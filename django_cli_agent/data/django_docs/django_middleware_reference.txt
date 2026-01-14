@@ -1,0 +1,166 @@
+SECTION: Middleware
+PURPOSE: This section documents all middleware components included with Django, explaining their usage and related settings. For general middleware concepts, activation, and writing custom middleware, see the middleware usage guide.
+SECTION: Available Middleware
+PURPOSE: This section lists and describes built-in middleware classes.
+SECTION: Cache Middleware
+PURPOSE: This subsection describes middleware for enabling site-wide caching.
+CONCEPT: UpdateCacheMiddleware and FetchFromCacheMiddleware enable caching for Django-powered pages based on CACHE_MIDDLEWARE_SECONDS. See cache documentation.
+CODE:
+class UpdateCacheMiddleware:
+    # Implementation for updating cache.
+    pass
+
+class FetchFromCacheMiddleware:
+    # Implementation for fetching from cache.
+    pass
+SECTION: Common Middleware
+PURPOSE: This subsection describes CommonMiddleware for various conveniences.
+CONCEPT: CommonMiddleware forbids access based on DISALLOWED_USER_AGENTS, performs URL rewriting with APPEND_SLASH and PREPEND_WWW, and sets Content-Length for non-streaming responses.
+CONCEPT: response_redirect_class defaults to HttpResponsePermanentRedirect; override to customize redirects.
+CONCEPT: BrokenLinkEmailsMiddleware sends broken link notifications to MANAGERS. See error reporting guide.
+CODE:
+class CommonMiddleware:
+    response_redirect_class = HttpResponsePermanentRedirect
+    # Adds conveniences like user agent forbidding, URL rewriting, Content-Length setting.
+
+class BrokenLinkEmailsMiddleware:
+    # Sends broken link emails to MANAGERS.
+    pass
+SECTION: GZip Middleware
+PURPOSE: This subsection describes GZipMiddleware for content compression.
+CONCEPT: GZipMiddleware compresses content for browsers supporting GZip. max_random_bytes defaults to 100; override to change random bytes in compressed responses.
+CONCEPT: Implements Heal The Breach (HTB) to mitigate BREACH attacks by adding random bytes.
+CONCEPT: Does not compress if content < 200 bytes, Content-Encoding set, or no Accept-Encoding: gzip.
+CONCEPT: Makes ETag weak if present to comply with RFC 9110.
+CONCEPT: Apply to views with gzip_page decorator.
+CODE:
+class GZipMiddleware:
+    max_random_bytes = 100
+    # Compresses content if conditions met.
+SECTION: Conditional GET Middleware
+PURPOSE: This subsection describes ConditionalGetMiddleware for conditional GET.
+CONCEPT: Handles conditional GET; adds ETag if needed, replaces response with HttpResponseNotModified if If-None-Match or If-Modified-Since match.
+CONCEPT: Apply to views with conditional_page decorator.
+CODE:
+class ConditionalGetMiddleware:
+    # Handles conditional GET operations.
+    pass
+SECTION: Locale Middleware
+PURPOSE: This subsection describes LocaleMiddleware for language selection.
+CONCEPT: Enables language selection based on request data; customizes content per user. See internationalization documentation.
+CONCEPT: response_redirect_class defaults to HttpResponseRedirect; override to customize.
+CODE:
+class LocaleMiddleware:
+    response_redirect_class = HttpResponseRedirect
+    # Enables language selection.
+SECTION: Message Middleware
+PURPOSE: This subsection describes MessageMiddleware for message support.
+CONCEPT: Enables cookie- and session-based message support. See messages documentation.
+CODE:
+class MessageMiddleware:
+    # Enables message support.
+    pass
+SECTION: Security Middleware
+PURPOSE: This subsection describes SecurityMiddleware for security enhancements.
+CONCEPT: Provides enhancements enabled/disabled via settings: SECURE_CONTENT_TYPE_NOSNIFF, SECURE_CROSS_ORIGIN_OPENER_POLICY, SECURE_HSTS_INCLUDE_SUBDOMAINS, SECURE_HSTS_PRELOAD, SECURE_HSTS_SECONDS, SECURE_REDIRECT_EXEMPT, SECURE_REFERRER_POLICY, SECURE_SSL_HOST, SECURE_SSL_REDIRECT.
+CONCEPT: Prefer front-end web server for SecurityMiddleware functionality if possible.
+CONCEPT: HTTP Strict Transport Security (HSTS): Sets Strict-Transport-Security header if SECURE_HSTS_SECONDS > 0. Test with small values; increase for production. Include includeSubDomains if SECURE_HSTS_INCLUDE_SUBDOMAINS=True. Add preload if SECURE_HSTS_PRELOAD=True.
+CONCEPT: HSTS applies to entire domain; ensure valid certificates.
+CONCEPT: Referrer Policy: Sets Referrer-Policy based on SECURE_REFERRER_POLICY (e.g., no-referrer, same-origin).
+CONCEPT: Cross-Origin Opener Policy (COOP): Sets Cross-Origin-Opener-Policy based on SECURE_CROSS_ORIGIN_OPENER_POLICY (e.g., same-origin).
+CONCEPT: X-Content-Type-Options: nosniff: Sets header if SECURE_CONTENT_TYPE_NOSNIFF=True to prevent content type guessing.
+CONCEPT: SSL Redirect: Redirects HTTP to HTTPS if SECURE_SSL_REDIRECT=True. Use SECURE_SSL_HOST for specific host. Exempt URLs with SECURE_REDIRECT_EXEMPT.
+CONCEPT: Set SECURE_PROXY_SSL_HEADER if behind proxy.
+CODE:
+class SecurityMiddleware:
+    # Provides security enhancements.
+    pass
+SECTION: Session Middleware
+PURPOSE: This subsection describes SessionMiddleware for session support.
+CONCEPT: Enables session support. See session documentation.
+CODE:
+class SessionMiddleware:
+    # Enables session support.
+    pass
+SECTION: Site Middleware
+PURPOSE: This subsection describes CurrentSiteMiddleware for site attribute.
+CONCEPT: Adds site attribute to every HttpRequest. See sites documentation.
+CODE:
+class CurrentSiteMiddleware:
+    # Adds site to requests.
+    pass
+SECTION: Authentication Middleware
+PURPOSE: This subsection describes middleware for authentication.
+CONCEPT: AuthenticationMiddleware adds user to HttpRequest. See authentication in web requests.
+CONCEPT: LoginRequiredMiddleware redirects unauthenticated requests to login, except excluded views. Customize with login_not_required decorator.
+CONCEPT: RemoteUserMiddleware for web server authentication. See REMOTE_USER guide.
+CONCEPT: PersistentRemoteUserMiddleware for authentication on login page only. See REMOTE_USER on login pages.
+CODE:
+class AuthenticationMiddleware:
+    # Adds user to requests.
+
+class LoginRequiredMiddleware:
+    redirect_field_name = "next"
+    # Redirects unauthenticated to login.
+
+class RemoteUserMiddleware:
+    # Web server authentication.
+
+class PersistentRemoteUserMiddleware:
+    # Authentication on login page only.
+SECTION: CSRF Protection Middleware
+PURPOSE: This subsection describes CsrfViewMiddleware for CSRF protection.
+CONCEPT: Adds CSRF protection with hidden fields and request checks. See CSRF documentation.
+CONCEPT: Apply to views with csrf_protect decorator.
+CODE:
+class CsrfViewMiddleware:
+    # CSRF protection.
+SECTION: X-Frame-Options Middleware
+PURPOSE: This subsection describes XFrameOptionsMiddleware for clickjacking protection.
+CONCEPT: Provides X-Frame-Options header for clickjacking protection. See clickjacking protection.
+CODE:
+class XFrameOptionsMiddleware:
+    # Clickjacking protection.
+SECTION: Content Security Policy Middleware
+PURPOSE: This subsection describes ContentSecurityPolicyMiddleware for CSP.
+CONCEPT: Adds support for Content Security Policy (CSP) to mitigate XSS and injections. New in Django 6.0.
+CONCEPT: Sets Content-Security-Policy based on SECURE_CSP, Content-Security-Policy-Report-Only based on SECURE_CSP_REPORT_ONLY.
+CODE:
+class ContentSecurityPolicyMiddleware:
+    # Adds CSP headers.
+SECTION: Middleware Ordering
+PURPOSE: This section provides hints on ordering Django middleware classes.
+CONCEPT: SecurityMiddleware near top for SSL redirect.
+CONCEPT: UpdateCacheMiddleware before those modifying Vary (SessionMiddleware, GZipMiddleware, LocaleMiddleware).
+CONCEPT: GZipMiddleware before response body modifiers, after UpdateCacheMiddleware.
+CONCEPT: SessionMiddleware before exception-triggering middleware if CSRF_USE_SESSIONS, after UpdateCacheMiddleware.
+CONCEPT: ConditionalGetMiddleware before response changers, after GZipMiddleware.
+CONCEPT: LocaleMiddleware after SessionMiddleware and UpdateCacheMiddleware.
+CONCEPT: CommonMiddleware before response changers, after SessionMiddleware if CSRF_USE_SESSIONS.
+CONCEPT: CsrfViewMiddleware before views assuming CSRF handled, before RemoteUserMiddleware, after SessionMiddleware if CSRF_USE_SESSIONS.
+CONCEPT: AuthenticationMiddleware after SessionMiddleware.
+CONCEPT: LoginRequiredMiddleware after AuthenticationMiddleware.
+CONCEPT: MessageMiddleware after SessionMiddleware.
+CONCEPT: FetchFromCacheMiddleware after Vary modifiers.
+CONCEPT: ContentSecurityPolicyMiddleware near bottom, after middleware using csp_nonce.
+CONCEPT: FlatpageFallbackMiddleware near bottom as last-resort.
+CONCEPT: RedirectFallbackMiddleware near bottom as last-resort.
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Reference for using built-in middleware in Django applications.
+SUMMARY:
+
+Cache: UpdateCacheMiddleware, FetchFromCacheMiddleware.
+Common: CommonMiddleware, BrokenLinkEmailsMiddleware.
+GZip: GZipMiddleware.
+Conditional GET: ConditionalGetMiddleware.
+Locale: LocaleMiddleware.
+Message: MessageMiddleware.
+Security: SecurityMiddleware.
+Session: SessionMiddleware.
+Site: CurrentSiteMiddleware.
+Authentication: AuthenticationMiddleware, LoginRequiredMiddleware, RemoteUserMiddleware, PersistentRemoteUserMiddleware.
+CSRF: CsrfViewMiddleware.
+X-Frame-Options: XFrameOptionsMiddleware.
+CSP: ContentSecurityPolicyMiddleware.
+Ordering hints provided.

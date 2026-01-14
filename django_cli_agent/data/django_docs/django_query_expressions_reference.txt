@@ -1,0 +1,114 @@
+PURPOSE: This section explains query expressions for computations in updates, creates, filters, order_by, annotations, aggregates; combining/nesting for complex queries.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Advanced QuerySets.
+
+CONCEPT: SUPPORTED ARITHMETIC
+Negation, +, -, *, /, %, ** on expressions, using Python values or expressions.
+CONCEPT: OUTPUT FIELD
+output_field: model field instance for type.
+Required for mixed types.
+CONCEPT: EXAMPLES
+Company.objects.filter(num_employees__gt=F("num_chairs"))
+
+Company.objects.filter(num_employees__gt=F("num_chairs") * 2)
+
+company = Company.objects.filter(num_employees__gt=F("num_chairs")).annotate(chairs_needed=F("num_employees") - F("num_chairs")).first()
+
+company = Company.objects.create(name="Google", ticker=Upper(Value("goog")))
+
+Company.objects.annotate(num_products=Count("products"))
+
+Company.objects.annotate(num_offerings=Count(F("products") + F("services")))
+
+Company.objects.order_by(Length("name").asc())
+
+Company.objects.filter(Exists(Employee.objects.filter(company=OuterRef("pk"), salary__gt=10)))
+
+Company.objects.filter(GreaterThan(F("num_employees"), F("num_chairs")))
+SECTION: BUILT-IN EXPRESSIONS
+PURPOSE: This section details key expression classes.
+CONCEPT: F() EXPRESSIONS
+F(): model field or annotated column reference.
+Database operations without Python memory.
+CODE EXAMPLE:
+reporter.stories_filed = F("stories_filed") + 1
+reporter.save()
+
+Reporter.objects.update(stories_filed=F("stories_filed") + 1)
+Slicing for string/text/ArrayField.
+Avoids race conditions.
+Refreshed on save (SQLite/PostgreSQL/Oracle).
+In filters/annotations.
+Sort nulls_first/nulls_last.
+Logical: ~F() for negation.
+CONCEPT: FUNC() EXPRESSIONS
+Func(): database functions.
+CODE EXAMPLE:
+class Lower(Func):
+    function = "LOWER"
+
+queryset.annotate(field_lower=Lower("field"))
+function, template, arg_joiner, arity.
+as_sql() for generation.
+CONCEPT: AGGREGATE() EXPRESSIONS
+Aggregate(): for GROUP BY.
+CODE EXAMPLE:
+Company.objects.annotate(managers_required=(Count("num_employees") / 4) + Count("num_managers"))
+distinct, filter, default, order_by (new in 6.0).
+CONCEPT: CREATING YOUR OWN AGGREGATE FUNCTIONS
+Subclass Aggregate; define function etc.
+CONCEPT: VALUE() EXPRESSIONS
+Value(value, output_field=None): simple value.
+Implicit for literals.
+CONCEPT: EXPRESSIONWRAPPER() EXPRESSIONS
+ExpressionWrapper(expression, output_field): for properties.
+For arithmetic different types.
+CONCEPT: CONDITIONAL EXPRESSIONS
+CASE via When etc.
+CONCEPT: SUBQUERY() EXPRESSIONS
+Subquery(queryset, output_field=None): explicit subquery.
+OuterRef for outer fields.
+Exists for EXISTS.
+CONCEPT: RAW SQL EXPRESSIONS
+RawSQL(sql, params, output_field=None): complex WHERE.
+Escape with params.
+CONCEPT: WINDOW FUNCTIONS
+Window: OVER clause.
+partition_by, order_by, frame.
+RowRange/ValueRange.
+SECTION: TECHNICAL INFORMATION
+PURPOSE: This section for library authors.
+CONCEPT: EXPRESSION API
+Expression subclass: attributes, methods.
+resolve_expression, get/set_source_expressions, relabeled_clone, convert_value, get_group_by_cols, asc/desc, reverse_ordering.
+CONCEPT: WRITING YOUR OWN QUERY EXPRESSIONS
+Example: Coalesce.
+CODE EXAMPLE:
+class Coalesce(Expression):
+    template = "COALESCE( %(expressions)s )"
+
+    def __init__(self, expressions, output_field):
+        super().__init__(output_field=output_field)
+        # validation
+
+    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
+        # copy and resolve nested
+
+    def as_sql(self, compiler, connection, template=None):
+        # compile expressions, join, interpolate
+
+    def as_oracle(self, compiler, connection):
+        # vendor specific
+get/set_source_expressions.
+Avoid injection: params, not interpolation.
+CONCEPT: ADDING SUPPORT IN THIRD-PARTY DATABASE BACKENDS
+Monkey patch as_vendor().
+SUMMARY:
+
+F(): field refs.
+Func/Aggregate: functions.
+Value/Wrapper/Subquery/RawSQL/Window.
+Custom: subclass, implement methods.

@@ -1,0 +1,156 @@
+PURPOSE: This section explains generating aggregate values (summary statistics) over QuerySets in Django, using aggregate() for overall summaries and annotate() for per-object summaries.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+QuerySets for summarizing data without raw SQL.
+
+CONCEPT: MODELS EXAMPLE
+Models: Author, Publisher, Book, Store.
+Book: name, pages, price, rating, authors (M2M), publisher (FK), pubdate.
+Store: name, books (M2M).
+SECTION: CHEAT SHEET
+PURPOSE: This section provides quick examples of common aggregates.
+CODE EXAMPLE:
+Total number of books.
+Book.objects.count()
+2452
+
+Total number of books with publisher=BaloneyPress
+Book.objects.filter(publisher__name="BaloneyPress").count()
+ 73
+
+ Average price across all books, default if none.
+from django.db.models import Avg
+Book.objects.aggregate(Avg("price", default=0))
+ {'price__avg': 34.35}
+
+ Max price, default if none.
+from django.db.models import Max
+Book.objects.aggregate(Max("price", default=0))
+ {'price__max': Decimal('81.20')}
+
+ Difference highest and average price.
+from django.db.models import FloatField
+Book.objects.aggregate(price_diff=Max("price", output_field=FloatField()) - Avg("price"))
+ {'price_diff': 46.85}
+
+ Each publisher with book count.
+from django.db.models import Count
+pubs = Publisher.objects.annotate(num_books=Count("book"))
+
+Publishers with counts above/below 5 rating.
+from django.db.models import Q
+above_5 = Count("book", filter=Q(book__rating__gt=5))
+below_5 = Count("book", filter=Q(book__rating__lte=5))
+pubs = Publisher.objects.annotate(below_5=below_5).annotate(above_5=above_5)
+
+ Top 5 publishers by book count.
+pubs = Publisher.objects.annotate(num_books=Count("book")).order_by("-num_books")[:5]
+SECTION: GENERATING AGGREGATES OVER A QUERYSET
+PURPOSE: This section explains aggregate() for QuerySet-wide summaries.
+CONCEPT: AGGREGATE() METHOD
+Terminal; returns dict of aggregates.
+CODE EXAMPLE:
+from django.db.models import Avg
+Book.objects.aggregate(Avg("price"))
+ {'price__avg': 34.35}
+
+Book.objects.aggregate(average_price=Avg("price"))
+ {'average_price': 34.35}
+
+from django.db.models import Avg, Max, Min
+Book.objects.aggregate(Avg("price"), Max("price"), Min("price"))
+ {'price__avg': 34.35, 'price__max': Decimal('81.20'), 'price__min': Decimal('12.99')}
+See QuerySet reference for functions.
+SECTION: GENERATING AGGREGATES FOR EACH ITEM IN A QUERYSET
+PURPOSE: This section explains annotate() for per-object aggregates.
+CONCEPT: ANNOTATE() METHOD
+Non-terminal; adds attributes to each object.
+CODE EXAMPLE:
+from django.db.models import Count
+q = Book.objects.annotate(Count("authors"))
+q[0].authors__count
+
+q = Book.objects.annotate(num_authors=Count("authors"))
+q[0].num_authors
+Chain with other QuerySet methods.
+CONCEPT: COMBINING MULTIPLE AGGREGATIONS
+annotate() with multiple: joins instead of subqueries; wrong results.
+Use distinct=True for Count.
+CODE EXAMPLE:
+ Wrong
+Book.objects.annotate(Count("authors"), Count("store"))
+ Multiplies counts
+
+ Correct
+q = Book.objects.annotate(Count("authors", distinct=True), Count("store", distinct=True))
+Inspect SQL if unsure.
+SECTION: JOINS AND AGGREGATES
+PURPOSE: This section explains aggregates over related fields.
+CONCEPT: RELATED FIELD AGGREGATES
+Use __ notation.
+CODE EXAMPLE:
+from django.db.models import Max, Min
+Store.objects.annotate(min_price=Min("books__price"), max_price=Max("books__price"))
+Store.objects.aggregate(min_price=Min("books__price"), max_price=Max("books__price"))
+Store.objects.aggregate(youngest_age=Min("books__authors__age"))
+CONCEPT: FOLLOWING RELATIONSHIPS BACKWARDS
+Lowercase model name __.
+CODE EXAMPLE:
+Publisher.objects.annotate(Count("book"))
+Publisher.objects.aggregate(oldest_pubdate=Min("book__pubdate"))
+Author.objects.annotate(total_pages=Sum("book__pages"))
+Author.objects.aggregate(average_rating=Avg("book__rating"))
+SECTION: AGGREGATIONS AND OTHER QUERYSET CLAUSES
+PURPOSE: This section explains interactions with filter(), order_by(), values().
+CONCEPT: FILTER() AND EXCLUDE()
+Constrain objects for aggregate/annotate.
+CONCEPT: FILTERING ON ANNOTATIONS
+Use annotation alias in filter().
+CODE EXAMPLE:
+Book.objects.annotate(num_authors=Count("authors")).filter(num_authors__gt=1)
+Conditional: filter argument.
+CODE EXAMPLE:
+highly_rated = Count("book", filter=Q(book__rating__gte=7))
+Author.objects.annotate(num_books=Count("book"), highly_rated_books=highly_rated)
+CONCEPT: ORDER OF ANNOTATE() AND FILTER() CLAUSES
+Order matters: annotate before filter: over all; filter before: constrained.
+CONCEPT: ORDER_BY()
+Use annotation aliases.
+CODE EXAMPLE:
+Book.objects.annotate(num_authors=Count("authors")).order_by("num_authors")
+CONCEPT: VALUES()
+Groups by values fields; annotations per group.
+CONCEPT: ORDER OF ANNOTATE() AND VALUES() CLAUSES
+values() before annotate(): group then annotate.
+annotate() before values(): annotate then select fields.
+Include annotation in values() if after annotate().
+CONCEPT: INTERACTION WITH ORDER_BY()
+order_by() fields added to grouping; clear or restrict.
+CONCEPT: AGGREGATING ANNOTATIONS
+aggregate() on annotated QuerySet.
+CODE EXAMPLE:
+Book.objects.annotate(num_authors=Count("authors")).aggregate(Avg("num_authors"))
+ {'num_authors__avg': 1.66}
+CONCEPT: AGGREGATING ON EMPTY QUERYSETS OR GROUPS
+Defaults to None; use default argument.
+Count: always 0.
+CODE EXAMPLE:
+Book.objects.filter(name__contains="web").aggregate(Sum("price", default=0))
+ {"price__sum": Decimal("0")}
+CONCEPT: AGGREGATING WITH MYSQL ONLY_FULL_GROUP_BY ENABLED
+Use AnyValue for non-aggregate in select with grouping.
+CODE EXAMPLE:
+Book.objects.values(greatest_pages=Greatest("pages", 600)).annotate(
+    num_authors=Count("authors"),
+    pages_per_author=AnyValue(F("greatest_pages")) / F("num_authors"),
+).aggregate(Avg("pages_per_author"))
+New in 6.0.
+SUMMARY:
+
+aggregate(): QuerySet-wide dict.
+annotate(): per-object attributes.
+Related/backward joins with __.
+Order/interactions matter.
+default for empty.

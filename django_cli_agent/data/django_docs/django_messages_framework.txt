@@ -1,0 +1,197 @@
+PURPOSE: Provides support for temporary, one-time notification messages (flash messages) after form processing or user input, using cookies or sessions for anonymous/authenticated users.
+Messages are tagged with levels for priority (info, warning, error). Framework stores messages in one request for display in the next.
+SECTION: ENABLING MESSAGES
+PURPOSE: Explains required settings to activate the messages framework.
+Include django.contrib.messages in INSTALLED_APPS.
+Add django.contrib.sessions.middleware.SessionMiddleware and django.contrib.messages.middleware.MessageMiddleware to MIDDLEWARE.
+Include django.contrib.messages.context_processors.messages in TEMPLATES context_processors.
+To disable, remove from INSTALLED_APPS, MIDDLEWARE, and TEMPLATES.
+SECTION: CONFIGURING THE MESSAGE ENGINE
+PURPOSE: Details backends and settings for message storage and behavior.
+CONCEPT: STORAGE BACKENDS
+Backends store temporary messages. Django provides three: SessionStorage (uses session), CookieStorage (uses signed cookie, drops old if >2048 bytes), FallbackStorage (Cookie first, then Session; default, best performance).
+COMMAND:
+CODE:
+MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"
+Custom backend: subclass BaseStorage, implement _get and _store.
+CONCEPT: MESSAGE LEVELS
+Levels group messages by type: DEBUG (10, dev info), INFO (20, general), SUCCESS (25, success), WARNING (30, minor issue), ERROR (40, failure).
+COMMAND:
+CODE:
+MESSAGE_LEVEL = messages.DEBUG  # Change minimum level
+CONCEPT: MESSAGE TAGS
+Tags are string representations of levels plus extra tags, space-separated, used as CSS classes.
+Defaults: debug, info, success, warning, error.
+COMMAND:
+CODE:
+MESSAGE_TAGS = {
+    messages.INFO: "",
+    50: "critical",
+}
+Extends defaults; provide only overrides.
+SUMMARY:
+
+Use FallbackStorage for efficiency.
+Adjust levels/tags for custom feedback.
+Custom backends for specialized storage.
+
+SECTION: USING MESSAGES IN VIEWS AND TEMPLATES
+PURPOSE: Guides adding and displaying messages.
+CONCEPT: ADDING A MESSAGE
+DO add messages with add_message or shortcuts.
+COMMAND:
+CODE:
+from django.contrib import messages
+
+messages.add_message(request, messages.INFO, "Hello world.")
+Shortcuts:
+COMMAND:
+CODE:
+messages.debug(request, "%s SQL statements were executed." % count)
+messages.info(request, "Three credits remain in your account.")
+messages.success(request, "Profile details updated.")
+messages.warning(request, "Your account expires in three days.")
+messages.error(request, "Document deleted.")
+CONCEPT: DISPLAYING MESSAGES
+In templates, iterate messages.
+COMMAND:
+CODE:
+django{% if messages %}
+<ul class="messages">
+    {% for message in messages %}
+    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+Or with level check:
+COMMAND:
+django{% if messages %}
+<ul class="messages">
+    {% for message in messages %}
+    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>
+        {% if message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}Important: {% endif %}
+        {{ message }}
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+Outside templates, use get_messages.
+COMMAND:
+CODE:
+from django.contrib.messages import get_messages
+
+storage = get_messages(request)
+for message in storage:
+    do_something_with_the_message(message)
+Iterating clears storage; set storage.used = False to preserve.
+CONCEPT: MESSAGE CLASS
+Message instances have: message (text), level (int), tags (string), extra_tags (string), level_tag (lowercase level name).
+CONCEPT: CREATING CUSTOM MESSAGE LEVELS
+Define constants >40; use in add_message.
+COMMAND:
+CODE:
+CRITICAL = 50
+
+messages.add_message(request, CRITICAL, "A serious error occurred.")
+Filter with MESSAGE_TAGS for custom levels.
+DO NOT overload built-in levels.
+USAGE GUIDELINES:
+USE WHEN:
+
+Reusable apps; stick to built-in levels.
+DO NOT USE WHEN:
+Relying on custom levels in reusable code.
+
+CONCEPT: CHANGING MINIMUM RECORDED LEVEL PER-REQUEST
+Set/get level per request.
+COMMAND:
+CODE:
+messages.set_level(request, messages.DEBUG)
+messages.debug(request, "Test message...")
+
+messages.set_level(request, messages.WARNING)
+messages.success(request, "Ignored")  # ignored
+messages.warning(request, "Recorded")  # recorded
+
+messages.set_level(request, None)  # back to default
+current_level = messages.get_level(request)
+CONCEPT: ADDING EXTRA MESSAGE TAGS
+Add extra_tags string.
+COMMAND:
+CODE:
+messages.add_message(request, messages.INFO, "Over 9000!", extra_tags="dragonball")
+messages.error(request, "Email box full", extra_tags="email")
+Prepended to level tag, space-separated.
+CONCEPT: FAILING SILENTLY WHEN FRAMEWORK DISABLED
+Pass fail_silently=True to hide MessageFailure.
+COMMAND:
+CODE:
+messages.add_message(request, messages.SUCCESS, "Profile details updated.", fail_silently=True)
+messages.info(request, "Hello world.", fail_silently=True)
+Hides only framework-disabled errors, not others.
+CONCEPT: ADDING MESSAGES IN CLASS-BASED VIEWS
+Use SuccessMessageMixin for FormView subclasses.
+COMMAND:
+CODE:
+from django.contrib.messages.views import SuccessMessageMixin
+from django.views.generic.edit import CreateView
+from myapp.models import Author
+
+class AuthorCreateView(SuccessMessageMixin, CreateView):
+    model = Author
+    success_url = "/success/"
+    success_message = "%(name)s was created successfully"
+Override get_success_message for object access.
+COMMAND:
+CODE:
+from django.contrib.messages.views import SuccessMessageMixin
+from django.views.generic.edit import CreateView
+from myapp.models import ComplicatedModel
+
+class ComplicatedCreateView(SuccessMessageMixin, CreateView):
+    model = ComplicatedModel
+    success_url = "/success/"
+    success_message = "%(calculated_field)s was created successfully"
+
+    def get_success_message(self, cleaned_data):
+        return self.success_message % dict(
+            cleaned_data,
+            calculated_field=self.object.calculated_field,
+        )
+SUMMARY:
+
+Add with add_message or shortcuts.
+Display by iterating messages.
+Customize levels/tags for feedback.
+Use fail_silently in reusable code.
+
+SECTION: EXPIRATION OF MESSAGES
+PURPOSE: Explains message clearing after iteration.
+Marked cleared on iteration; processed on response.
+Preserve with storage.used = False after iterating.
+SECTION: BEHAVIOR OF PARALLEL REQUESTS
+PURPOSE: Warns about undefined behavior in concurrent requests.
+Cookie/session backends may deliver messages to wrong windows or lose them in parallel requests from same client.
+Not an issue in most apps; HTML5 tabs have separate contexts.
+SECTION: SETTINGS
+PURPOSE: Lists controlling settings.
+MESSAGE_LEVEL: Minimum level.
+MESSAGE_STORAGE: Backend path.
+MESSAGE_TAGS: Level to tag mapping.
+Cookie backends use SESSION_COOKIE_DOMAIN/SECURE/HTTPONLY.
+SECTION: TESTING
+PURPOSE: Provides assertion for testing messages in responses.
+Use MessagesTestMixin.
+COMMAND:
+CODE:
+from django.contrib.messages.test import MessagesTestMixin
+from django.test import TestCase
+
+class MsgTestCase(MessagesTestMixin, TestCase):
+    pass
+assertMessages(response, expected_messages, ordered=True)
+expected_messages: List of Message objects.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - Web apps needing flash messages.

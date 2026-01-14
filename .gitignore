@@ -1,0 +1,7 @@
+venv/
+django_cli_agent/agent_test_project/
+Junk-Folder
+*.egg-info/
+dist/
+build/
+__pycache__/

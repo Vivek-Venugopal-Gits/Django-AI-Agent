@@ -1,0 +1,199 @@
+PURPOSE: Introduces Django's use of Python's logging module for structured application logging beyond simple print statements.
+Django extends Python's logging module. Logging provides detailed information for debugging and monitoring application state.
+SECTION: THE CAST OF PLAYERS
+PURPOSE: Describes the four components of Python's logging configuration used in Django.
+CONCEPT: LOGGERS
+Loggers are named entry points for writing messages. Each has a log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) determining message severity handled.
+Messages are Log Records with level and metadata like stack traces.
+Logger compares message level to its level; if meets or exceeds, processes further; else ignores.
+Processed messages pass to handlers.
+CONCEPT: HANDLERS
+Handlers determine actions for messages, e.g., console, file, socket.
+Handlers have levels; ignore messages below their level.
+Loggers can have multiple handlers with different levels for varied notifications.
+CONCEPT: FILTERS
+Filters add control over log records passed from logger to handler.
+Apply additional criteria or modify records, e.g., downgrade ERROR to WARNING.
+Install on loggers or handlers; chain multiple.
+CONCEPT: FORMATTERS
+Formatters render log records as text, using Python formatting strings with LogRecord attributes.
+Custom formatters possible for specific formats.
+SUMMARY:
+
+Loggers filter by level and route messages.
+Handlers output messages.
+Filters refine processing.
+Formatters structure output.
+
+SECTION: SECURITY IMPLICATIONS
+PURPOSE: Highlights handling of sensitive information in logs.
+Logs may contain sensitive data like request details or stack traces.
+Know what is collected, stored, transferred, and who accesses.
+Filter sensitive info from error reports.
+SECTION: ADMINEMAILHANDLER
+PURPOSE: Discusses security concerns with the built-in AdminEmailHandler.
+If include_html enabled, emails full tracebacks with locals and settings, like DEBUG=True pages.
+DO NOT send such info over email; use third-party services for detailed logs with access control.
+USAGE GUIDELINES:
+USE WHEN:
+
+Notifying admins of errors.
+DO NOT USE WHEN:
+include_html=True without secure transmission.
+
+SECTION: CONFIGURING LOGGING
+PURPOSE: Explains setting up logging via LOGGING dictionary in settings.
+Use LOGGING for dictConfig format. Merged with Django's default config.
+If disable_existing_loggers True (default if missing), disables default loggers.
+Set to False to keep and redefine defaults.
+Logging configured in setup(); ready post-settings load.
+SECTION: LOGGING EXAMPLES
+PURPOSE: Provides configuration samples.
+Basic console output:
+COMMAND:
+CODE:
+import os
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+}
+Adjust root level to INFO/DEBUG for more messages.
+Fine-grained for django logger:
+COMMAND:
+CODE:
+import os
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}
+File logging for django:
+COMMAND:
+CODE:
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "file": {
+            "level": "DEBUG",
+            "class": "logging.FileHandler",
+            "filename": "/path/to/django/debug.log",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["file"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+    },
+}
+Complex setup with formatters, filters, handlers:
+COMMAND:
+CODE:
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "filters": {
+        "special": {
+            "()": "project.logging.SpecialFilter",
+            "foo": "bar",
+        },
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
+        },
+    },
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "filters": ["require_debug_true"],
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+        "mail_admins": {
+            "level": "ERROR",
+            "class": "django.utils.log.AdminEmailHandler",
+            "filters": ["special"],
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["mail_admins"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "myproject.custom": {
+            "handlers": ["console", "mail_admins"],
+            "level": "INFO",
+            "filters": ["special"],
+        },
+    },
+}
+SUMMARY:
+
+Version 1 required.
+Formatters define output style.
+Filters like RequireDebugTrue control based on DEBUG.
+Handlers like console, mail_admins.
+Loggers route messages.
+
+SECTION: CUSTOM LOGGING CONFIGURATION
+PURPOSE: Allows alternative configuration methods.
+LOGGING_CONFIG callable, default logging.config.dictConfig.
+Use any callable taking LOGGING as argument.
+SECTION: DISABLING LOGGING CONFIGURATION
+PURPOSE: Bypasses default config for manual setup.
+Set LOGGING_CONFIG to None; disables auto-config, but logging calls still occur with default behavior.
+Manual config example:
+COMMAND:
+CODE:
+LOGGING_CONFIG = None
+
+import logging.config
+
+logging.config.dictConfig(...)
+Manual config loads immediately; place after dependent settings.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - All projects; extends Python logging.

@@ -1,0 +1,134 @@
+PURPOSE:
+Explain how Django applications are deployed using ASGI, including configuration, application entry points, and middleware integration.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Django projects that use ASGI-compliant application servers
+
+Development and production deployments using ASGI
+
+CONCEPT: ASGI Support in Django
+
+Django supports deployment using ASGI (Asynchronous Server Gateway Interface) in addition to WSGI. ASGI is a Python standard designed for asynchronous web servers and applications.
+
+Django provides a default ASGI configuration when creating a project. This configuration can be modified as needed and is compatible with any ASGI-compliant application server.
+
+Django includes introductory deployment guidance for several ASGI servers, including Daphne, Hypercorn, and Uvicorn.
+
+SECTION: The ASGI Application Object
+
+PURPOSE:
+Define the role of the ASGI application callable and how Django exposes it for servers.
+
+CONCEPT:
+
+ASGI requires an application callable that the application server uses to communicate with the Django project. This callable is typically exposed as a module-level object named application.
+
+When a Django project is created, a default ASGI entry point is generated in the project directory.
+
+FILE: <project_name>/asgi.py
+ROLE: Defines the ASGI application callable used by ASGI servers to interface with Django.
+
+The Django development server (runserver) does not use this ASGI entry point. However, any ASGI-compliant server can use it in both development and production environments.
+
+ASGI servers typically reference the application callable using a dotted module path string.
+
+COMMAND:
+CODE:
+myproject.asgi:application
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Deploying Django with an ASGI-compliant server
+
+Running Django in an asynchronous-capable environment
+
+DO NOT USE WHEN:
+
+Relying exclusively on WSGI-based servers
+
+Referencing the ASGI callable from the Django development server
+
+CONCEPT: Async Safety Warning
+
+Django’s default ASGI handler executes code in a synchronous thread. If a custom asynchronous handler is used, all async-safety rules must be followed.
+
+DO NOT call blocking synchronous functions or libraries from async code. Django enforces async safety for its own components, but third-party libraries may not be protected.
+
+SECTION: Configuring the Django Settings Module
+
+PURPOSE:
+Explain how Django locates and loads the project settings during ASGI startup.
+
+CONCEPT:
+
+When an ASGI server loads the Django application, Django must import the project’s settings module. The location of the settings module is defined using an environment variable.
+
+ENVIRONMENT VARIABLE: DJANGO_SETTINGS_MODULE
+ROLE: Specifies the dotted Python path to the Django settings module.
+
+This variable can differ between development and production environments, depending on how settings are organized.
+
+If the variable is not explicitly set, the default asgi.py file assigns it automatically.
+
+DEFAULT VALUE:
+
+mysite.settings
+
+
+(where mysite is the project name)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Running Django under an ASGI server
+
+Managing multiple settings configurations across environments
+
+DO NOT USE WHEN:
+
+Relying on implicit settings resolution outside Django’s startup process
+
+SECTION: Applying ASGI Middleware
+
+PURPOSE:
+Describe how to extend or wrap the Django ASGI application with middleware.
+
+CONCEPT:
+
+ASGI middleware can be applied by wrapping Django’s application object directly in the asgi.py file. This allows Django to be embedded within a larger ASGI application or extended with additional ASGI-compatible behavior.
+
+COMMAND:
+from some_asgi_library import AmazingMiddleware
+
+application = AmazingMiddleware(application)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Adding ASGI middleware to Django
+
+Integrating Django into a broader ASGI application stack
+
+DO NOT USE WHEN:
+
+Middleware is incompatible with ASGI
+
+Middleware relies on blocking synchronous execution
+
+SUMMARY:
+
+Django supports deployment using ASGI alongside WSGI.
+
+The ASGI application callable is defined in <project_name>/asgi.py.
+
+ASGI servers reference the application using a dotted module path.
+
+Settings are loaded using the DJANGO_SETTINGS_MODULE environment variable.
+
+ASGI middleware is applied by wrapping the application object directly.

@@ -1,0 +1,372 @@
+SECTION: Time Zone Support Overview
+
+PURPOSE:
+Explain how Django handles time zones internally and at presentation boundaries.
+
+CONCEPT:
+
+When time zone support is enabled, Django:
+
+Stores all datetime values in UTC in the database
+
+Uses time-zone-aware datetime objects internally
+
+Converts datetimes to the end user’s time zone in forms
+
+Uses the default time zone in templates unless explicitly overridden
+
+This approach avoids errors caused by daylight saving time (DST) transitions and ensures consistent datetime arithmetic.
+
+Time zone support is enabled by default. To disable it:
+
+USE_TZ = False
+
+
+Django uses the Python standard library zoneinfo module for time zone handling.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Users are distributed across multiple time zones
+
+Datetime arithmetic or billing accuracy matters
+
+DO NOT USE WHEN:
+
+You intentionally require naive datetimes and fully understand DST risks
+
+SECTION: Naive vs Aware Datetime Objects
+
+PURPOSE:
+Define datetime object types and their behavior in Django.
+
+CONCEPT:
+
+A datetime object is:
+
+Aware if it has a tzinfo attribute describing a UTC offset
+
+Naive if it does not
+
+Django provides utilities to inspect datetime objects:
+
+is_aware()
+
+is_naive()
+
+When time zone support is disabled, Django uses naive datetimes in local time.
+When enabled, Django expects aware datetimes.
+
+COMMAND:
+# Time zone support disabled
+import datetime
+now = datetime.datetime.now()
+
+# Time zone support enabled
+from django.utils import timezone
+now = timezone.now()
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+USE_TZ = True → always create aware datetimes
+DO NOT USE WHEN:
+
+Mixing naive and aware datetimes in comparisons
+
+SECTION: Limitations of tzinfo and DST
+
+PURPOSE:
+Explain pitfalls of time zone handling.
+
+CONCEPT:
+
+The tzinfo argument on the standard datetime constructor does not reliably handle DST transitions. UTC is always safe.
+
+Django only supports naive time objects. Saving an aware time object raises an exception because time values without a date cannot meaningfully represent a time zone.
+
+SECTION: Interpretation of Naive Datetimes
+
+PURPOSE:
+Explain how Django handles naive datetimes when USE_TZ is enabled.
+
+CONCEPT:
+
+When USE_TZ = True, Django still accepts naive datetimes for backward compatibility. It assumes they are in the default time zone and converts them to aware datetimes, emitting a warning.
+
+During DST transitions, some datetimes are ambiguous or invalid. This is why application code should always create aware datetimes explicitly.
+
+Django-provided datetimes from models and forms are already aware. Most new datetimes come from timezone.now() or arithmetic with timedelta.
+
+SECTION: Default Time Zone vs Current Time Zone
+
+PURPOSE:
+Clarify the difference between configuration and rendering behavior.
+
+CONCEPT:
+
+Default time zone: defined by TIME_ZONE
+
+Current time zone: used for rendering datetimes
+
+If no current time zone is activated, Django uses the default time zone.
+
+Django sets environment variables so the process runs in the default time zone regardless of USE_TZ.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Rendering datetimes for end users
+DO NOT USE WHEN:
+
+Performing internal datetime arithmetic (use UTC)
+
+SECTION: Selecting the Current Time Zone
+
+PURPOSE:
+Describe how to determine and activate a user’s time zone.
+
+CONCEPT:
+
+Django cannot infer a user’s time zone automatically. Applications must define their own selection logic.
+
+A common pattern:
+
+Store the user’s time zone in the session
+
+Activate it per request
+
+Deactivate when unavailable
+
+SECTION: Time Zone Selection Middleware
+
+PURPOSE:
+Activate the current time zone per request.
+
+COMMAND:
+import zoneinfo
+from django.utils import timezone
+
+class TimezoneMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        tzname = request.session.get("django_timezone")
+        if tzname:
+            timezone.activate(zoneinfo.ZoneInfo(tzname))
+        else:
+            timezone.deactivate()
+        return self.get_response(request)
+
+SECTION: Time Zone Selection View
+
+PURPOSE:
+Store the selected time zone in the session.
+
+COMMAND:
+from django.shortcuts import redirect, render
+
+common_timezones = {
+    "London": "Europe/London",
+    "Paris": "Europe/Paris",
+    "New York": "America/New_York",
+}
+
+def set_timezone(request):
+    if request.method == "POST":
+        request.session["django_timezone"] = request.POST["timezone"]
+        return redirect("/")
+    else:
+        return render(request, "template.html", {"timezones": common_timezones})
+
+SECTION: Time Zone Selection Template
+
+PURPOSE:
+Allow users to select their time zone.
+
+COMMAND:
+{% load tz %}
+{% get_current_timezone as TIME_ZONE %}
+<form action="{% url 'set_timezone' %}" method="POST">
+    {% csrf_token %}
+    <label for="timezone">Time zone:</label>
+    <select name="timezone">
+        {% for city, tz in timezones.items %}
+        <option value="{{ tz }}"{% if tz == TIME_ZONE %} selected{% endif %}>{{ city }}</option>
+        {% endfor %}
+    </select>
+    <input type="submit" value="Set">
+</form>
+
+SECTION: Time Zone Aware Input in Forms
+
+PURPOSE:
+Explain how forms process datetime input.
+
+CONCEPT:
+
+When time zone support is enabled:
+
+Datetimes entered in forms are interpreted in the current time zone
+
+Returned values in cleaned_data are aware datetimes
+
+Ambiguous or non-existent datetimes (DST transitions) are rejected
+
+SECTION: Time Zone Aware Output in Templates
+
+PURPOSE:
+Control how datetimes are rendered.
+
+CONCEPT:
+
+Aware datetimes are converted to the current time zone when rendered. Naive datetimes are not converted automatically.
+
+Machine-readable output may require disabling conversion.
+
+SECTION: Template Tag — localtime
+
+PURPOSE:
+Enable or disable datetime conversion within a block.
+
+COMMAND:
+{% load tz %}
+
+{% localtime on %}
+    {{ value }}
+{% endlocaltime %}
+
+{% localtime off %}
+    {{ value }}
+{% endlocaltime %}
+
+SECTION: Template Tag — timezone
+
+PURPOSE:
+Temporarily set the current time zone.
+
+COMMAND:
+{% load tz %}
+
+{% timezone "Europe/Paris" %}
+    Paris time: {{ value }}
+{% endtimezone %}
+
+{% timezone None %}
+    Server time: {{ value }}
+{% endtimezone %}
+
+SECTION: Template Tag — get_current_timezone
+
+PURPOSE:
+Retrieve the active time zone name.
+
+COMMAND:
+{% get_current_timezone as TIME_ZONE %}
+
+SECTION: Template Filters for Time Zones
+
+PURPOSE:
+Force conversion of individual values.
+
+FILTERS:
+
+localtime – convert to current time zone
+
+utc – convert to UTC
+
+timezone – convert to specified time zone
+
+COMMAND:
+{{ value|localtime }}
+{{ value|utc }}
+{{ value|timezone:"Europe/Paris" }}
+
+SECTION: Migration Guide — Database Considerations
+
+PURPOSE:
+Explain how databases handle time zones during migration.
+
+CONCEPT:
+
+PostgreSQL:
+
+Stores datetimes as timestamp with time zone
+
+Automatically converts between UTC and connection time zone
+
+Allows switching USE_TZ without data migration
+
+Other databases:
+
+Store datetimes without time zone information
+
+Require manual conversion from local time to UTC
+
+SECTION: Migration Guide — Code Changes
+
+PURPOSE:
+Migrate application code to time zone support.
+
+CONCEPT:
+
+Enable USE_TZ = True
+
+Replace naive datetime creation with aware datetimes
+
+Refactor comparisons between naive and aware datetimes
+
+Use helpers from django.utils.timezone
+
+WARNING:
+
+Saving a naive datetime triggers:
+
+RuntimeWarning: DateTimeField ModelName.field_name received a naive datetime
+
+
+Warnings can be escalated to errors during development.
+
+SECTION: Migration Guide — Fixtures
+
+PURPOSE:
+Handle serialized datetimes correctly.
+
+CONCEPT:
+
+Aware datetimes include a UTC offset
+
+Naive datetimes do not
+
+Fixtures created without time zone support must be updated or regenerated
+
+SECTION: FAQ — Best Practices
+
+PURPOSE:
+Address common time zone pitfalls.
+
+KEY POINTS:
+
+Time zone support should remain enabled
+
+Always transmit datetimes with UTC offsets or in UTC
+
+Avoid converting datetimes to dates without first converting time zones
+
+Prefer template filters over manual conversions
+
+SUMMARY:
+
+Django stores datetimes in UTC and renders them in user time zones
+
+Aware datetimes are mandatory when USE_TZ = True
+
+Mixing naive and aware datetimes causes runtime errors
+
+Templates provide fine-grained control over time zone conversion
+
+PostgreSQL handles time zones natively; others require migration care

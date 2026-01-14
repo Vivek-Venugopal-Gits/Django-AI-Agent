@@ -1,0 +1,80 @@
+PURPOSE: This section explains executing raw SQL in Django, using Manager.raw() for model instances or direct custom SQL, with warnings to prefer ORM.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+When ORM insufficient; escape parameters to prevent SQL injection.
+
+CONCEPT: RAW SQL OVERVIEW
+Two ways: Manager.raw() for model instances, or direct SQL bypassing models.
+Explore ORM first: QuerySet API, annotate/aggregate, custom expressions.
+Always escape user-controlled parameters with params.
+SECTION: PERFORMING RAW QUERIES
+PURPOSE: This section describes using raw() for raw SQL returning instances.
+CONCEPT: MANAGER.RAW METHOD
+Executes raw SQL, returns RawQuerySet iterable as instances.
+CODE EXAMPLE:
+Manager.raw(raw_query, params=(), translations=None)
+CODE EXAMPLE:
+for p in Person.objects.raw("SELECT * FROM myapp_person"):
+    print(p)
+Model table names: app_label_modelname, or db_table Meta.
+Warning: No SQL checking; must return rows or error.
+MySQL: integer param on string column coerces to int; typecast properly.
+CONCEPT: INDEX LOOKUPS
+Supports indexing/slicing, but not at DB level; use LIMIT for efficiency.
+CODE EXAMPLE:
+first_person = Person.objects.raw("SELECT * FROM myapp_person LIMIT 1")[0]
+CONCEPT: DEFERRING MODEL FIELDS
+Omit fields: deferred loading on access.
+Must include primary key.
+CONCEPT: ADDING ANNOTATIONS
+Execute with non-model fields; accessible as attributes.
+Use Func() expressions to avoid raw SQL.
+CONCEPT: PASSING PARAMETERS INTO RAW()
+Use params list/dict for %s/%(key)s placeholders.
+CODE EXAMPLE:
+lname = "Doe"
+Person.objects.raw("SELECT * FROM myapp_person WHERE last_name = %s", [lname])
+Dict not supported on SQLite.
+Warning: Do not use % formatting or quote %s; risk injection.
+SECTION: EXECUTING CUSTOM SQL DIRECTLY
+PURPOSE: This section describes direct SQL for non-model queries or updates.
+CONCEPT: CUSTOM SQL OVERVIEW
+Use django.db.connection.cursor() for cursor.
+execute(sql, [params]), fetchone()/fetchall().
+CODE EXAMPLE:
+from django.db import connection
+
+def my_custom_sql(self):
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE bar SET foo = 1 WHERE baz = %s", [self.baz])
+        cursor.execute("SELECT foo FROM bar WHERE baz = %s", [self.baz])
+        row = cursor.fetchone()
+
+    return row
+No quotes around %s.
+Double %% for literal %.
+For multi-DB: django.db.connections["alias"].
+Context manager equivalent to try-finally close.
+Return dicts with dictfetchall().
+CODE EXAMPLE:
+def dictfetchall(cursor):
+    columns = [col[0] for col in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+Or namedtuplefetchall() for namedtuples.
+Assume unique column names.
+CONCEPT: CONNECTIONS AND CURSORS
+Implement Python DB-API (PEP 249), except transactions.
+%s placeholder always, not ?.
+CONCEPT: CALLING STORED PROCEDURES
+callproc(procname, params=None, kparams=None)
+kparams only on Oracle.
+CODE EXAMPLE:
+with connection.cursor() as cursor:
+    cursor.callproc("test_procedure", [1, "test"])
+SUMMARY:
+
+Prefer ORM; use raw() for instances, direct for custom.
+Always parameterize to avoid injection.
+Connections/cursors for flexibility.

@@ -1,0 +1,192 @@
+PURPOSE: This section explains Django's migrations for propagating model changes to the database schema, including commands, backend support, workflow, and advanced topics.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django projects for schema and data changes.
+
+SECTION: THE COMMANDS
+PURPOSE: This section lists commands for interacting with migrations and database schema.
+COMMAND:
+migrate
+Applies and unapplies migrations.
+COMMAND:
+makemigrations
+Creates new migrations based on model changes.
+COMMAND:
+sqlmigrate
+Displays SQL statements for a migration.
+COMMAND:
+showmigrations
+Lists project's migrations and their status.
+CONCEPT: MIGRATIONS OVERVIEW
+Migrations act as version control for database schema. makemigrations packages changes like commits; migrate applies them.
+Migration files are in app's migrations directory, committed to version control.
+Override migrations package name via MIGRATION_MODULES setting.
+Migrations run consistently across datasets.
+Django makes migrations for any model/field changes, including non-database options for reconstruction.
+SECTION: BACKEND SUPPORT
+PURPOSE: This section describes migration support across database backends.
+CONCEPT: POSTGRESQL SUPPORT
+Most capable for schema support.
+CONCEPT: MYSQL SUPPORT
+No transactions around schema alterations; failures require manual rollback.
+MySQL 8.0+ enhances DDL performance, but locks/interruptions possible.
+Small index column size limit.
+CONCEPT: SQLITE SUPPORT
+Limited schema alteration; Django emulates by creating new table, copying data, dropping old, renaming.
+Slow and potentially buggy; not recommended for production.
+CONCEPT: GENERAL SUPPORT
+Supported on all shipped backends and third-party with schema alteration support via SchemaEditor.
+Set atomic=False to run without transactions where unsupported.
+SECTION: WORKFLOW
+PURPOSE: This section outlines creating and applying migrations.
+COMMAND:
+python manage.py makemigrations
+Scans models, compares to migration files, writes new migrations.
+Review output; not always perfect for complex changes.
+COMMAND:
+python manage.py migrate
+Applies migrations.
+Commit models and migrations together.
+COMMAND:
+python manage.py makemigrations --name changed_my_model your_app_label
+Custom name.
+CONCEPT: VERSION CONTROL
+Concurrent migrations may number same; Django detects, offers linearization or manual edit.
+Edit dependencies carefully to avoid inconsistency.
+For multi-database, use allow_migrate in routers for history checks.
+SECTION: TRANSACTIONS
+PURPOSE: This section explains transaction behavior in migrations.
+CONCEPT: TRANSACTIONS OVERVIEW
+On SQLite/PostgreSQL, operations in single transaction by default.
+On MySQL/Oracle, without transactions.
+Set atomic=False on Migration class to disable.
+Use atomic() or RunPython(atomic=True) for partial transactions.
+See Non-atomic migrations for details.
+SECTION: DEPENDENCIES
+PURPOSE: This section describes migration dependencies.
+CONCEPT: DEPENDENCIES OVERVIEW
+Migrations depend on others, e.g., ForeignKey adds dependency.
+Restricting to one app is best-effort; dependencies may pull others.
+Apps without migrations must not relate to apps with migrations.
+CONCEPT: SWAPPABLE DEPENDENCIES
+Use swappable_dependency for swapped models like AUTH_USER_MODEL.
+CODE EXAMPLE:
+from django.db.migrations import swappable_dependency
+swappable_dependency("myapp.MyModel")
+SECTION: MIGRATION FILES
+PURPOSE: This section explains migration file structure and editing.
+CONCEPT: MIGRATION FILES OVERVIEW
+Python files with Migration subclass.
+CODE EXAMPLE:
+from django.db import migrations, models
+
+class Migration(migrations.Migration):
+    dependencies = [("migrations", "0001_initial")]
+
+    operations = [
+        migrations.DeleteModel("Tribble"),
+        migrations.AddField("Author", "rating", models.IntegerField(default=0)),
+    ]
+Django loads Migration subclass, inspects dependencies, operations.
+Operations: key declarative instructions.
+Optimizer reduces sequence.
+Edit manually for complex operations.
+CONCEPT: CUSTOM FIELDS
+Cannot modify positional args in migrated custom fields without TypeError.
+Add new args as kwargs with assertion.
+CONCEPT: MODEL MANAGERS
+Serialize with use_in_migrations=True.
+For from_queryset, inherit generated class.
+CONCEPT: INITIAL MIGRATIONS
+Marked initial=True or first in app.
+With --fake-initial, skips if tables/columns exist.
+CONCEPT: HISTORY CONSISTENCY
+Inconsistent history (applied without dependencies) refused until fixed.
+Prune deleted references with migrate --prune.
+SECTION: ADDING MIGRATIONS TO APPS
+PURPOSE: This section explains adding migrations to existing apps.
+New apps ready; run makemigrations after changes.
+For apps with tables but no migrations:
+COMMAND:
+python manage.py makemigrations your_app_label
+Then migrate --fake-initial.
+Works if no changes since table creation, no manual edits.
+SECTION: REVERSING MIGRATIONS
+PURPOSE: This section describes reversing applied migrations.
+COMMAND:
+python manage.py migrate books 0002
+To zero for all:
+COMMAND:
+python manage.py migrate books zero
+Irreversible operations raise IrreversibleError.
+SECTION: HISTORICAL MODELS
+PURPOSE: This section explains using historical model versions in migrations.
+In RunPython or allow_migrate, use historical models from app registry.
+No custom methods; fields, managers (with use_in_migrations=True), Meta options versioned.
+Keep referenced functions/classes for migrations.
+Base classes stored; keep around.
+Methods/managers from bases inherit.
+To remove references, squash or copy to files.
+SECTION: CONSIDERATIONS WHEN REMOVING MODEL FIELDS
+PURPOSE: This section describes handling removed fields in migrations.
+Removing custom fields referenced in old migrations causes issues.
+Use system_check_deprecated_details, then system_check_removed_details.
+Keep stub field with methods for migrations.
+SECTION: DATA MIGRATIONS
+PURPOSE: This section explains migrations altering data.
+Data migrations alongside schema; write separately.
+Use RunPython with forward/backward functions.
+CODE EXAMPLE:
+from django.db import migrations
+
+def combine_names(apps, schema_editor):
+    Person = apps.get_model("yourappname", "Person")
+    for person in Person.objects.all():
+        person.name = f"{person.first_name} {person.last_name}"
+        person.save()
+
+class Migration(migrations.Migration):
+    dependencies = [("yourappname", "0001_initial")]
+
+    operations = [
+        migrations.RunPython(combine_names),
+    ]
+Omit backward for irreversible.
+CONCEPT: ACCESSING MODELS FROM OTHER APPS
+Add dependencies for other apps.
+CONCEPT: MORE ADVANCED MIGRATIONS
+See migration operations reference, writing migrations how-to.
+SECTION: SQUASHING MIGRATIONS
+PURPOSE: This section explains reducing many migrations to few.
+Squashing optimizes operations into fewer.
+Coexists with old; switches intelligently.
+Process: squash, commit/release, wait for upgrades, remove old, commit/release.
+COMMAND:
+python manage.py squashmigrations myapp 0004
+Use --squashed-name for name.
+Resolve CircularDependencyError manually.
+Can squash squashed (new in 6.0).
+Transition to normal by deleting replaced, updating dependencies, removing replaces.
+SECTION: SERIALIZING VALUES
+PURPOSE: This section explains serializing values in migrations.
+Django serializes: primitives, collections, dates/times, Decimal, Enum, UUID, partial, paths, fields, functions/classes (top-level), deconstructible.
+Cannot: nested classes, arbitrary instances, lambdas.
+CONCEPT: CUSTOM SERIALIZERS
+Subclass BaseSerializer, implement serialize().
+Register with MigrationWriter.register_serializer.
+CONCEPT: ADDING A DECONSTRUCT() METHOD
+For custom classes: deconstruct() returns (path, args, kwargs).
+Add eq() for change detection.
+Use @deconstructible decorator.
+SECTION: SUPPORTING MULTIPLE DJANGO VERSIONS
+PURPOSE: This section advises for third-party apps supporting multiple Django versions.
+Run makemigrations with lowest version.
+Migrations backward-compatible; not forward.
+SUMMARY:
+
+Use makemigrations and migrate for changes.
+Handle dependencies, historical models carefully.
+Squash to reduce files.
+Serialize custom types properly.

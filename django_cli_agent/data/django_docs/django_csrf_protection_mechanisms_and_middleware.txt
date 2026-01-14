@@ -1,0 +1,347 @@
+=========================
+CROSS SITE REQUEST FORGERY (CSRF) PROTECTION
+=========================
+SECTION: CSRF Overview
+
+PURPOSE:
+Explain what CSRF attacks are and what Django protects against.
+
+CONCEPT:
+
+Cross Site Request Forgery (CSRF) is an attack where a malicious site causes a user’s browser to perform an unwanted action on another site where the user is authenticated.
+
+Django’s CSRF protection also covers “login CSRF” attacks, where a user is tricked into logging in with credentials controlled by an attacker.
+
+The primary defense strategy is:
+
+Ensure safe HTTP methods (GET, HEAD, OPTIONS, TRACE) have no side effects
+
+Protect unsafe methods (POST, PUT, DELETE, and others) using CSRF validation
+
+=========================
+CSRF PROTECTION MECHANISM
+=========================
+SECTION: CSRF Protection Components
+
+PURPOSE:
+Describe the core elements used by Django to prevent CSRF attacks.
+
+CONCEPT:
+
+Django’s CSRF protection relies on multiple coordinated checks performed by CsrfViewMiddleware.
+
+SECTION: CSRF Cookie
+
+PURPOSE:
+Explain the role of the CSRF cookie.
+
+CONCEPT:
+
+A CSRF cookie stores a random secret value that is inaccessible to other sites.
+
+The cookie is sent when django.middleware.csrf.get_token() is called
+
+The secret value is rotated every time a user logs in
+
+The cookie alone is not sufficient to validate a request
+
+SECTION: CSRF Token in Forms
+
+PURPOSE:
+Explain how CSRF tokens are embedded in HTML forms.
+
+CONCEPT:
+
+All outgoing POST forms must include a hidden field named csrfmiddlewaretoken.
+
+To mitigate BREACH attacks:
+
+The token is masked using a random value
+
+The masked token changes on every response
+
+Only the underlying secret is validated
+
+This behavior is implemented by the csrf_token template tag.
+
+SECTION: Request Validation Rules
+
+PURPOSE:
+Define how incoming requests are validated.
+
+CONCEPT:
+
+For all requests using unsafe HTTP methods:
+
+A CSRF cookie must be present
+
+A valid csrfmiddlewaretoken must be included
+
+Failure results in an HTTP 403 response
+
+Only the secret portion of the token is compared, allowing tokens to change per request while maintaining a consistent secret.
+
+SECTION: Origin and Referer Validation
+
+PURPOSE:
+Explain how Django verifies request origins.
+
+CONCEPT:
+
+CsrfViewMiddleware enforces origin checks as follows:
+
+If the Origin header is present, it must match the current host or a trusted origin
+
+Trusted origins are defined using CSRF_TRUSTED_ORIGINS
+
+This prevents cross-subdomain and cross-origin attacks
+
+For HTTPS requests without an Origin header:
+
+Strict referer checking is applied
+
+The referer must match the host or configured cookie domain
+
+Referer checks are not applied to HTTP requests due to header unreliability.
+
+SECTION: Cookie Domain and Subdomain Handling
+
+PURPOSE:
+Clarify how cookie domains affect CSRF validation.
+
+CONCEPT:
+
+If CSRF_COOKIE_DOMAIN is set:
+
+Referer validation compares against the configured domain
+
+A leading dot allows cross-subdomain requests
+
+If not set:
+
+The referer must match the HTTP Host header exactly
+
+Trusted origins can further expand allowed domains.
+
+SECTION: Safe vs Unsafe HTTP Methods
+
+PURPOSE:
+Clarify which HTTP methods are protected.
+
+CONCEPT:
+
+CSRF checks are skipped for safe methods:
+
+GET
+
+HEAD
+
+OPTIONS
+
+TRACE
+
+All other methods are treated as unsafe and are subject to CSRF protection.
+
+SECTION: Security Assumptions
+
+PURPOSE:
+Define what CSRF protection does and does not cover.
+
+CONCEPT:
+
+CSRF protection:
+
+DOES NOT protect against man-in-the-middle attacks
+
+ASSUMES HTTPS is used
+
+ASSUMES Host header validation is enabled
+
+ASSUMES no cross-site scripting (XSS) vulnerabilities exist
+
+XSS vulnerabilities already allow attackers to bypass CSRF protections entirely.
+
+=========================
+REFERER HEADER CONSIDERATIONS
+=========================
+SECTION: Referer Header Removal
+
+PURPOSE:
+Explain the impact of suppressing the Referer header.
+
+CONCEPT:
+
+Disabling the Referer header globally can cause CSRF validation failures for unsafe requests under HTTPS.
+
+DO NOT disable the Referer header site-wide for unsafe requests.
+
+Instead:
+
+Use rel="noreferrer" on individual outbound links when necessary
+
+=========================
+LIMITATIONS
+=========================
+SECTION: Subdomain Trust Limitations
+
+PURPOSE:
+Explain inherent CSRF limitations related to subdomains.
+
+CONCEPT:
+
+Subdomains can set cookies for the entire domain.
+
+If subdomains are untrusted:
+
+They may bypass CSRF protection by setting valid cookies and tokens
+
+DO NOT delegate subdomains to untrusted parties.
+
+=========================
+CSRF UTILITIES
+=========================
+SECTION: csrf_exempt
+
+PURPOSE:
+Disable CSRF protection for a specific view.
+
+COMMAND:
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def my_view(request):
+    return HttpResponse("Hello world")
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Integrating with trusted external systems
+
+Handling non-browser clients where CSRF is not applicable
+
+DO NOT USE WHEN:
+
+The view accepts authenticated user input
+
+The view performs sensitive state changes
+
+SECTION: csrf_protect
+
+PURPOSE:
+Enable CSRF protection for a specific view.
+
+COMMAND:
+from django.shortcuts import render
+from django.views.decorators.csrf import csrf_protect
+
+@csrf_protect
+def my_view(request):
+    c = {}
+    # ...
+    return render(request, "a_template.html", c)
+
+SECTION: requires_csrf_token
+
+PURPOSE:
+Ensure CSRF tokens are available to templates without rejecting requests.
+
+COMMAND:
+from django.shortcuts import render
+from django.views.decorators.csrf import requires_csrf_token
+
+@requires_csrf_token
+def my_view(request):
+    c = {}
+    # ...
+    return render(request, "a_template.html", c)
+
+SECTION: ensure_csrf_cookie
+
+PURPOSE:
+Force the CSRF cookie to be sent with the response.
+
+CONCEPT:
+
+This decorator ensures that the CSRF cookie is included even if no token is generated.
+
+=========================
+CSRF SETTINGS
+=========================
+SECTION: CSRF Configuration Options
+
+PURPOSE:
+List settings that control CSRF behavior.
+
+CONCEPT:
+
+The following settings affect CSRF protection:
+
+CSRF_COOKIE_AGE
+
+CSRF_COOKIE_DOMAIN
+
+CSRF_COOKIE_HTTPONLY
+
+CSRF_COOKIE_NAME
+
+CSRF_COOKIE_PATH
+
+CSRF_COOKIE_SAMESITE
+
+CSRF_COOKIE_SECURE
+
+CSRF_FAILURE_VIEW
+
+CSRF_HEADER_NAME
+
+CSRF_TRUSTED_ORIGINS
+
+CSRF_USE_SESSIONS
+
+=========================
+FREQUENTLY ASKED QUESTIONS
+=========================
+SECTION: Arbitrary CSRF Token Submission
+
+PURPOSE:
+Clarify whether submitting arbitrary tokens is a vulnerability.
+
+CONCEPT:
+
+Submitting arbitrary CSRF tokens is not a vulnerability.
+
+Attackers cannot set CSRF cookies in a victim’s browser without XSS or similar attacks. Modifying your own tokens using developer tools does not represent a security issue.
+
+SECTION: Session Independence
+
+PURPOSE:
+Explain why CSRF tokens are not session-bound by default.
+
+CONCEPT:
+
+CSRF tokens are not tied to sessions to support anonymous submissions.
+
+To store CSRF tokens in sessions, enable CSRF_USE_SESSIONS.
+
+SECTION: CSRF Failures After Login
+
+PURPOSE:
+Explain token invalidation after authentication.
+
+CONCEPT:
+
+CSRF tokens are rotated on login.
+
+Forms rendered before login contain invalid tokens and must be reloaded. This commonly occurs when users navigate back after logging in or authenticate in a separate tab.
+
+SUMMARY:
+
+CSRF protection defends against unauthorized state-changing requests
+
+Validation combines cookies, tokens, origin checks, and referer checks
+
+Unsafe HTTP methods are always protected
+
+Trusted subdomains are a strict requirement

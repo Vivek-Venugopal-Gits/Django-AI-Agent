@@ -1,0 +1,89 @@
+APPLICABILITY: Database backend configuration and limitations across PostgreSQL, MySQL, Oracle, SQLite, MariaDB
+​
+SECTION: Supported Databases: Lists officially supported database backends and third-party options.
+Supported databases include PostgreSQL 14+, MariaDB 10.6+, MySQL 8.0.11+, Oracle, SQLite 3.31.0+. Django supports maximum features across backends but makes compromises where databases differ.
+
+SECTION: Persistent Connections: Controls CONN_MAX_AGE for connection reuse.
+Persistent connections reuse database connections across HTTP requests. Set CONN_MAX_AGE to positive integer seconds or None for unlimited lifetime. Default is 0 (close after each request).
+
+USAGE GUIDELINES:
+USE WHEN:
+
+High-traffic applications needing connection reuse
+
+Database supports thread-per-connection model
+
+DO NOT USE WHEN:
+
+ASGI applications (disable for connection pooling)
+
+Development server (creates new thread per request)
+
+SECTION: PostgreSQL Configuration: Optimizes psycopg 3.1.12+ connections.
+PostgreSQL requires client_encoding='UTF8', default_transaction_isolation='read committed', timezone handling. Set via postgresql.conf or ALTER ROLE for performance.
+CODE:
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'OPTIONS': {
+            'isolation_level': IsolationLevel.SERIALIZABLE,  # Higher isolation
+            'service': 'myservice',  # Service file connection
+            'passfile': '~/.mypgpass',
+        }
+    }
+}
+CONCEPT: Connection Pooling
+Enable psycopg pool via OPTIONS['pool'] = True or dict configuration. Requires psycopg-pool package.
+
+SECTION: MySQL/MariaDB Notes: Storage engines and collation settings.
+Use InnoDB storage engine (transactional, foreign keys). Create database with CHARACTER SET utf8mb4. Default collation utf8mb4_0900_ai_ci performs case-insensitive comparisons.
+
+CODE:
+CREATE DATABASE dbname CHARACTER SET utf8mb4;
+USAGE GUIDELINES:
+USE WHEN:
+
+Strict mode (STRICT_TRANS_TABLES) for data truncation prevention
+
+mysqlclient 2.2.1+ driver
+
+DO NOT USE WHEN:
+
+MyISAM (no transactions/foreign keys)
+
+SECTION: SQLite Limitations: Development-focused database constraints.
+SQLite provides read-only/read-mostly development alternative. Lacks SELECT ... FOR UPDATE support. Case-insensitive substring matching with iexact/contains filters.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+Small footprint applications
+
+Development/prototyping
+
+DO NOT USE WHEN:
+
+High concurrency (limited transactions)
+
+Production write-heavy workloads
+
+SECTION: Oracle Backend: NCLOB and identifier constraints.
+Oracle stores TextField as NCLOB (no primary keys/indexes/DISTINCT). Limits identifiers to 30 characters (auto-truncates with MD5 hash). Quotes db_table for legacy uppercase names.
+
+CODE:
+class LegacyModel(models.Model):
+    class Meta:
+        db_table = '"nameleftinlowercase"'
+SECTION: Cross-Database Warnings: Common configuration pitfalls.
+CODE:
+- Use utf8mb4 charset (MySQL) to avoid encoding errors
+- Set CONN_HEALTH_CHECKS=True for robust connection reuse
+- Avoid persistent connections (CONN_MAX_AGE=0) in development/ASGI
+- Reset sequences after manual AutoField assignment (PostgreSQL)
+- Timezone tables required for MySQL timezone support (mysql_tzinfo_to_sql)
+SUMMARY:
+PostgreSQL: psycopg 3.1.12+, connection pooling, server-side cursors
+MySQL/MariaDB: InnoDB required, utf8mb4 charset, strict SQL mode
+SQLite: Development-only, no SELECT FOR UPDATE, case-insensitive matching quirks
+Oracle: NCLOB TextField limits, 30-char identifier truncation
+All: UTF-8 encoding required, persistent connections via CONN_MAX_AGE

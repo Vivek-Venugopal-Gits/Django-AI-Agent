@@ -1,0 +1,213 @@
+=========================
+INTERNATIONALIZATION AND LOCALIZATION
+=========================
+SECTION: Overview
+
+PURPOSE:
+Enable a single Django application to serve content in multiple languages and regional formats.
+
+CONCEPT:
+
+Internationalization and localization allow web applications to adapt content to users’ linguistic and cultural preferences.
+
+Django provides built-in support for:
+
+Translation of text
+
+Formatting of dates, times, and numbers
+
+Time zone handling
+
+These features work together to customize the user experience based on locale-specific preferences.
+
+=========================
+DJANGO’S ROLE IN I18N AND L10N
+=========================
+SECTION: Core Responsibilities
+
+PURPOSE:
+Explain what Django handles in the i18n/l10n process.
+
+Django performs two primary functions:
+
+Declaration Phase (Developer-Controlled)
+Developers and template authors define which parts of the application:
+
+Are translatable
+
+Require locale-aware formatting
+
+Localization Phase (Runtime-Controlled)
+Django uses these definitions to localize the application for individual users based on preferences.
+
+=========================
+LANGUAGE, FORMAT, AND TIME ZONE SOURCES
+=========================
+SECTION: Locale Determination
+
+PURPOSE:
+Explain how Django determines user preferences.
+
+Language and formatting
+Derived from the browser’s Accept-Language HTTP header.
+
+Time zone
+Not automatically provided by browsers and must be handled separately.
+
+Translation generally depends on the target language, while formatting depends on the target country or region.
+
+=========================
+TERMINOLOGY AND DEFINITIONS
+=========================
+SECTION: Key Definitions
+
+PURPOSE:
+Clarify commonly confused internationalization terms.
+
+TERM: Internationalization (i18n)
+
+DEFINITION:
+The process of preparing software for localization.
+
+RESPONSIBILITY:
+Typically performed by developers.
+
+TERM: Localization (l10n)
+
+DEFINITION:
+The process of writing translations and defining local formats.
+
+RESPONSIBILITY:
+Typically performed by translators or localization teams.
+
+=========================
+IMPORTANT SETTING WARNING
+=========================
+SECTION: USE_I18N Setting
+
+WARNING:
+Translation behavior is controlled by the USE_I18N setting.
+
+Despite its name, this setting affects both internationalization and localization. The naming reflects historical design decisions in Django.
+
+=========================
+LOCALE AND LANGUAGE TERMINOLOGY
+=========================
+SECTION: Locale Name
+
+DEFINITION:
+A locale identifier describing a language or a language-country combination.
+
+FORMAT:
+
+Language only: ll
+
+Language + country: ll_CC
+
+RULES:
+
+Language code: lowercase
+
+Country code:
+
+Uppercase if 2 characters
+
+Titlecase if longer
+
+Separator: underscore (_)
+
+EXAMPLES:
+
+it
+
+de_AT
+
+es
+
+pt_BR
+
+sr_Latn
+
+SECTION: Language Code
+
+DEFINITION:
+Represents a language identifier sent by browsers in the Accept-Language header.
+
+FORMAT:
+
+Lowercase by convention
+
+Case-insensitive in HTTP
+
+Separator: dash (-)
+
+EXAMPLES:
+
+it
+
+de-at
+
+es
+
+pt-br
+
+=========================
+TRANSLATION FILES
+=========================
+SECTION: Message File
+
+DEFINITION:
+A plain-text file containing all translatable strings for a single language.
+
+FILE TYPE:
+.po
+
+CONTENTS:
+
+Original text (message IDs)
+
+Translated text for a specific language
+
+SECTION: Translation String
+
+DEFINITION:
+A literal value in code or templates that can be translated.
+
+=========================
+FORMAT FILES
+=========================
+SECTION: Format File
+
+DEFINITION:
+A Python module defining locale-specific formatting rules.
+
+RESPONSIBILITIES:
+
+Date formats
+
+Time formats
+
+Number formats
+
+Each locale can define its own format file to control presentation conventions.
+
+=========================
+SUMMARY
+=========================
+SUMMARY:
+
+Django supports multilingual and locale-aware applications
+
+Internationalization prepares the app for localization
+
+Localization provides actual translations and formats
+
+Language preferences come from Accept-Language
+
+Time zones require separate handling
+
+.po files store translations
+
+Format files control regional presentation rules
+
+Locale names and language codes follow distinct conventions

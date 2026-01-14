@@ -1,0 +1,420 @@
+SECTION: Built-in Template Tags and Filters Overview
+
+PURPOSE:
+Describe Django’s built-in template tags and filters used for logic, rendering control, formatting, and data manipulation in templates.
+
+CONCEPT:
+
+Django templates provide built-in tags and filters that implement presentation logic without embedding Python code. These constructs control flow, formatting, escaping, inclusion, reuse, and data transformation.
+
+SECTION: Auto-Escaping Control
+TAG: autoescape
+CONCEPT:
+
+Controls whether HTML auto-escaping is enabled within a template block. When enabled, variables are escaped unless explicitly marked as safe.
+
+COMMAND:
+{% autoescape on %}
+    {{ body }}
+{% endautoescape %}
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Rendering user-provided content safely
+
+Preventing XSS vulnerabilities
+
+DO NOT USE WHEN:
+
+Outputting already sanitized HTML without understanding safety implications
+
+SUMMARY:
+
+Auto-escaping applies after filters
+
+Safe strings bypass escaping
+
+Chained filters may suppress escaping when autoescape is off
+
+SECTION: Template Inheritance Blocks
+TAG: block
+CONCEPT:
+
+Defines a named section in a template that child templates can override.
+
+SECTION: Commenting Template Code
+TAG: comment
+CONCEPT:
+
+Ignores everything between {% comment %} and {% endcomment %}. Comments are not rendered.
+
+COMMAND:
+{% comment "Optional note" %}
+    <p>Commented out content</p>
+{% endcomment %}
+
+USAGE GUIDELINES:
+
+DO NOT USE WHEN:
+
+Nesting comments (not supported)
+
+SECTION: CSRF Protection
+TAG: csrf_token
+CONCEPT:
+
+Outputs a CSRF token required for POST forms to prevent cross-site request forgery.
+
+SECTION: Cycling Values
+TAG: cycle
+CONCEPT:
+
+Cycles through a list of values on each invocation. Commonly used in loops.
+
+COMMAND:
+{% cycle 'row1' 'row2' %}
+
+ADVANCED USAGE:
+
+Named cycles with as
+
+Silent declaration with silent
+
+Reset with resetcycle
+
+SUMMARY:
+
+Supports strings and variables
+
+Can be reused across template scopes
+
+Silent cycles suppress output
+
+SECTION: Debug Output
+TAG: debug
+CONCEPT:
+
+Outputs debugging information including context and imported modules.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+DEBUG setting is enabled
+
+Inspecting template context during development
+
+SECTION: Template Extension
+TAG: extends
+CONCEPT:
+
+Declares a parent template to inherit from.
+
+COMMAND:
+{% extends "base.html" %}
+
+RULES:
+
+Must be the first tag in the template
+
+Accepts literals or variables
+
+Supports relative paths
+
+SECTION: Filtering Template Blocks
+TAG: filter
+CONCEPT:
+
+Applies one or more filters to the entire block content.
+
+COMMAND:
+{% filter force_escape|lower %}
+    Content
+{% endfilter %}
+
+USAGE GUIDELINES:
+
+DO NOT USE:
+
+escape or safe filters (use autoescape instead)
+
+SECTION: Conditional Fallback Output
+TAG: firstof
+CONCEPT:
+
+Outputs the first variable that evaluates to a non-false value.
+
+COMMAND:
+{% firstof var1 var2 "fallback" %}
+
+SECTION: Looping Constructs
+TAG: for
+CONCEPT:
+
+Iterates over sequences, dictionaries, or querysets.
+
+COMMAND:
+{% for athlete in athlete_list %}
+    {{ athlete.name }}
+{% endfor %}
+
+LOOP VARIABLES:
+
+forloop.counter
+
+forloop.first
+
+forloop.last
+
+forloop.length (Added in Django 6.0)
+
+SECTION: Loop Empty Handling
+TAG: for … empty
+CONCEPT:
+
+Renders fallback content if the iterable is empty or missing.
+
+SECTION: Conditional Logic
+TAG: if
+CONCEPT:
+
+Evaluates expressions using boolean logic and comparison operators.
+
+SUPPORTED OPERATORS:
+
+Logical: and, or, not
+
+Comparison: ==, !=, <, >, <=, >=
+
+Membership: in, not in
+
+Identity: is, is not
+
+RULES:
+
+Operator precedence matches Python
+
+Parentheses are not allowed
+
+Chained comparisons are invalid
+
+SECTION: Change Detection in Loops
+TAG: ifchanged
+CONCEPT:
+
+Renders content only when values change between loop iterations.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Grouping repeated values visually
+
+Avoiding redundant output
+
+SECTION: Including Subtemplates
+TAG: include
+CONCEPT:
+
+Renders another template with the current or limited context.
+
+COMMAND:
+{% include "template.html" %}
+
+RULES:
+
+Included templates render independently
+
+Blocks are evaluated before inclusion
+
+SECTION: Loading Custom Tag Libraries
+TAG: load
+CONCEPT:
+
+Loads custom template tag and filter libraries.
+
+COMMAND:
+{% load somelibrary %}
+
+SECTION: Placeholder Text Generation
+TAG: lorem
+CONCEPT:
+
+Generates Lorem Ipsum text for placeholder content.
+
+SECTION: Current Date and Time
+TAG: now
+CONCEPT:
+
+Outputs the current date/time using a format string.
+
+COMMAND:
+{% now "Y" as current_year %}
+
+SECTION: Template Partials (New in Django 6.0)
+TAG: partialdef
+CONCEPT:
+
+Defines a reusable template fragment.
+
+TAG: partial
+CONCEPT:
+
+Renders a previously defined partial.
+
+SECTION: Query String Manipulation (Django 6.0)
+TAG: querystring
+CONCEPT:
+
+Builds or modifies URL query strings from mappings.
+
+RULES:
+
+Always returns a leading ?
+
+Later arguments override earlier ones
+
+Supports lists and removal via None
+
+SECTION: Regrouping Data
+TAG: regroup
+CONCEPT:
+
+Groups ordered data by a shared attribute into named groups.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Data is already sorted by grouping key
+
+DO NOT USE WHEN:
+
+Input data is unordered (will produce duplicate groups)
+
+SECTION: Resetting Cycles
+TAG: resetcycle
+CONCEPT:
+
+Resets a previously defined cycle to its first value.
+
+SECTION: Removing Whitespace
+TAG: spaceless
+CONCEPT:
+
+Removes whitespace between HTML tags only.
+
+SECTION: Escaping Template Syntax
+TAG: templatetag
+CONCEPT:
+
+Outputs Django template syntax characters literally.
+
+SECTION: URL Reversal
+TAG: url
+CONCEPT:
+
+Generates URLs from named URL patterns.
+
+RULES:
+
+Arguments must match URLconf
+
+Positional and keyword arguments cannot be mixed
+
+Missing URLs raise errors unless using as var
+
+SECTION: Literal Rendering
+TAG: verbatim
+CONCEPT:
+
+Prevents template rendering within the block.
+
+SECTION: Ratio-Based Calculation
+TAG: widthratio
+CONCEPT:
+
+Calculates proportional values, commonly for visual scaling.
+
+SECTION: Context Variable Aliasing
+TAG: with
+CONCEPT:
+
+Assigns complex expressions to temporary variables.
+
+SECTION: Built-in Filters Overview
+
+PURPOSE:
+Transform and format values inside template variables.
+
+SECTION: Arithmetic and String Filters
+FILTER: add
+
+Adds values numerically or concatenates sequences.
+
+FILTER: addslashes
+
+Escapes quotes with backslashes.
+
+FILTER: capfirst
+
+Capitalizes the first character.
+
+FILTER: center
+
+Centers text within a fixed width.
+
+FILTER: cut
+
+Removes all occurrences of a substring.
+
+SECTION: Date Formatting
+FILTER: date
+CONCEPT:
+
+Formats date and datetime values using Django-specific format specifiers.
+
+RULES:
+
+Compatible with PHP-style date formats
+
+Locale-aware
+
+Supports predefined formats
+
+SECTION: Default Value Filters
+FILTER: default
+
+Uses fallback if value is falsey.
+
+FILTER: default_if_none
+
+Uses fallback only if value is None.
+
+SECTION: Sorting Filters
+FILTER: dictsort
+
+Sorts lists of dictionaries by key or nested attribute.
+
+FILTER: dictsortreversed
+
+Same as dictsort, reversed order.
+
+SECTION: Boolean and Escaping Filters
+FILTER: divisibleby
+
+Returns true if divisible.
+
+FILTER: escape
+
+Escapes HTML entities safely.
+
+FILTER: escapejs
+
+Escapes strings for JavaScript literals.
+
+FILTER: escapeseq
+
+Escapes each element in a sequence.

@@ -1,0 +1,137 @@
+PURPOSE: This section describes Django's support for using multiple databases, including configuration, routing, synchronization, and manual selection.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Projects requiring multiple databases (e.g., primary/replica, separate apps).
+
+SECTION: DEFINING YOUR DATABASES
+PURPOSE: This section explains configuring multiple databases.
+CONCEPT: DATABASES SETTING
+DATABASES: dict of aliases to connection settings.
+default alias special: used when unspecified.
+CODE EXAMPLE:
+DATABASES = {
+    "default": {
+        "NAME": "app_data",
+        "ENGINE": "django.db.backends.postgresql",
+        "USER": "postgres_user",
+        "PASSWORD": "s3krit",
+    },
+    "users": {
+        "NAME": "user_data",
+        "ENGINE": "django.db.backends.mysql",
+        "USER": "mysql_user",
+        "PASSWORD": "priv4te",
+    },
+}
+Empty default possible with routers covering all apps.
+Undefined alias: ConnectionDoesNotExist.
+SECTION: SYNCHRONIZING YOUR DATABASES
+PURPOSE: This section describes applying migrations to multiple databases.
+CONCEPT: MIGRATE COMMAND
+migrate: one DB at a time; default or --database.
+CODE EXAMPLE:
+Shell./manage.py migrate
+./manage.py migrate --database=users
+makemigrations: validates history; checks default or allow_migrate().
+Other commands: similar, use --database.
+SECTION: AUTOMATIC DATABASE ROUTING
+PURPOSE: This section explains default and custom routing.
+CONCEPT: DEFAULT ROUTING
+Sticky: objects saved to retrieval DB.
+Fallback to default if unspecified.
+CONCEPT: DATABASE ROUTERS
+Classes with methods: db_for_read, db_for_write, allow_relation, allow_migrate.
+Return DB alias or None.
+Hints: instance etc.
+CONCEPT: USING ROUTERS
+DATABASE_ROUTERS: list of router class paths.
+Processed in order.
+CONCEPT: EXAMPLE ROUTERS
+AuthRouter: auth/contenttypes to auth_db.
+PrimaryReplicaRouter: reads random replica, writes primary.
+CODE EXAMPLE:
+class AuthRouter:
+    route_app_labels = {"auth", "contenttypes"}
+
+    def db_for_read(self, model, **hints):
+        if model._meta.app_label in self.route_app_labels:
+            return "auth_db"
+        return None
+
+    # Similar for write, allow_relation, allow_migrate
+
+class PrimaryReplicaRouter:
+    def db_for_read(self, model, **hints):
+        return random.choice(["replica1", "replica2"])
+
+    def db_for_write(self, model, **hints):
+        return "primary"
+
+    # allow_relation, allow_migrate
+DATABASE_ROUTERS = ["path.to.AuthRouter", "path.to.PrimaryReplicaRouter"]
+SECTION: MANUALLY SELECTING A DATABASE
+PURPOSE: This section explains explicit DB selection.
+CONCEPT: USING() ON QUERYSET
+using(alias): new QuerySet on alias.
+CODE EXAMPLE:
+Author.objects.using("other")
+CONCEPT: SAVE() WITH USING
+save(using=alias)
+CODE EXAMPLE:
+my_object.save(using="legacy_users")
+Moving: clear pk or force_insert.
+CONCEPT: DELETE() WITH USING
+delete(using=alias)
+CONCEPT: DB_MANAGER() ON MANAGERS
+db_manager(alias): manager bound to alias.
+CODE EXAMPLE:
+User.objects.db_manager("new_users").create_user(...)
+get_queryset(): handle _db.
+SECTION: EXPOSING MULTIPLE DATABASES IN DJANGO’S ADMIN INTERFACE
+PURPOSE: This section describes custom ModelAdmin for non-default DBs.
+CONCEPT: MULTIDBMODELADMIN
+Override save_model, delete_model, get_queryset, formfield_for_foreignkey/manytomany.
+CODE EXAMPLE:
+class MultiDBModelAdmin(admin.ModelAdmin):
+    using = "other"
+
+    def save_model(self, request, obj, form, change):
+        obj.save(using=self.using)
+
+    def delete_model(self, request, obj):
+        obj.delete(using=self.using)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).using(self.using)
+
+    # formfield_for_foreignkey/manytomany
+Similar for InlineModelAdmin.
+Register with AdminSite.
+SECTION: USING RAW CURSORS WITH MULTIPLE DATABASES
+PURPOSE: This section explains direct cursor access.
+CONCEPT: CONNECTIONS DICT
+connections["alias"].cursor()
+CODE EXAMPLE:
+from django.db import connections
+
+with connections["my_db_alias"].cursor() as cursor:
+    ...
+SECTION: LIMITATIONS OF MULTIPLE DATABASES
+PURPOSE: This section lists restrictions.
+CONCEPT: CROSS-DATABASE RELATIONS
+No support for FK/M2M across DBs.
+Referential integrity issues.
+MyISAM: possible but unsupported.
+CONCEPT: BEHAVIOR OF CONTRIB APPS
+Some must be together: auth with contenttypes, admin with auth, flatpages/redirects with sites.
+Auto-created objects: Site, ContentType, Permissions.
+Recommend router to sync to one DB.
+Multiple contenttypes sync: PK mismatch risk.
+SUMMARY:
+
+Configure DATABASES.
+Use routers for automatic allocation.
+Manual: using(), save/delete(using=).
+Limitations: no cross-DB relations, contrib constraints.

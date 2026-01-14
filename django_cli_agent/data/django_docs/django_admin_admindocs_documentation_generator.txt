@@ -1,0 +1,211 @@
+PURPOSE:
+Explain how Django’s admindocs app generates and exposes developer-facing documentation inside the Django admin.
+
+The django.contrib.admindocs application automatically extracts documentation from Python docstrings defined on models, views, template tags, and template filters. This documentation is made available through the Django admin interface for all applications listed in INSTALLED_APPS.
+
+SECTION: Version and Applicability
+
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django projects using the built-in admin interface
+
+Documentation sourced from Python docstrings
+
+Features described include changes introduced in Django 5.2 and later
+
+SECTION: Activation and Setup
+
+PURPOSE:
+Describe the required steps to enable and use the admin documentation generator.
+
+To activate admindocs, ALL of the following are required:
+
+Add django.contrib.admindocs to INSTALLED_APPS.
+
+Include the admindocs URL configuration in urlpatterns before the admin URL entry.
+
+Install the docutils package version 0.22 or higher.
+
+(Optional) Install django.contrib.admindocs.middleware.XViewMiddleware to enable bookmarklet functionality.
+
+Once enabled, the documentation is accessible from within the Django admin.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+You want centralized, auto-generated documentation for internal developers
+
+You rely on docstrings as the authoritative documentation source
+
+DO NOT USE WHEN:
+
+Documentation must be exposed publicly
+
+You do not maintain meaningful docstrings in your codebase
+
+SECTION: Documentation Helpers (reStructuredText Roles)
+
+PURPOSE:
+Define special markup roles that enable cross-linking between documented components.
+
+The following reStructuredText roles may be used inside docstrings to generate hyperlinks:
+
+COMPONENT	ROLE SYNTAX
+Models	:model:\app_label.ModelName``
+Views	:view:\app_label.view_name``
+Template tags	:tag:\tagname``
+Template filters	:filter:\filtername``
+Templates	:template:\path/to/template.html``
+
+Custom link text is supported using this format:
+
+:role:`link text <target>`
+
+
+Changed in Django 5.2:
+Support for custom link text was added.
+
+SECTION: Model Reference Documentation
+
+PURPOSE:
+Explain how model documentation is generated and displayed.
+
+The models section lists all models the user is permitted to access. For each model, the documentation includes:
+
+Fields
+
+Properties
+
+Methods
+
+Relationships to other models (displayed as hyperlinks)
+
+Documentation sources:
+
+Field descriptions are pulled from help_text
+
+Method descriptions are pulled from method docstrings
+
+COMMAND: Example Documented Model
+CODE:
+class BlogEntry(models.Model):
+    """
+    Stores a single blog entry, related to :model:`blog.Blog` and
+    :model:`auth.User`.
+    """
+
+    slug = models.SlugField(help_text="A short label, generally used in URLs.")
+    author = models.ForeignKey(
+        User,
+        models.SET_NULL,
+        blank=True,
+        null=True,
+    )
+    blog = models.ForeignKey(Blog, models.CASCADE)
+    ...
+
+    def publish(self):
+        """Makes the blog entry live on the site."""
+        ...
+
+
+Changed in Django 5.2:
+Access to model documentation is restricted to users with view or change permissions for that model.
+
+SECTION: View Reference Documentation
+
+PURPOSE:
+Describe how views are documented and presented.
+
+Each URL pattern in the project appears as a separate entry. Selecting a URL displays the associated view documentation.
+
+Recommended view docstring content:
+
+A concise description of the view’s purpose
+
+A list of context variables
+
+The template or templates rendered by the view
+
+COMMAND: Example Documented View
+CODE:
+from django.shortcuts import render
+from myapp.models import MyModel
+
+def my_view(request, slug):
+    """
+    Display an individual :model:`myapp.MyModel`.
+
+    **Context**
+
+    ``mymodel``
+        An instance of :model:`myapp.MyModel`.
+
+    **Template:**
+
+    :template:`myapp/my_template.html`
+    """
+    context = {"mymodel": MyModel.objects.get(slug=slug)}
+    return render(request, "myapp/my_template.html", context)
+
+SECTION: Template Tags and Filters Reference
+
+PURPOSE:
+Explain how template tag and filter documentation is generated.
+
+The tags and filters sections document:
+
+All built-in Django template tags and filters
+
+Any custom tags or filters defined in project or third-party applications
+
+These sections are generated entirely from tag and filter docstrings.
+
+SECTION: Template Reference Validation
+
+PURPOSE:
+Describe how template references are validated.
+
+admindocs does not support standalone template documentation. However, when the :template: role is used in a docstring, Django verifies the referenced template path using the configured template loaders.
+
+This allows:
+
+Confirmation that the template exists
+
+Display of the template’s filesystem location
+
+SECTION: Included Bookmarklet
+
+PURPOSE:
+Describe the available bookmarklet and its requirements.
+
+The provided bookmarklet allows navigation from any rendered page directly to the documentation for the view that generated that page.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+You need to inspect view documentation during development
+
+You want rapid navigation between views and their docs
+
+REQUIREMENTS:
+
+XViewMiddleware must be installed
+
+The user must be logged into the Django admin
+
+The user must have is_staff = True
+
+SUMMARY:
+
+admindocs generates admin-visible documentation from docstrings
+
+Models, views, tags, filters, and templates are supported
+
+reStructuredText roles enable internal cross-linking
+
+Access control is enforced via standard Django permissions

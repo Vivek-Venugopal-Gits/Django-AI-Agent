@@ -1,0 +1,153 @@
+APPLICABILITY: All Django installations and deployments
+CONCEPT: DJANGO SETTINGS FILE
+Django settings file contains all configuration for a Django installation. Settings file is a Python module with module-level variables.
+
+Example settings:
+
+CODE:
+ALLOWED_HOSTS = ["www.example.com"]
+DEBUG = False
+DEFAULT_FROM_EMAIL = "webmaster@example.com"
+DO NOT allow Python syntax errors in settings file. Settings file supports dynamic assignment using Python syntax. Settings file can import values from other settings files.
+
+If DEBUG is False, set ALLOWED_HOSTS properly.
+
+SUMMARY:
+Settings file is Python module with module-level variables
+Supports dynamic assignment and imports from other settings
+DEBUG=False requires ALLOWED_HOSTS configuration
+
+CONCEPT: DESIGNATING THE SETTINGS MODULE
+Use DJANGO_SETTINGS_MODULE environment variable to specify settings module. Value uses Python path syntax like mysite.settings. Settings module must be on Python sys.path.
+
+COMMAND: SET DJANGO_SETTINGS_MODULE (UNIX BASH)
+CODE:
+export DJANGO_SETTINGS_MODULE=mysite.settings
+django-admin runserver
+COMMAND: SET DJANGO_SETTINGS_MODULE (WINDOWS)
+CODE:
+set DJANGO_SETTINGS_MODULE=mysite.settings
+django-admin runserver
+COMMAND: USE --SETTINGS ARGUMENT
+CODE:
+django-admin runserver --settings=mysite.settings
+COMMAND: WSGI SERVER CONFIGURATION
+CODE:
+import os
+os.environ["DJANGO_SETTINGS_MODULE"] = "mysite.settings"
+CONCEPT: DEFAULT SETTINGS LOADING
+Django loads settings from django/conf/global_settings.py first. Specified settings file overrides global settings. DO NOT import from global_settings in settings file - this is redundant.
+
+COMMAND: VIEW CHANGED SETTINGS
+CODE:
+manage.py diffsettings
+Displays differences between current settings and Django defaults.
+
+CONCEPT: USING SETTINGS IN PYTHON CODE
+Import django.conf.settings object to access settings in Django apps.
+
+COMMAND: ACCESS SETTINGS
+CODE:
+from django.conf import settings
+
+if settings.DEBUG:
+     Do something
+    ...
+django.conf.settings is an object, not a module. DO NOT import individual settings like from django.conf.settings import DEBUG. DO NOT import from global_settings or own settings file.
+
+CONCEPT: RUNTIME SETTINGS ALTERATION
+DO NOT alter settings at runtime in applications or views.
+
+COMMAND: INCORRECT RUNTIME CHANGE (DO NOT USE)
+CODE:
+from django.conf import settings
+settings.DEBUG = True  # Don't do this!
+Assign settings only in settings files.
+
+CONCEPT: SETTINGS SECURITY
+Settings file contains sensitive information like database passwords. Limit access to settings file. Change file permissions so only owner and web server user can read it.
+
+CONCEPT: CREATING CUSTOM SETTINGS
+Create custom settings for Django apps following these rules:
+
+Use all uppercase names
+
+DO NOT reinvent existing settings
+Django uses lists for sequence settings as convention.
+
+CONCEPT: SETTINGS WITHOUT DJANGO_SETTINGS_MODULE
+Configure settings manually using django.conf.settings.configure() for standalone usage or template system alone.
+
+COMMAND: BASIC CONFIGURE
+CODE:
+from django.conf import settings
+settings.configure(DEBUG=True)
+Pass keyword arguments for settings. Django uses default values for unspecified settings.
+
+COMMAND: CUSTOM DEFAULT SETTINGS
+CODE:
+from django.conf import settings
+from myapp import myapp_defaults
+
+settings.configure(default_settings=myapp_defaults, DEBUG=True)
+Custom defaults replace Django defaults completely. Specify all needed settings when overriding defaults.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+Using Django components standalone
+
+Template system without full Django setup
+
+Framework pieces in larger applications
+
+DO NOT USE WHEN:
+
+DJANGO_SETTINGS_MODULE already set
+
+Settings accessed before configure()
+
+Calling configure() multiple times
+
+CONCEPT: CONFIGURE REQUIREMENTS
+Use exactly one of configure() or DJANGO_SETTINGS_MODULE. Check settings.configured before calling configure().
+
+COMMAND: SAFE CONFIGURE CHECK
+CODE:
+from django.conf import settings
+
+if not settings.configured:
+    settings.configure(myapp_defaults, DEBUG=True)
+CONCEPT: STANDALONE DJANGO USAGE
+For standalone scripts using Django components, call django.setup() after configuring settings. Loads settings and populates application registry.
+
+COMMAND: STANDALONE DJANGO SETUP
+CODE:
+import django
+from django.conf import settings
+from myapp import myapp_defaults
+
+settings.configure(default_settings=myapp_defaults, DEBUG=True)
+django.setup()
+
+Now use Django components
+from myapp import models
+USAGE GUIDELINES:
+USE WHEN:
+
+Standalone Python scripts
+Loading templates or using ORM outside web context
+
+DO NOT USE WHEN:
+
+Running through web server or django-admin
+Calling django.setup() multiple times
+Placing reusable logic in scripts requiring setup()
+Place django.setup() in if name == "main" blocks for reusable scripts.
+
+SUMMARY:
+Settings file manages all Django configuration as Python module
+Use DJANGO_SETTINGS_MODULE or settings.configure() - exactly one method
+Access via django.conf.settings object only
+Call django.setup() for standalone usage
+Secure settings files with proper permissions

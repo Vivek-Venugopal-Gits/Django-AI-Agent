@@ -1,0 +1,58 @@
+SECTION: How to Create PDF Files
+PURPOSE: This section explains how to output PDF files dynamically using Django views with the ReportLab library.
+CONCEPT: Generate customized PDFs for different users or content, such as printer-friendly brackets.
+SECTION: Install ReportLab
+PURPOSE: This section provides installation instructions for the ReportLab library.
+CONCEPT: ReportLab is available on PyPI and includes a user guide.
+COMMAND:
+Shellpython -m pip install reportlab
+CONCEPT: Test installation by importing in Python interactive interpreter.
+CODE:
+import reportlab
+CONCEPT: No errors indicate successful installation.
+SECTION: Write Your View
+PURPOSE: This section demonstrates creating a view to generate a PDF response.
+CONCEPT: ReportLab API acts on file-like objects; use FileResponse for dynamic PDFs.
+CODE:
+import io
+from django.http import FileResponse
+from reportlab.pdfgen import canvas
+
+def some_view(request):
+    # Create a file-like buffer to receive PDF data.
+    buffer = io.BytesIO()
+
+    # Create the PDF object, using the buffer as its "file."
+    p = canvas.Canvas(buffer)
+
+    # Draw things on the PDF. Here's where the PDF generation happens.
+    # See the ReportLab documentation for the full list of functionality.
+    p.drawString(100, 100, "Hello world.")
+
+    # Close the PDF object cleanly, and we're done.
+    p.showPage()
+    p.save()
+
+    # FileResponse sets the Content-Disposition header so that browsers
+    # present the option to save the file.
+    buffer.seek(0)
+    return FileResponse(buffer, as_attachment=True, filename="hello.pdf")
+CONCEPT: MIME type application/pdf set automatically from filename extension.
+CONCEPT: as_attachment=True prompts save dialog; omit for inline display.
+CONCEPT: filename arbitrary; used in save dialog.
+CONCEPT: Buffer passed to canvas.Canvas and FileResponse.
+CONCEPT: Call methods on PDF object p, not buffer.
+CONCEPT: Call showPage() and save() on PDF file.
+CONCEPT: ReportLab not thread-safe; may cause issues with concurrent access.
+SECTION: Other Formats
+PURPOSE: This section notes adaptability to other formats.
+CONCEPT: Techniques apply to any format with Python library support.
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Dynamic PDF generation in Django applications.
+SUMMARY:
+
+Install ReportLab via pip.
+Use io.BytesIO buffer with canvas.Canvas.
+Return FileResponse with buffer.
+Adapt for other text/binary formats.

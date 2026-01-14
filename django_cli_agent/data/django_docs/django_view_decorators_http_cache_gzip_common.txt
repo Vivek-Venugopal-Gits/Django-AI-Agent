@@ -1,0 +1,289 @@
+SECTION: VIEW DECORATORS
+PURPOSE: Describe Django’s built-in view decorators for HTTP method control, caching, compression, and common middleware customization.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: Django views (function-based and class-based via method decoration).
+​
+CONCEPT: VIEW DECORATORS OVERVIEW
+Django provides view decorators to declaratively control HTTP methods, caching behavior, compression, vary headers, and common middleware behavior on a per-view basis.
+​
+These decorators wrap view callables and modify request handling or response headers without changing the view’s core logic.
+​
+SECTION: ALLOWED HTTP METHODS
+PURPOSE: Restrict access to views based on the incoming HTTP request method.
+​
+CONCEPT: HTTP METHOD RESTRICTION
+The decorators in django.views.decorators.http restrict which HTTP methods are allowed for a view.
+​
+If a disallowed method is used, the view returns django.http.HttpResponseNotAllowed with the list of permitted methods.
+​
+COMMAND: require_http_methods
+Decorator to require that a view only accepts specific request methods.
+​
+Request methods must be specified in uppercase.
+​
+python
+from django.views.decorators.http import require_http_methods
+
+@require_http_methods(["GET", "POST"])
+def my_view(request):
+    # I can assume now that only GET or POST requests make it this far
+    # ...
+    pass
+USAGE GUIDELINES:
+USE WHEN:
+
+Limiting a view to a specific set of HTTP methods such as GET, POST, or PUT.
+​
+Returning HttpResponseNotAllowed automatically for unsupported methods.
+​
+DO NOT USE WHEN:
+
+Allowing all HTTP methods is acceptable.
+
+Method handling must be dynamically determined at runtime beyond a fixed list.
+
+COMMAND: require_GET
+Decorator to require that a view only accepts the GET method.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+The view must only read data without modifying server state.
+​
+DO NOT USE WHEN:
+
+The view also needs to handle POST or other methods.
+
+COMMAND: require_POST
+Decorator to require that a view only accepts the POST method.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+The view performs operations that change server state, such as form submissions.
+​
+DO NOT USE WHEN:
+
+The same URL must also respond to GET or other methods.
+
+COMMAND: require_safe
+Decorator to require that a view only accepts the GET and HEAD methods.
+​
+These methods are considered safe because they should not perform state-changing actions.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+Exposing read-only resources that may be accessed via GET and HEAD, including automated tools such as link checkers.
+​
+DO NOT USE WHEN:
+
+The view must handle any state-changing methods such as POST, PUT, or DELETE.
+
+CONCEPT: HANDLING HEAD REQUESTS
+Web servers should strip the body from responses to HEAD requests while preserving response headers.
+​
+Views can handle HEAD exactly like GET, and using require_safe ensures both GET and HEAD are allowed.
+
+SUMMARY:
+Use require_http_methods to allow an explicit list of methods.
+​
+Use require_GET for read-only GET views.
+​
+Use require_POST for write-only POST views.
+
+Use require_safe for safe GET/HEAD access, including automated clients.
+
+SECTION: CONDITIONAL VIEW PROCESSING
+PURPOSE: Enable conditional HTTP responses using ETag and Last-Modified headers to support efficient caching.
+​
+CONCEPT: CONDITIONAL RETRIEVAL VIA HEADERS
+Django’s conditional decorators in django.views.decorators.http support responses that depend on ETag and Last-Modified headers.
+​
+They can bypass full view processing if the client already has a fresh cached representation of the resource.
+
+COMMAND: condition
+condition(etag_func=None, last_modified_func=None) is a decorator that enables conditional retrieval or change for a view based on ETag and last-modified values computed by callables.
+​
+The callables receive the same arguments as the view and must return a string ETag or a datetime object, or None if the resource does not exist.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You can compute ETag and/or last modified timestamps for a resource and want to support 304 Not Modified or 412 Precondition Failed responses.
+​
+You want per-view conditional behavior similar to ConditionalGetMiddleware.
+​
+DO NOT USE WHEN:
+
+No reliable ETag or last-modified computation is available.
+
+Conditional processing is already handled globally and does not need per-view customization.
+
+COMMAND: conditional_page
+conditional_page() applies the conditional GET handling of ConditionalGetMiddleware to a single view.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You want the behavior of ConditionalGetMiddleware only for specific views.
+​
+DO NOT USE WHEN:
+
+The middleware is already enabled and the behavior should be global.
+
+COMMAND: etag
+etag(etag_func) is a shortcut decorator that uses only an ETag function for conditional processing.
+​
+COMMAND: last_modified
+last_modified(last_modified_func) is a shortcut decorator that uses only a last-modified function for conditional processing.
+​
+USAGE GUIDELINES (etag, last_modified):
+USE WHEN:
+
+Only one of ETag or Last-Modified is easy or necessary to compute for the resource.
+​
+DO NOT USE WHEN:
+
+Both values are required and you must use condition with both callables.
+​
+SUMMARY:
+condition enables per-view conditional responses based on ETag and last-modified values.
+​
+conditional_page scopes ConditionalGetMiddleware behavior to a single view.
+
+etag and last_modified are simpler shortcuts for single-header conditional handling.
+​
+SECTION: GZIP COMPRESSION
+PURPOSE: Enable gzip compression of responses on a per-view basis.
+​
+CONCEPT: PER-VIEW GZIP COMPRESSION
+The decorators in django.views.decorators.gzip control whether a view’s response is compressed using gzip.
+​
+Compression depends on the client’s Accept-Encoding header and is reflected in the response headers.
+
+COMMAND: gzip_page
+gzip_page() compresses the response body if the client supports gzip and sets the Vary header so caches vary on Accept-Encoding.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+Responses are large enough that gzip compression meaningfully reduces bandwidth.
+​
+You need compression only for specific views instead of all responses.
+
+DO NOT USE WHEN:
+
+Responses are very small or already compressed content types where gzip offers little benefit.
+
+Global gzip middleware already handles compression for all desired responses.
+
+SUMMARY:
+gzip_page enables per-view gzip compression based on client support.
+​
+It adjusts the Vary header so caching respects Accept-Encoding.
+​
+SECTION: VARY HEADERS
+PURPOSE: Control HTTP Vary headers to influence how caches key and serve responses.
+​
+CONCEPT: CONTROLLING CACHE KEYS VIA HEADERS
+The decorators in django.views.decorators.vary modify the Vary header to indicate which request headers affect the cached representation of a response.
+​
+The Vary header ensures caches differentiate responses for requests that vary in specific headers such as cookies or language.
+
+COMMAND: vary_on_cookie
+vary_on_cookie(func) marks the response as varying on the incoming request cookies.
+​
+COMMAND: vary_on_headers
+vary_on_headers(*headers) marks the response as varying on the specified request headers.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+Responses differ based on cookies or specific headers such as Accept-Language or User-Agent.
+
+You must avoid serving private or user-specific content from a cache to other users.
+
+DO NOT USE WHEN:
+
+The response is identical for all relevant request headers.
+
+Overly broad variation would significantly harm cache efficiency.
+
+SUMMARY:
+vary_on_cookie adds cookie awareness to cache key decisions.
+​
+vary_on_headers varies responses on explicitly listed request headers.
+​
+Correct Vary usage prevents serving incorrect cached content across different users or contexts.
+​
+SECTION: CACHING DECORATORS
+PURPOSE: Control cache-related headers and caching behavior on individual views.
+​
+CONCEPT: PER-VIEW CACHE CONTROL
+The decorators in django.views.decorators.cache adjust server and client caching through response headers and cache middleware integration.
+​
+They provide declarative control to either manage cacheability or explicitly disable caching.
+​
+COMMAND: cache_control
+cache_control(**kwargs) updates the response’s Cache-Control header by applying the provided keyword arguments.
+​
+The transformation of keyword arguments into header directives is identical to django.utils.cache.patch_cache_control().
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You need fine-grained Cache-Control directives such as max_age, public, or private per view.
+​
+DO NOT USE WHEN:
+
+Default caching headers already match the desired behavior and no per-view override is required.
+
+COMMAND: never_cache
+never_cache(view_func) adds headers to ensure the response is never cached.
+​
+It adds an Expires header set to the current date/time and a Cache-Control: max-age=0, no-cache, no-store, must-revalidate, private header when not already present.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+The response contains sensitive, per-user, or frequently changing data that must not be cached by any intermediate or client cache.
+​
+DO NOT USE WHEN:
+
+Caching is desired for performance and data is safe to cache.
+
+SUMMARY:
+cache_control customizes Cache-Control directives using keyword arguments.
+​
+never_cache configures headers so clients and intermediaries do not cache the response.
+​
+SECTION: COMMON MIDDLEWARE CUSTOMIZATION
+PURPOSE: Customize CommonMiddleware behavior on individual views.
+​
+CONCEPT: PER-VIEW COMMONMIDDLEWARE BEHAVIOR
+The decorators in django.views.decorators.common let views opt in or out of specific CommonMiddleware behaviors.
+​
+This is useful when global middleware settings must be overridden for certain URLs.
+​
+COMMAND: no_append_slash
+no_append_slash() prevents automatic URL slash normalization for a view when APPEND_SLASH is enabled.
+​
+This decorator excludes the view from the APPEND_SLASH behavior that would otherwise redirect or rewrite URLs without trailing slashes.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+A view must preserve a specific URL format without automatic trailing slash handling.
+​
+DO NOT USE WHEN:
+
+Standard APPEND_SLASH handling is acceptable or required for consistency across URLs.
+
+SUMMARY:
+no_append_slash disables automatic trailing slash normalization for selected views.
+​
+Use this to override global APPEND_SLASH behavior on a per-view basis.

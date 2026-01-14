@@ -1,0 +1,192 @@
+SECTION: Django Shortcut Functions
+PURPOSE: This section describes helper functions and classes in django.shortcuts that provide convenience by spanning multiple MVC levels.
+SECTION: render
+PURPOSE: This section explains the render function, which combines a template with context and returns an HttpResponse object.
+CONCEPT: Render a template with context into an HttpResponse. Use TemplateResponse constructor for similar convenience if needed.
+CONCEPT: Required arguments include the request object and template_name, which is the full template name or sequence of names; use the first existing template.
+CONCEPT: Optional arguments include context as a dictionary (call callables before rendering), content_type defaulting to text/html, status defaulting to 200, and using as the template engine NAME.
+CODE:
+from django.shortcuts import render
+
+def my_view(request):
+    # View code here...
+    return render(
+        request,
+        "myapp/index.html",
+        {
+            "foo": "bar",
+        },
+        content_type="application/xhtml+xml",
+    )
+CONCEPT: Equivalent using loader and HttpResponse.
+CODE:
+from django.http import HttpResponse
+from django.template import loader
+
+def my_view(request):
+    # View code here...
+    t = loader.get_template("myapp/index.html")
+    c = {"foo": "bar"}
+    return HttpResponse(t.render(c, request), content_type="application/xhtml+xml")
+USAGE GUIDELINES:
+USE WHEN:
+
+Rendering templates with context in views to generate responses.
+DO NOT USE WHEN:
+Needing deferred rendering; use TemplateResponse instead.
+
+SECTION: redirect
+PURPOSE: This section describes the redirect function, which returns an HttpResponseRedirect or variant based on arguments.
+CONCEPT: Return HttpResponseRedirect to a URL resolved from a model, view name with args/kwargs, or direct URL. Issue temporary 302 redirect by default; use permanent=True for 301. Use preserve_request=True to preserve method and body, using 307 for temporary or 308 for permanent.
+CONCEPT: Redirect status codes vary: 301 for permanent False preserve_request False, 302 for False False, 307 for False True, 308 for True True.
+CODE:
+from django.shortcuts import redirect
+
+def my_view(request):
+    ...
+    obj = MyModel.objects.get(...)
+    return redirect(obj)
+CODE:
+def my_view(request):
+    ...
+    return redirect("some-view-name", foo="bar")
+CODE:
+def my_view(request):
+    ...
+    return redirect("/some/url/")
+CODE:
+def my_view(request):
+    ...
+    return redirect("https://example.com/")
+CODE:
+def my_view(request):
+    ...
+    obj = MyModel.objects.get(...)
+    return redirect(obj, permanent=True)
+CODE:
+def my_view(request):
+    # ...
+    obj = MyModel.objects.get(...)
+    if request.method in ("POST", "PUT"):
+        # Redirection preserves the original request method.
+        return redirect(obj, preserve_request=True)
+    # ...
+USAGE GUIDELINES:
+USE WHEN:
+
+Redirecting after form submission or to canonical URLs.
+DO NOT USE WHEN:
+Preserving request method is unnecessary; default to temporary without preserve.
+
+SECTION: resolve_url
+PURPOSE: This section explains resolve_url, which resolves and normalizes a target into a URL string.
+CONCEPT: Resolve to as a get_absolute_url() call for models, reverse() for views/functions/classes with args/kwargs, or unchanged URL string. Used internally by redirect.
+CODE:
+from django.db import models
+from django.urls import reverse
+
+class Article(models.Model):
+    title = models.CharField(max_length=100)
+
+    def get_absolute_url(self):
+        return reverse("article-detail", args=[self.pk])
+CODE:
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, resolve_url
+from .models import Article
+
+def article_api_view(request, pk):
+    """Return metadata about an article, including its canonical URL."""
+    article = get_object_or_404(Article, pk=pk)
+    return JsonResponse(
+        {
+            "id": article.pk,
+            "title": article.title,
+            "url": resolve_url(article),
+        }
+    )
+CODE:
+from django.conf import settings
+from django.http import HttpResponse
+from django.shortcuts import resolve_url
+
+def login_success(request):
+    response = HttpResponse("Login successful")
+    response["X-Next-URL"] = resolve_url(settings.LOGIN_REDIRECT_URL)
+    return response
+USAGE GUIDELINES:
+USE WHEN:
+
+Obtaining URLs outside redirects, like in headers or APIs.
+DO NOT USE WHEN:
+Direct redirection is needed; use redirect instead.
+
+SECTION: get_object_or_404
+PURPOSE: This section describes get_object_or_404, which fetches an object or raises Http404.
+CONCEPT: Call get() on a model manager, raising Http404 instead of DoesNotExist. Asynchronous version: aget_object_or_404.
+CONCEPT: Arguments include klass as Model, Manager, or QuerySet; *args as Q objects; **kwargs as lookup parameters.
+CODE:
+from django.shortcuts import get_object_or_404
+
+def my_view(request):
+    obj = get_object_or_404(MyModel, pk=1)
+CONCEPT: Equivalent to manual try-except with Http404.
+CODE:
+from django.http import Http404
+
+def my_view(request):
+    try:
+        obj = MyModel.objects.get(pk=1)
+    except MyModel.DoesNotExist:
+        raise Http404("No MyModel matches the given query.")
+CODE:
+queryset = Book.objects.filter(title__startswith="M")
+get_object_or_404(queryset, pk=1)
+CODE:
+get_object_or_404(Book, title__startswith="M", pk=1)
+CODE:
+get_object_or_404(Book.dahl_objects, title="Matilda")
+CODE:
+Pythonauthor = Author.objects.get(name="Roald Dahl")
+get_object_or_404(author.book_set, title="Matilda")
+CONCEPT: Raise MultipleObjectsReturned if more than one object found.
+USAGE GUIDELINES:
+USE WHEN:
+
+Fetching single objects in views with 404 fallback.
+DO NOT USE WHEN:
+Expecting multiple objects; use get_list_or_404.
+
+SECTION: get_list_or_404
+PURPOSE: This section describes get_list_or_404, which fetches a list or raises Http404 if empty.
+CONCEPT: Return filter() result as list, raising Http404 if empty. Asynchronous version: aget_list_or_404.
+CONCEPT: Arguments include klass as Model, Manager, or QuerySet; *args as Q objects; **kwargs as lookup parameters.
+CODE:
+from django.shortcuts import get_list_or_404
+
+def my_view(request):
+    my_objects = get_list_or_404(MyModel, published=True)
+CONCEPT: Equivalent to manual list conversion with Http404 if empty.
+CODE:
+from django.http import Http404
+
+def my_view(request):
+    my_objects = list(MyModel.objects.filter(published=True))
+    if not my_objects:
+        raise Http404("No MyModel matches the given query.")
+USAGE GUIDELINES:
+USE WHEN:
+
+Fetching lists in views with 404 if none found.
+DO NOT USE WHEN:
+Single object expected; use get_object_or_404.
+
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Simplifying common view operations in Django.
+SUMMARY:
+
+Use render for template responses.
+Use redirect for URL redirection with options.
+Use resolve_url for URL strings from various inputs.
+Use get_object_or_404 and get_list_or_404 for safe fetching with 404 handling.

@@ -1,0 +1,278 @@
+PURPOSE: This section explains structuring and writing database migrations for various scenarios, beyond introductory material.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django projects for advanced migration handling.
+
+SECTION: DATA MIGRATIONS AND MULTIPLE DATABASES
+PURPOSE: This section describes handling data migrations with multiple databases.
+CONCEPT: MULTI-DB MIGRATIONS OVERVIEW
+Check connection.alias in RunPython to run on specific DB.
+CODE EXAMPLE:
+from django.db import migrations
+
+def forwards(apps, schema_editor):
+    if schema_editor.connection.alias != "default":
+        return
+    # Your migration code goes here
+
+class Migration(migrations.Migration):
+    dependencies = [
+        # Dependencies to other migrations
+    ]
+
+    operations = [
+        migrations.RunPython(forwards),
+    ]
+Provide hints to allow_migrate() in routers.
+CODE EXAMPLE:
+class MyRouter:
+    def allow_migrate(self, db, app_label, model_name=None, **hints):
+        if "target_db" in hints:
+            return db == hints["target_db"]
+        return True
+CODE EXAMPLE:
+from django.db import migrations
+
+def forwards(apps, schema_editor):
+    # Your migration code goes here
+    ...
+
+class Migration(migrations.Migration):
+    dependencies = [
+        # Dependencies to other migrations
+    ]
+
+    operations = [
+        migrations.RunPython(forwards, hints={"target_db": "default"}),
+    ]
+Pass model_name hint for single-model ops.
+SECTION: MIGRATIONS THAT ADD UNIQUE FIELDS
+PURPOSE: This section explains adding unique non-nullable fields without errors.
+Adding unique non-nullable field with existing rows errors due to duplicate defaults.
+Steps for UUIDField with default:
+
+Add field with default=uuid.uuid4, unique=True.
+makemigrations: AddField.
+Two empty migrations.
+Copy AddField to last, change to AlterField, import uuid/models.
+
+CODE EXAMPLE:
+# 0006_remove_uuid_null.py
+from django.db import migrations, models
+import uuid
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("myapp", "0005_populate_uuid_values"),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name="mymodel",
+            name="uuid",
+            field=models.UUIDField(default=uuid.uuid4, unique=True),
+        ),
+    ]
+
+First migration: unique=True to null=True.
+
+CODE EXAMPLE:
+# 0004_add_uuid_field.py
+class Migration(migrations.Migration):
+    dependencies = [
+        ("myapp", "0003_auto_20150129_1705"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="mymodel",
+            name="uuid",
+            field=models.UUIDField(default=uuid.uuid4, null=True),
+        ),
+    ]
+
+Middle migration: RunPython to populate UUIDs.
+
+CODE EXAMPLE:
+# 0005_populate_uuid_values.py
+from django.db import migrations
+import uuid
+
+def gen_uuid(apps, schema_editor):
+    MyModel = apps.get_model("myapp", "MyModel")
+    for row in MyModel.objects.all():
+        row.uuid = uuid.uuid4()
+        row.save(update_fields=["uuid"])
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("myapp", "0004_add_uuid_field"),
+    ]
+
+    operations = [
+        migrations.RunPython(gen_uuid, reverse_code=migrations.RunPython.noop),
+    ]
+
+Apply migrations.
+
+Race condition if creations during migration; post-AddField, pre-RunPython.
+SECTION: NON-ATOMIC MIGRATIONS
+PURPOSE: This section explains preventing transactions in migrations.
+atomic=False on Migration class runs without transaction.
+Use atomic() or RunPython(atomic=True) for parts.
+Example: batch update large table.
+CODE EXAMPLE:
+import uuid
+from django.db import migrations, transaction
+
+def gen_uuid(apps, schema_editor):
+    MyModel = apps.get_model("myapp", "MyModel")
+    while MyModel.objects.filter(uuid__isnull=True).exists():
+        with transaction.atomic():
+            for row in MyModel.objects.filter(uuid__isnull=True)[:1000]:
+                row.uuid = uuid.uuid4()
+                row.save()
+
+class Migration(migrations.Migration):
+    atomic = False
+
+    operations = [
+        migrations.RunPython(gen_uuid),
+    ]
+No effect on non-DDL-transaction DBs.
+Avoid mixing schema/RunPython in PostgreSQL to prevent errors.
+Check connection.features.can_rollback_ddl.
+SECTION: CONTROLLING THE ORDER OF MIGRATIONS
+PURPOSE: This section describes ordering migrations via dependencies.
+Order by graph of dependencies and run_before.
+dependencies: list of ("app", "migration").
+Usually sufficient; autodetector sets.
+For before others: run_before = [("app", "migration")].
+Prefer dependencies; use run_before if impractical.
+SECTION: MIGRATING DATA BETWEEN THIRD-PARTY APPS
+PURPOSE: This section explains moving data between third-party apps.
+Set dependencies conditionally on app installation.
+Catch LookupError in get_model().
+CODE EXAMPLE:
+from django.apps import apps as global_apps
+from django.db import migrations
+
+def forwards(apps, schema_editor):
+    try:
+        OldModel = apps.get_model("old_app", "OldModel")
+    except LookupError:
+        # The old app isn't installed.
+        return
+
+    NewModel = apps.get_model("new_app", "NewModel")
+    NewModel.objects.bulk_create(
+        NewModel(new_attribute=old_object.old_attribute)
+        for old_object in OldModel.objects.all()
+    )
+
+class Migration(migrations.Migration):
+    operations = [
+        migrations.RunPython(forwards, migrations.RunPython.noop),
+    ]
+    dependencies = [
+        ("myapp", "0123_the_previous_migration"),
+        ("new_app", "0001_initial"),
+    ]
+
+    if global_apps.is_installed("old_app"):
+        dependencies.append(("old_app", "0001_initial"))
+For unapply: do nothing or remove data.
+SECTION: CHANGING A MANYTOMANYFIELD TO USE A THROUGH MODEL
+PURPOSE: This section explains changing ManyToManyField to use through model without data loss.
+Default migration deletes/recreates table, losing relations.
+Use SeparateDatabaseAndState: rename table in DB ops, create through model in state ops.
+Check table/constraint names via sqlmigrate/dbshell.
+New through uses same ForeignKeys names.
+Add extra fields after.
+CODE EXAMPLE:
+from django.db import migrations, models
+import django.db.models.deletion
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("core", "0001_initial"),
+    ]
+
+    operations = [
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # Old table name from checking with sqlmigrate, new table
+                # name from AuthorBook._meta.db_table.
+                migrations.RunSQL(
+                    sql="ALTER TABLE core_book_authors RENAME TO core_authorbook",
+                    reverse_sql="ALTER TABLE core_authorbook RENAME TO core_book_authors",
+                ),
+            ],
+            state_operations=[
+                migrations.CreateModel(
+                    name="AuthorBook",
+                    fields=[
+                        (
+                            "id",
+                            models.AutoField(
+                                auto_created=True,
+                                primary_key=True,
+                                serialize=False,
+                                verbose_name="ID",
+                            ),
+                        ),
+                        (
+                            "author",
+                            models.ForeignKey(
+                                on_delete=django.db.models.deletion.DO_NOTHING,
+                                to="core.Author",
+                            ),
+                        ),
+                        (
+                            "book",
+                            models.ForeignKey(
+                                on_delete=django.db.models.deletion.DO_NOTHING,
+                                to="core.Book",
+                            ),
+                        ),
+                    ],
+                    options={
+                        "constraints": [
+                            models.UniqueConstraint(
+                                fields=["author", "book"],
+                                name="unique_author_book",
+                            )
+                        ],
+                    },
+                ),
+                migrations.AlterField(
+                    model_name="book",
+                    name="authors",
+                    field=models.ManyToManyField(
+                        to="core.Author",
+                        through="core.AuthorBook",
+                    ),
+                ),
+            ],
+        ),
+        migrations.AddField(
+            model_name="authorbook",
+            name="is_primary",
+            field=models.BooleanField(default=False),
+        ),
+    ]
+SECTION: CHANGING AN UNMANAGED MODEL TO MANAGED
+PURPOSE: This section explains changing managed=False to managed=True.
+Remove managed=False, makemigrations before other schema changes.
+Schema changes in same migration as managed change may not apply.
+SUMMARY:
+
+Handle multi-DB with alias/hints.
+Add unique fields in steps to avoid errors.
+Use atomic=False for large tables.
+Control order with dependencies/run_before.
+Migrate data between apps conditionally.
+Use SeparateDatabaseAndState for through changes.
+Change unmanaged first.

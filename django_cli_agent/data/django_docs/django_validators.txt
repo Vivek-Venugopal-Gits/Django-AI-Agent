@@ -1,0 +1,144 @@
+PURPOSE: Explains writing and using validators for model/form fields to enforce criteria and raise ValidationError on failure.
+Validators are callables reusable across fields.
+SECTION: WRITING VALIDATORS
+PURPOSE: Guides creating custom validators.
+Validator: Callable taking value, raising ValidationError if invalid.
+COMMAND:
+CODE:
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+
+def validate_even(value):
+    if value % 2 != 0:
+        raise ValidationError(
+            _("%(value)s is not an even number"),
+            params={"value": value},
+        )
+Add to field:
+COMMAND:
+CODE:
+from django.db import models
+
+class MyModel(models.Model):
+    even_field = models.IntegerField(validators=[validate_even])
+Or form:
+COMMAND:
+CODE:
+from django import forms
+
+class MyForm(forms.Form):
+    even_field = forms.IntegerField(validators=[validate_even])
+Class-based: Use call for complex/configurable.
+Add deconstruct/eq for migration serialization if used in validators option.
+SECTION: HOW VALIDATORS ARE RUN
+PURPOSE: Notes where validators execute.
+See form validation and model validation docs.
+Not auto-run on model save; run in ModelForm if field included.
+SECTION: BUILT-IN VALIDATORS
+PURPOSE: Lists callable validators in django.core.validators.
+CONCEPT: REGEXVALIDATOR
+Validates against regex with re.search.
+COMMAND:
+CODE:
+RegexValidator(regex=None, message=None, code=None, inverse_match=None, flags=0)
+regex: String or compiled.
+inverse_match: Raise if match (default False).
+flags: Regex flags; regex must be string if set.
+Defaults: regex='', message="Enter a valid value", code="invalid".
+CONCEPT: EMAILVALIDATOR
+Ensures email-like; max 320 chars.
+COMMAND:
+CODE:
+EmailValidator(message=None, code=None, allowlist=None)
+allowlist: Domains bypassing regex (default ['localhost']).
+message="Enter a valid email address", code="invalid".
+CONCEPT: DOMAINNAMEVALIDATOR
+Validates domain-like; max 255 chars; no IPs.
+COMMAND:
+CODE:
+DomainNameValidator(accept_idna=True, message=None, code=None)
+accept_idna: Allow internationalized (default True).
+CONCEPT: URLVALIDATOR
+Validates URL-like; max max_length chars (default 2048).
+Loopback/reserved IPs valid; IPv6/Unicode supported.
+COMMAND:
+CODE:
+URLValidator(schemes=None, regex=None, message=None, code=None)
+schemes: List (default ['http', 'https', 'ftp', 'ftps']).
+max_length=2048.
+Warning: No file:/// with host.
+CONCEPT: VALIDATE_EMAIL
+EmailValidator instance.
+CONCEPT: VALIDATE_DOMAIN_NAME
+DomainNameValidator instance.
+CONCEPT: VALIDATE_SLUG
+Regex: letters, numbers, _, -.
+CONCEPT: VALIDATE_UNICODE_SLUG
+Regex: Unicode letters, numbers, _, -.
+CONCEPT: VALIDATE_IPV4_ADDRESS
+Regex for IPv4.
+CONCEPT: VALIDATE_IPV6_ADDRESS
+Uses django.utils.ipv6.
+CONCEPT: VALIDATE_IPV46_ADDRESS
+Both IPv4/IPv6.
+CONCEPT: VALIDATE_COMMA_SEPARATED_INTEGER_LIST
+Comma-separated integers.
+CONCEPT: INT_LIST_VALIDATOR
+Returns RegexValidator for sep-separated integers; allow_negative.
+COMMAND:
+CODE:
+int_list_validator(sep=',', message=None, code='invalid', allow_negative=False)
+CONCEPT: MAXVALUEVALIDATOR
+Raises if > limit_value (callable).
+COMMAND:
+CODE:
+MaxValueValidator(limit_value, message=None)
+code='max_value'.
+CONCEPT: MINVALUEVALIDATOR
+Raises if < limit_value.
+COMMAND:
+CODE:
+MinValueValidator(limit_value, message=None)
+code='min_value'.
+CONCEPT: MAXLENGTHVALIDATOR
+Raises if len > limit_value.
+COMMAND:
+CODE:
+MaxLengthValidator(limit_value, message=None)
+code='max_length'.
+CONCEPT: MINLENGTHVALIDATOR
+Raises if len < limit_value.
+COMMAND:
+CODE:
+MinLengthValidator(limit_value, message=None)
+code='min_length'.
+CONCEPT: DECIMALVALIDATOR
+For Decimal: max_digits, max_decimal_places, max_whole_digits.
+COMMAND:
+CODE:
+DecimalValidator(max_digits, decimal_places)
+Codes: max_digits, max_decimal_places, max_whole_digits.
+CONCEPT: FILEEXTENSIONVALIDATOR
+Validates file.name extension in allowed_extensions (case-insensitive).
+COMMAND:
+CODE:
+FileExtensionValidator(allowed_extensions, message, code)
+code='invalid_extension'.
+CONCEPT: VALIDATE_IMAGE_FILE_EXTENSION
+Uses Pillow for valid image extensions.
+CONCEPT: PROHIBITNULLCHARACTERSVALIDATOR
+Raises if str(value) has null chars.
+COMMAND:
+CODE:
+ProhibitNullCharactersValidator(message=None, code=None)
+message="Null characters are not allowed.", code="null_characters_not_allowed".
+CONCEPT: STEPVALUEVALIDATOR
+Raises if not multiple of limit_value (from offset if set).
+COMMAND:
+CODE:
+StepValueValidator(limit_value, message=None, offset=None)
+code='step_size'.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - Reusable validation logic.

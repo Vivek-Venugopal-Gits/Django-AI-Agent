@@ -1,0 +1,678 @@
+PURPOSE: This section provides API references for Field, including options and types, and notes on custom fields and third-party packages.
+DO NOT use built-in fields if they do not fit; use django-localflavor for locale-specific needs or create custom fields.
+Fields are in django.db.models.fields, imported as from django.db import models for convenience.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Defining database columns in models.
+
+SECTION: Field Options
+PURPOSE: This section details optional arguments available to all field types.
+All arguments are optional unless specified.
+CONCEPT: null
+If True, store empty values as NULL in database. Default is False.
+DO NOT use null on string-based fields like CharField and TextField; use empty string for no data.
+If CharField has unique=True and blank=True, set null=True to avoid unique violations on blank values.
+On Oracle, NULL stores empty strings regardless.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Controlling database NULL values.
+USAGE GUIDELINES:
+USE WHEN:
+
+Allowing database NULL for non-string fields.
+DO NOT USE WHEN:
+On string fields; prefer empty strings.
+
+CONCEPT: blank
+If True, allow blank values in validation. Default is False.
+blank differs from null: blank is validation-related, null is database-related.
+If blank=True, forms allow empty values; if blank=False, field is required.
+If blank=True and null=False, implement clean() on model to supply missing values.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Controlling form validation for empty values.
+USAGE GUIDELINES:
+USE WHEN:
+
+Permitting empty inputs in forms.
+DO NOT USE WHEN:
+Field must always have a value.
+
+CONCEPT: choices
+A mapping, sequence of 2-tuples, enumeration, or callable returning such, for field choices.
+Enforces choices in model validation; default form widget is select box.
+Keys are database values; values are human-readable.
+A new migration occurs if choices order changes.
+Use get_FOO_display() for human-readable value.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Limiting field inputs to predefined options.
+COMMAND:
+CODE:
+YEAR_IN_SCHOOL_CHOICES = {
+    "FR": "Freshman",
+    "SO": "Sophomore",
+    "JR": "Junior",
+    "SR": "Senior",
+    "GR": "Graduate",
+}
+COMMAND:
+CODE:
+YEAR_IN_SCHOOL_CHOICES = [
+    ("FR", "Freshman"),
+    ("SO", "Sophomore"),
+    ("JR", "Junior"),
+    ("SR", "Senior"),
+    ("GR", "Graduate"),
+]
+CONCEPT: Callable choices
+Use callable for dynamic choices, e.g., from I/O or third-party apps.
+COMMAND:
+CODE:
+def get_currencies():
+    return {i: i for i in settings.CURRENCIES}
+
+class Expense(models.Model):
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, choices=get_currencies)
+Define choices inside model class as constants for encapsulation.
+COMMAND:
+CODE:
+from django.db import models
+
+class Student(models.Model):
+    FRESHMAN = "FR"
+    SOPHOMORE = "SO"
+    JUNIOR = "JR"
+    SENIOR = "SR"
+    GRADUATE = "GR"
+    YEAR_IN_SCHOOL_CHOICES = {
+        FRESHMAN: "Freshman",
+        SOPHOMORE: "Sophomore",
+        JUNIOR: "Junior",
+        SENIOR: "Senior",
+        GRADUATE: "Graduate",
+    }
+    year_in_school = models.CharField(
+        max_length=2,
+        choices=YEAR_IN_SCHOOL_CHOICES,
+        default=FRESHMAN,
+    )
+
+    def is_upperclass(self):
+        return self.year_in_school in {self.JUNIOR, self.SENIOR}
+Group choices for organization.
+COMMAND:
+CODE:
+MEDIA_CHOICES = {
+    "Audio": {
+        "vinyl": "Vinyl",
+        "cd": "CD",
+    },
+    "Video": {
+        "vhs": "VHS Tape",
+        "dvd": "DVD",
+    },
+    "unknown": "Unknown",
+}
+Or as sequence:
+COMMAND:
+CODE:
+MEDIA_CHOICES = [
+    (
+        "Audio",
+        (
+            ("vinyl", "Vinyl"),
+            ("cd", "CD"),
+        ),
+    ),
+    (
+        "Video",
+        (
+            ("vhs", "VHS Tape"),
+            ("dvd", "DVD"),
+        ),
+    ),
+    ("unknown", "Unknown"),
+]
+If blank=False and no default, select box renders "---------" label; override with (None, 'String') or empty string.
+SECTION: Enumeration Types
+PURPOSE: This section explains subclassing choices for concise definitions.
+Subclass TextChoices or IntegerChoices.
+Member values are tuples; last item is label if string.
+Provides .label, .choices, .labels, .values, .names.
+Enforces unique values.
+COMMAND:
+CODE:
+from django.utils.translation import gettext_lazy as _
+
+class Student(models.Model):
+    class YearInSchool(models.TextChoices):
+        FRESHMAN = "FR", _("Freshman")
+        SOPHOMORE = "SO", _("Sophomore")
+        JUNIOR = "JR", _("Junior")
+        SENIOR = "SR", _("Senior")
+        GRADUATE = "GR", _("Graduate")
+
+    year_in_school = models.CharField(
+        max_length=2,
+        choices=YearInSchool,
+        default=YearInSchool.FRESHMAN,
+    )
+
+    def is_upperclass(self):
+        return self.year_in_school in {
+            self.YearInSchool.JUNIOR,
+            self.YearInSchool.SENIOR,
+        }
+Infer labels from member names if no translation needed.
+COMMAND:
+CODE:
+class Vehicle(models.TextChoices):
+    CAR = "C"
+    TRUCK = "T"
+    JET_SKI = "J"
+Use Enum Functional API.
+COMMAND:
+CODE:
+MedalType = models.TextChoices("MedalType", "GOLD SILVER BRONZE")
+Place = models.IntegerChoices("Place", "FIRST SECOND THIRD")
+For custom types, subclass Choices and data type.
+COMMAND:
+CODE:
+class MoonLandings(datetime.date, models.Choices):
+    APOLLO_11 = 1969, 7, 20, "Apollo 11 (Eagle)"
+    APOLLO_12 = 1969, 11, 19, "Apollo 12 (Intrepid)"
+    APOLLO_14 = 1971, 2, 5, "Apollo 14 (Antares)"
+    APOLLO_15 = 1971, 7, 30, "Apollo 15 (Falcon)"
+    APOLLO_16 = 1972, 4, 21, "Apollo 16 (Orion)"
+    APOLLO_17 = 1972, 12, 11, "Apollo 17 (Challenger)"
+No named groups in enums.
+Override empty for blank label.
+COMMAND:
+CODE:
+class Answer(models.IntegerChoices):
+    NO = 0, _("No")
+    YES = 1, _("Yes")
+
+    __empty__ = _("(Unknown)")
+DJANGO VERSION: 6.0
+APPLICABILITY: - Defining choices concisely.
+USAGE GUIDELINES:
+USE WHEN:
+
+Choices are enums.
+DO NOT USE WHEN:
+Needing groups.
+
+SUMMARY:
+
+Subclass TextChoices/IntegerChoices.
+Auto-generates labels.
+Provides utility properties.
+Custom types via subclassing.
+
+CONCEPT: db_column
+Database column name; defaults to field name.
+Use for SQL reserved words or hyphens; Django quotes names.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Customizing column names.
+CONCEPT: db_comment
+Comment on database column for documentation.
+COMMAND:
+CODE:
+pub_date = models.DateTimeField(
+    db_comment="Date and time when the article was published",
+)
+DJANGO VERSION: 6.0
+APPLICABILITY: - Documenting fields in database.
+CONCEPT: db_default
+Database-computed default; literal or function.
+COMMAND:
+CODE:
+created = models.DateTimeField(db_default=Now())
+Use expressions with literals/functions.
+COMMAND:
+CODE:
+month_due = models.DateField(
+    db_default=TruncMonth(
+        Now() + timedelta(days=90),
+        output_field=models.DateField(),
+    )
+)
+DO NOT reference other fields/models.
+If both default and db_default, default takes precedence in Python; db_default in database.
+Unsaved instances return DatabaseDefault if no default.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Setting database-level defaults.
+USAGE GUIDELINES:
+USE WHEN:
+
+Defaults computed by database.
+DO NOT USE WHEN:
+Referencing other fields.
+
+CONCEPT: db_index
+If True, create database index.
+Prefer Meta.indexes for more functionality.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Improving query performance.
+CONCEPT: db_tablespace
+Tablespace for field's index if indexed.
+Defaults to DEFAULT_INDEX_TABLESPACE or model's db_tablespace.
+Ignored if backend lacks tablespace support for indexes.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Specifying storage location.
+CONCEPT: default
+Default value or callable.
+DO NOT use mutable defaults like {} or [].
+COMMAND:
+CODE:
+def contact_default():
+    return {"email": "to1@example.com"}
+
+contact_info = JSONField("ContactInfo", default=contact_default)
+DO NOT use lambdas; not serializable in migrations.
+For ForeignKey, use field value (pk or to_field), not instance.
+Used when no value provided; for pk, used if None.
+Can set at database with db_default.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Providing initial values.
+USAGE GUIDELINES:
+USE WHEN:
+
+Fields need defaults.
+DO NOT USE WHEN:
+Mutable objects.
+
+CONCEPT: editable
+If False, exclude from admin/ModelForm and skip validation. Default True.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Hiding fields in interfaces.
+CONCEPT: error_messages
+Dictionary overriding default error messages.
+Keys: null, blank, invalid, invalid_choice, unique, unique_for_date, etc.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Customizing validation errors.
+CONCEPT: help_text
+Help text for form widgets; not HTML-escaped.
+Escape user-provided text to prevent XSS.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Adding documentation to fields.
+CONCEPT: primary_key
+If True, field is primary key.
+Implies null=False, unique=True.
+One per model; if none, add auto id.
+Read-only; changing creates new object.
+Set to None on delete.
+Use CompositePrimaryKey for composites.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Defining unique identifiers.
+CONCEPT: unique
+If True, unique throughout table.
+Enforced in database and validation.
+Implies db_index=True.
+Not for ManyToManyField, OneToOneField.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Ensuring uniqueness.
+CONCEPT: unique_for_date
+Field name (DateField/DateTimeField) for date-based uniqueness.
+Uses date portion; in current timezone if USE_TZ=True.
+Enforced in validation, not database.
+Skips if field excluded in form.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Date-scoped uniqueness.
+CONCEPT: unique_for_month
+Unique with respect to month.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Month-scoped uniqueness.
+CONCEPT: unique_for_year
+Unique with respect to year.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Year-scoped uniqueness.
+CONCEPT: verbose_name
+Human-readable name; defaults to attribute name with spaces.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Improving display names.
+CONCEPT: validators
+List of validators.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Adding custom validation.
+SUMMARY:
+
+null/blank control empties.
+choices limit options.
+default/db_default set initials.
+unique/primary_key enforce constraints.
+validators customize checks.
+
+
+SECTION: Field Types
+PURPOSE: This section lists built-in field classes and their arguments.
+
+CONCEPT: AutoField
+IntegerField that auto-increments.
+Primary key if none specified.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Automatic IDs.
+CONCEPT: BigAutoField
+64-bit auto-increment; 1 to 9223372036854775807.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Larger ID ranges.
+CONCEPT: BigIntegerField
+64-bit integer; -9223372036854775808 to 9223372036854775807.
+Widget: NumberInput.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Large integers.
+CONCEPT: BinaryField
+Stores raw binary data; assigns bytes, bytearray, memoryview.
+editable=False by default; not in ModelForm.
+max_length for byte limit.
+DO NOT store files in database; use static files.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Binary data.
+USAGE GUIDELINES:
+USE WHEN:
+
+Storing binary.
+DO NOT USE WHEN:
+For files.
+
+CONCEPT: BooleanField
+True/false; widget CheckboxInput or NullBooleanSelect if null=True.
+Default None if no default.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Boolean values.
+CONCEPT: CompositePrimaryKey
+Virtual field for composite primary key.
+Set as model's pk.
+field_names list of composing fields.
+Creates table with composite pk.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Multi-field pks.
+CONCEPT: CharField
+String field; max_length required except PostgreSQL/SQLite.
+Enforced with MaxLengthValidator.
+db_collation for collation name.
+On Oracle, collations if MAX_STRING_SIZE=EXTENDED.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Short strings.
+CONCEPT: DateField
+Date; datetime.date.
+auto_now: Set to now on save.
+auto_now_add: Set on create.
+Widget: DateInput.
+DO NOT use datetime.datetime directly; convert to date.
+On PostgreSQL/MySQL, timedelta arithmetic returns datetime; cast to date.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Dates.
+USAGE GUIDELINES:
+USE WHEN:
+
+Storing dates.
+DO NOT USE WHEN:
+With datetimes without conversion.
+
+CONCEPT: DateTimeField
+Datetime; datetime.datetime.
+Same auto options.
+Widget: DateTimeInput.
+DO NOT use date; convert to datetime.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Datetimes.
+CONCEPT: DecimalField
+Fixed-precision decimal; Decimal.
+max_digits, decimal_places required.
+Widget: NumberInput or TextInput.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Precise decimals.
+CONCEPT: DurationField
+Periods; timedelta.
+interval on PostgreSQL/Oracle; bigint microseconds else.
+Arithmetic works; comparisons vary.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Time durations.
+CONCEPT: EmailField
+CharField validated as email.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Emails.
+CONCEPT: FileField
+File upload.
+upload_to: Path or callable.
+storage: Storage object or callable.
+DO NOT set primary_key.
+Widget: ClearableFileInput.
+Define MEDIA_ROOT/URL.
+Path relative to MEDIA_ROOT.
+Validate uploads for security.
+varchar(100) in db.
+COMMAND:
+CODE:
+class MyModel(models.Model):
+    upload = models.FileField(upload_to="uploads/")
+COMMAND:
+CODE:
+def user_directory_path(instance, filename):
+    return "user_{0}/{1}".format(instance.user.id, filename)
+
+class MyModel(models.Model):
+    upload = models.FileField(upload_to=user_directory_path)
+DJANGO VERSION: 6.0
+APPLICABILITY: - File uploads.
+USAGE GUIDELINES:
+USE WHEN:
+
+Handling files.
+DO NOT USE WHEN:
+Without validation.
+
+SECTION: FieldFile
+PURPOSE: Proxy for FileField underlying file.
+Methods: name, path, size, url, open, close, save, delete.
+save/delete save model by default.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Interacting with uploaded files.
+CONCEPT: FilePathField
+CharField limited to directory filenames.
+path: Absolute path or callable.
+match: Regex for filenames.
+recursive: Include subdirs.
+allow_files/folders: Include types.
+varchar(100).
+DJANGO VERSION: 6.0
+APPLICABILITY: - Selecting filesystem paths.
+CONCEPT: FloatField
+Floating-point; float.
+Widget: NumberInput or TextInput.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Approximate reals.
+CONCEPT: GeneratedField
+Computed from other fields; expression, output_field, db_persist.
+expression: Deterministic, same-table fields.
+db_persist: True for stored, False for virtual.
+Refreshed on save/load where supported.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Computed columns.
+USAGE GUIDELINES:
+USE WHEN:
+
+Database computes values.
+DO NOT USE WHEN:
+Referencing other tables/generated fields.
+
+CONCEPT: GenericIPAddressField
+IPv4/IPv6 address.
+protocol: both, IPv4, IPv6.
+unpack_ipv4: Unpack ::ffff:.
+Normalization per RFC 4291.
+DJANGO VERSION: 6.0
+APPLICABILITY: - IP addresses.
+CONCEPT: ImageField
+FileField validating images.
+height_field, width_field: Auto-populate dimensions.
+Requires pillow.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Image uploads.
+CONCEPT: IntegerField
+Integer; database-dependent range.
+-2147483648 to 2147483647 safe.
+Widget: NumberInput or TextInput.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Integers.
+CONCEPT: JSONField
+JSON data; dict, list, etc.
+encoder, decoder optional.
+Supported on most backends.
+Index with GinIndex on PostgreSQL.
+PostgreSQL uses jsonb; Oracle no scalars.
+DJANGO VERSION: 6.0
+APPLICABILITY: - JSON storage.
+CONCEPT: PositiveBigIntegerField
+Positive BigIntegerField; 0 to 9223372036854775807.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Large positive integers.
+CONCEPT: PositiveIntegerField
+Positive IntegerField; 0 to 2147483647 safe.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Positive integers.
+CONCEPT: PositiveSmallIntegerField
+Positive SmallIntegerField; 0 to 32767 safe.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Small positive integers.
+CONCEPT: SlugField
+CharField for slugs; letters, numbers, _, -.
+max_length=50 default.
+db_index=True.
+allow_unicode for Unicode.
+Validated with validate_slug or validate_unicode_slug.
+DJANGO VERSION: 6.0
+APPLICABILITY: - URL slugs.
+CONCEPT: SmallAutoField
+Small auto-increment; 1 to 32767 safe.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Small IDs.
+CONCEPT: SmallIntegerField
+Small integer; -32768 to 32767 safe.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Small integers.
+CONCEPT: TextField
+Large text; Textarea widget.
+max_length reflected in widget, not enforced.
+db_collation for collation.
+On Oracle, no collations.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Long text.
+CONCEPT: TimeField
+Time; datetime.time.
+auto_now/add.
+Widget: TimeInput.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Times.
+CONCEPT: URLField
+CharField validated as URL.
+max_length=200 default.
+Widget: URLInput.
+DJANGO VERSION: 6.0
+APPLICABILITY: - URLs.
+CONCEPT: UUIDField
+UUID; uuid.UUID.
+uuid datatype on PostgreSQL/MariaDB; char(32) else.
+Default with uuid.uuid4.
+Lookups vary on backends.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Unique identifiers.
+SUMMARY:
+
+Auto/BigAuto for IDs.
+Integer variants for ranges.
+Char/Text for strings.
+Date/Time for temporal.
+File/Image for uploads.
+
+
+SECTION: Relationship Fields
+PURPOSE: This section covers fields for relations.
+
+CONCEPT: ForeignKey
+Many-to-one; to class, on_delete.
+Index created; db_index=False to disable.
+COMMAND:
+CODE:
+from django.db import models
+
+class Manufacturer(models.Model):
+    name = models.TextField()
+
+class Car(models.Model):
+    manufacturer = models.ForeignKey(Manufacturer, on_delete=models.CASCADE)
+Column: field_id.
+Arguments: on_delete (CASCADE, PROTECT, RESTRICT, SET_NULL, SET_DEFAULT, SET, DO_NOTHING).
+limit_choices_to for form limits.
+related_name for reverse.
+related_query_name for reverse filter.
+to_field for non-pk unique field.
+db_constraint for no constraint.
+swappable for user models.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Many-to-one links.
+CONCEPT: ManyToManyField
+Many-to-many; to class.
+Uses intermediary table.
+Arguments: related_name, related_query_name, limit_choices_to, symmetrical (False for self), through for intermediate, through_fields for ambiguous, db_table, db_constraint, swappable.
+No validators, null.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Many-to-many links.
+CONCEPT: OneToOneField
+One-to-one; to class, on_delete.
+Like unique ForeignKey.
+parent_link for inheritance.
+DJANGO VERSION: 6.0
+APPLICABILITY: - One-to-one extensions.
+CONCEPT: Lazy Relationships
+Reference by string or "self".
+Recursive: "self".
+Relative: Model name.
+Absolute: "app_label.ModelName".
+DJANGO VERSION: 6.0
+APPLICABILITY: - Avoiding circular imports.
+SUMMARY:
+
+ForeignKey for many-to-one.
+ManyToManyField for many-to-many.
+OneToOneField for one-to-one.
+Lazy for unresolved models.
+
+
+SECTION: Field API Reference
+PURPOSE: This section describes Field class and methods.
+Field represents column; used in models/querysets.
+Subclass RegisterLookupMixin for lookups.
+description for verbose.
+descriptor_class for get/set.
+get_internal_type for backend type.
+db_type for column type.
+rel_db_type for related type.
+get_prep_value for query prep.
+get_db_prep_value for backend value.
+from_db_value for load conversion.
+get_db_prep_save for save prep.
+pre_save for pre-save prep.
+to_python for deserialization.
+value_from_object for serialization.
+value_to_string for serialize.
+formfield for form field.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Custom fields.
+
+SECTION: Registering and Fetching Lookups
+PURPOSE: This section notes lookup registration API on Field.
+Customize lookups.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Custom query behavior.
+
+SECTION: Field Attribute Reference
+PURPOSE: This section lists Field attributes for introspection.
+auto_created: True if auto-created.
+concrete: True if has column.
+hidden: True if hidden.
+is_relation: True if relational.
+model: Defining model.
+For relations: many_to_many, many_to_one, one_to_many, one_to_one, related_model.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Field inspection.

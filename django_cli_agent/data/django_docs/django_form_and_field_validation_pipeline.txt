@@ -1,0 +1,367 @@
+SECTION: Form and Field Validation Overview
+
+PURPOSE:
+Explain how Django validates form and field data and where customization is applied.
+
+CONCEPT:
+
+Form validation occurs during the cleaning phase. Validation is typically triggered by calling is_valid() on a form, but it may also occur when accessing errors or calling full_clean() directly.
+
+Validation logic is divided across multiple methods, each responsible for a specific stage of data normalization and validation.
+
+All validation methods may raise ValidationError. If no error is raised, the method MUST return cleaned, normalized Python data.
+
+SECTION: Validation Execution Order
+
+PURPOSE:
+Define the exact order in which Django runs validation logic.
+
+CONCEPT:
+
+Validation is performed field-by-field, followed by form-wide validation.
+
+ORDER OF EXECUTION:
+
+Field.to_python()
+
+Field.validate()
+
+Field.run_validators()
+
+Field.clean()
+
+Form.clean_<fieldname>()
+
+Form.clean()
+
+RULES:
+
+Validation stops immediately for a field if Field.clean() raises ValidationError
+
+Validation continues for remaining fields
+
+Form.clean() ALWAYS runs, regardless of previous field errors
+
+SECTION: Field.to_python()
+
+PURPOSE:
+Convert raw input into a Python data type.
+
+CONCEPT:
+
+to_python() receives raw input from the widget and converts it into the correct Python type.
+
+FAILURE BEHAVIOR:
+
+Raises ValidationError if conversion fails
+
+EXAMPLE:
+
+FloatField converts input to float
+
+Invalid input raises ValidationError
+
+SECTION: Field.validate()
+
+PURPOSE:
+Perform field-specific validation not suitable for validators.
+
+CONCEPT:
+
+validate() checks constraints that depend on field semantics rather than reusable validation logic.
+
+RULES:
+
+Receives already converted Python data
+
+MUST NOT modify the value
+
+MUST raise ValidationError on failure
+
+MUST NOT return a value
+
+SECTION: Field.run_validators()
+
+PURPOSE:
+Execute all validators attached to a field.
+
+CONCEPT:
+
+run_validators() executes each validator and aggregates all validation errors into a single ValidationError.
+
+RULE:
+
+DO NOT override this method
+
+SECTION: Field.clean()
+
+PURPOSE:
+Coordinate the complete validation pipeline for a field.
+
+CONCEPT:
+
+clean() runs the following in order:
+
+to_python()
+
+validate()
+
+run_validators()
+
+If any step raises ValidationError, validation stops.
+
+RETURN VALUE:
+
+Cleaned Python value
+
+Stored in form.cleaned_data
+
+SECTION: Form.clean_<fieldname>()
+
+PURPOSE:
+Apply validation logic specific to one form field.
+
+CONCEPT:
+
+This method is defined on the form, not the field.
+
+RULES:
+
+Method name MUST match clean_<fieldname>
+
+Access value via self.cleaned_data
+
+Value is already converted to Python
+
+MUST return the cleaned value
+
+USE CASE:
+
+Validation specific to a single form field
+
+Validation unrelated to field type
+
+SECTION: Form.clean()
+
+PURPOSE:
+Validate relationships between multiple fields.
+
+CONCEPT:
+
+Form.clean() runs after all individual fields have been cleaned.
+
+CAPABILITIES:
+
+Access multiple fields at once
+
+Validate interdependent fields
+
+Replace entire cleaned_data dictionary if necessary
+
+ERROR HANDLING:
+
+Errors raised here are non-field errors
+
+Stored under __all__
+
+Accessible via non_field_errors()
+
+FIELD-SPECIFIC ERRORS:
+
+Use add_error(field_name, error)
+
+SECTION: ValidationError Best Practices
+
+PURPOSE:
+Ensure error messages are reusable, translatable, and machine-readable.
+
+CONCEPT:
+
+Always raise ValidationError with structured metadata.
+
+RULES:
+
+ALWAYS provide an error code
+
+NEVER interpolate variables directly into strings
+
+ALWAYS use params for dynamic values
+
+ALWAYS wrap messages with translation functions
+
+COMMAND:
+raise ValidationError(
+    _("Invalid value: %(value)s"),
+    code="invalid",
+    params={"value": "42"},
+)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Writing reusable forms
+
+Writing reusable fields
+
+Writing model fields
+
+DO NOT USE WHEN:
+
+You require fully overrideable error messages
+
+SECTION: Raising Multiple Validation Errors
+
+PURPOSE:
+Report multiple validation failures at once.
+
+CONCEPT:
+
+Pass a list of ValidationError objects to the constructor.
+
+COMMAND:
+raise ValidationError(
+    [
+        ValidationError(_("Error 1"), code="error1"),
+        ValidationError(_("Error 2"), code="error2"),
+    ]
+)
+
+
+RULE:
+
+Prefer ValidationError instances over plain strings
+
+SECTION: Validators
+
+PURPOSE:
+Use reusable validation logic across fields and models.
+
+CONCEPT:
+
+Validators are callables that:
+
+Accept a single value
+
+Raise ValidationError on invalid input
+
+EXECUTION:
+
+Run after to_python() and validate()
+
+COMMAND:
+from django.core import validators
+from django.forms import CharField
+
+class SlugField(CharField):
+    default_validators = [validators.validate_slug]
+
+EQUIVALENCE:
+slug = forms.SlugField()
+
+slug = forms.CharField(validators=[validators.validate_slug])
+
+SECTION: Custom Field Validation Example
+
+PURPOSE:
+Demonstrate custom field-level validation.
+
+COMMAND:
+from django import forms
+from django.core.validators import validate_email
+
+class MultiEmailField(forms.Field):
+    def to_python(self, value):
+        if not value:
+            return []
+        return value.split(",")
+
+    def validate(self, value):
+        super().validate(value)
+        for email in value:
+            validate_email(email)
+
+
+RULE:
+
+This validation applies to ALL uses of the field
+
+SECTION: Form-Level Field Cleaning Example
+
+PURPOSE:
+Apply validation to a specific form field.
+
+COMMAND:
+class ContactForm(forms.Form):
+    ...
+
+    def clean_recipients(self):
+        data = self.cleaned_data["recipients"]
+        if "fred@example.com" not in data:
+            raise ValidationError("You have forgotten about Fred!")
+        return data
+
+
+RULE:
+
+ALWAYS return a value
+
+SECTION: Cross-Field Validation Example
+
+PURPOSE:
+Validate conditions involving multiple fields.
+
+COMMAND:
+class ContactForm(forms.Form):
+    ...
+
+    def clean(self):
+        cleaned_data = super().clean()
+        cc_myself = cleaned_data.get("cc_myself")
+        subject = cleaned_data.get("subject")
+
+        if cc_myself and subject and "help" not in subject:
+            raise ValidationError(
+                "Did not send for 'help' in the subject despite CC'ing yourself."
+            )
+
+
+ERROR TYPE:
+
+Non-field error
+
+SECTION: Assigning Errors to Specific Fields
+
+PURPOSE:
+Attach cross-field errors to individual fields.
+
+COMMAND:
+class ContactForm(forms.Form):
+    ...
+
+    def clean(self):
+        cleaned_data = super().clean()
+        cc_myself = cleaned_data.get("cc_myself")
+        subject = cleaned_data.get("subject")
+
+        if cc_myself and subject and "help" not in subject:
+            msg = "Must put 'help' in subject when cc'ing yourself."
+            self.add_error("cc_myself", msg)
+            self.add_error("subject", msg)
+
+
+RULES:
+
+add_error() removes the field from cleaned_data
+
+Error argument SHOULD be a ValidationError
+
+SUMMARY:
+
+Validation occurs in a strict, ordered pipeline
+
+Field validation precedes form validation
+
+ValidationError MUST be structured and translatable
+
+Cross-field logic belongs in Form.clean()

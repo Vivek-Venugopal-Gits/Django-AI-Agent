@@ -1,0 +1,325 @@
+SECTION: URL Dispatcher
+PURPOSE: This section provides an overview of Django's URL dispatcher, explaining how to map URL paths to views for handling web requests.
+CONCEPT: Design clean and elegant URLs in Django without framework limitations.
+SECTION: Overview
+PURPOSE: This section describes the URLconf module, which maps URL paths to Python functions or views.
+CONCEPT: Create a Python module called URLconf to map URL path expressions to views. This module can reference other mappings and be constructed dynamically.
+CONCEPT: Translate URLs according to the active language using Django's internationalization features.
+SECTION: How Django Processes a Request
+PURPOSE: This section outlines the algorithm Django uses to handle incoming requests and determine which code to execute.
+
+Determine the root URLconf module using the ROOT_URLCONF setting, or the urlconf attribute on the HttpRequest object if set by middleware.
+Load the module and find the urlpatterns variable, which is a sequence of path() and/or re_path() instances.
+Run through each URL pattern in order, stopping at the first match against the path_info.
+Import and call the matched view, passing an HttpRequest instance, positional arguments from unnamed groups, and keyword arguments from named parts or kwargs.
+Invoke an error-handling view if no pattern matches or an exception occurs.
+
+SECTION: Example
+PURPOSE: This section provides a sample URLconf and explains how requests match patterns.
+CODE:
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("articles/2003/", views.special_case_2003),
+    path("articles/<int:year>/", views.year_archive),
+    path("articles/<int:year>/<int:month>/", views.month_archive),
+    path("articles/<int:year>/<int:month>/<slug:slug>/", views.article_detail),
+]
+CONCEPT: Use angle brackets to capture values from the URL. Include a converter type like <int:name> for integers; otherwise, match any string excluding /. Omit leading slashes in patterns.
+CONCEPT: Requests match patterns in order. For example, /articles/2005/03/ calls views.month_archive(request, year=2005, month=3). /articles/2003/ matches the first pattern as a special case. /articles/2003 without a trailing slash does not match. /articles/2003/03/building-a-django-site/ calls views.article_detail with year=2003, month=3, slug="building-a-django-site".
+SECTION: Path Converters
+PURPOSE: This section lists default path converters for capturing and converting URL segments.
+CONCEPT: str matches any non-empty string excluding /. int matches zero or positive integers, returns int. slug matches ASCII letters, numbers, hyphens, underscores. uuid matches lowercase UUID with dashes, returns UUID instance. path matches any non-empty string including /.
+SECTION: Registering Custom Path Converters
+PURPOSE: This section explains how to define and register custom converters for complex matching.
+CONCEPT: Define a class with regex attribute as a string, to_python method to convert matched string (raise ValueError on failure), and to_url method to convert Python type to URL string (raise ValueError on failure).
+CODE:
+class FourDigitYearConverter:
+    regex = "[0-9]{4}"
+
+    def to_python(self, value):
+        return int(value)
+
+    def to_url(self, value):
+        return "%04d" % value
+CONCEPT: Register using register_converter in URLconf.
+CODE:
+from django.urls import path, register_converter
+
+from . import converters, views
+
+register_converter(converters.FourDigitYearConverter, "yyyy")
+
+urlpatterns = [
+    path("articles/2003/", views.special_case_2003),
+    path("articles/<yyyy:year>/", views.year_archive),
+    ...,
+]
+SECTION: Using Regular Expressions
+PURPOSE: This section describes using re_path for patterns beyond path converters.
+CONCEPT: Use re_path instead of path for regular expressions. Named groups use (?P<name>pattern).
+CODE:
+from django.urls import path, re_path
+
+from . import views
+
+urlpatterns = [
+    path("articles/2003/", views.special_case_2003),
+    re_path(r"^articles/(?P<year>[0-9]{4})/$", views.year_archive),
+    re_path(r"^articles/(?P<year>[0-9]{4})/(?P<month>[0-9]{2})/$", views.month_archive),
+    re_path(
+        r"^articles/(?P<year>[0-9]{4})/(?P<month>[0-9]{2})/(?P<slug>[\w-]+)/$",
+        views.article_detail,
+    ),
+]
+CONCEPT: Captured arguments are strings. Year is constrained to four digits.
+USAGE GUIDELINES:
+USE WHEN:
+
+Defining patterns requiring complex regex not covered by path converters.
+DO NOT USE WHEN:
+Simple path matching suffices, as path is preferred for readability.
+
+SECTION: Using Unnamed Regular Expression Groups
+PURPOSE: This section covers using unnamed groups in regex and mixing with named groups.
+CONCEPT: Use unnamed groups like ([0-9]{4}). Unnamed groups are ignored if mixed with named; only named are passed to views. Use one style per regex.
+SECTION: Nested Arguments
+PURPOSE: This section explains handling nested captured arguments in regex.
+CONCEPT: Django resolves nested arguments and passes them to views. When reversing, fill outer arguments, ignoring nested.
+CODE:
+from django.urls import re_path
+
+urlpatterns = [
+    re_path(r"^blog/(page-([0-9]+)/)?$", blog_articles),  # bad
+    re_path(r"^comments/(?:page-(?P<page_number>[0-9]+)/)?$", comments),  # good
+]
+CONCEPT: Use non-capturing groups (?:...) for arguments views ignore. Capture only needed values to avoid coupling.
+SECTION: What the URLconf Searches Against
+PURPOSE: This section specifies what part of the request URL is matched.
+CONCEPT: Match against the URL as a string, excluding GET/POST parameters and domain. For https://www.example.com/myapp/?page=3, match myapp/. Route all methods (POST, GET, etc.) to the same function.
+SECTION: Specifying Defaults for View Arguments
+PURPOSE: This section shows how to set default values for view parameters.
+CODE:
+Python# URLconf
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("blog/", views.page),
+    path("blog/page<int:num>/", views.page),
+]
+
+# View (in blog/views.py)
+def page(request, num=1):
+    # Output the appropriate page of blog entries, according to num.
+    ...
+CONCEPT: Both patterns point to the same view. First uses default num=1; second uses captured num.
+SECTION: Performance
+PURPOSE: This section discusses URL pattern processing efficiency.
+CONCEPT: Compile urlpatterns on first access and cache for subsequent requests.
+SECTION: Syntax of the urlpatterns Variable
+PURPOSE: This section defines the required format for urlpatterns.
+CONCEPT: urlpatterns is a sequence of path() and/or re_path() instances.
+SECTION: Error Handling
+PURPOSE: This section explains views for unmatched URLs or exceptions.
+CONCEPT: Invoke error-handling views specified by handler400, handler403, handler404, handler500. Set in root URLconf as callables or import paths. Customize error views as needed.
+SECTION: Including Other URLconfs
+PURPOSE: This section describes nesting URLconfs for modular routing.
+CONCEPT: Use include() to root a set of URLs under a prefix.
+CODE:
+from django.urls import include, path
+
+urlpatterns = [
+    # ... snip ...
+    path("community/", include("aggregator.urls")),
+    path("contact/", include("contact.urls")),
+    # ... snip ...
+]
+CONCEPT: Chop off matched part and pass remainder to included URLconf.
+CONCEPT: Include a list of path() instances.
+CODE:
+from django.urls import include, path
+
+from apps.main import views as main_views
+from credit import views as credit_views
+
+extra_patterns = [
+    path("reports/", credit_views.report),
+    path("reports/<int:id>/", credit_views.report),
+    path("charge/", credit_views.charge),
+]
+
+urlpatterns = [
+    path("", main_views.homepage),
+    path("help/", include("apps.help.urls")),
+    path("credit/", include(extra_patterns)),
+]
+CONCEPT: Group common prefixes.
+CODE:
+from django.urls import include, path
+from . import views
+
+urlpatterns = [
+    path(
+        "<page_slug>-<page_id>/",
+        include(
+            [
+                path("history/", views.history),
+                path("edit/", views.edit),
+                path("discuss/", views.discuss),
+                path("permissions/", views.permissions),
+            ]
+        ),
+    ),
+]
+SECTION: Captured Parameters
+PURPOSE: This section covers passing captured values to included URLconfs.
+CONCEPT: Included URLconfs receive captured parameters from parents.
+CODE:
+# In settings/urls/main.py
+from django.urls import include, path
+
+urlpatterns = [
+    path("<username>/blog/", include("foo.urls.blog")),
+]
+
+# In foo/urls/blog.py
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path("", views.blog.index),
+    path("archive/", views.blog.archive),
+]
+CONCEPT: username is passed to included views.
+SECTION: Passing Extra Options to View Functions
+PURPOSE: This section explains passing additional keyword arguments to views via URLconf.
+CONCEPT: path() takes optional dictionary of extra kwargs.
+CODE:
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path("blog/<int:year>/", views.year_archive, {"foo": "bar"}),
+]
+CONCEPT: Calls views.year_archive(request, year=2005, foo='bar'). Dictionary arguments override captured ones with same names.
+SECTION: Passing Extra Options to include()
+PURPOSE: This section shows passing extra options to all views in an included URLconf.
+CODE:
+# main.py
+from django.urls import include, path
+
+urlpatterns = [
+    path("blog/", include("inner"), {"blog_id": 3}),
+]
+
+# inner.py
+from django.urls import path
+from mysite import views
+
+urlpatterns = [
+    path("archive/", views.archive),
+    path("about/", views.about),
+]
+CONCEPT: Extra options pass to every view in included URLconf. Ensure all views accept them.
+SECTION: Reverse Resolution of URLs
+PURPOSE: This section describes obtaining URLs from view names and arguments, avoiding hardcoding.
+CONCEPT: Use URLconf as single source for URL design. Reverse from view name and arguments.
+CONCEPT: Tools: url template tag, reverse() function, get_absolute_url() method.
+SECTION: Examples
+PURPOSE: This section provides examples of URL reversing.
+CODE:
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    # ...
+    path("articles/<int:year>/", views.year_archive, name="news-year-archive"),
+    # ...
+]
+CONCEPT: URL for year nnnn is /articles/<nnnn>/. In template: 2012 Archive. Or with variable: {% url 'news-year-archive' yearvar %}. In Python: return HttpResponseRedirect(reverse("news-year-archive", args=(year,))).
+CONCEPT: Change URLconf entry to update all URLs.
+SECTION: Naming URL Patterns
+PURPOSE: This section explains using names for URL patterns to enable reversing.
+CONCEPT: Use named patterns with any characters. Prefix with app name to avoid clashes. Same name in different apps: last in urlpatterns wins. Override views by placing after others. Multiple patterns with same name differ by arguments.
+SECTION: URL Namespaces
+PURPOSE: This section covers namespaces for unique URL reversing across apps or instances.
+SECTION: Introduction
+PURPOSE: This subsection introduces application and instance namespaces.
+CONCEPT: Application namespace names the app; same for all instances. Instance namespace identifies specific instance, unique project-wide; can match application namespace for default.
+CONCEPT: Reference with : operator, e.g., admin:index. Nested: sports:polls:index.
+SECTION: Reversing Namespaced URLs
+PURPOSE: This subsection explains resolving namespaced URLs.
+CONCEPT: Split name, find application namespace instances. Use current_app from reverse() or request.current_app. No current: use default (instance matching app namespace). No default: use last deployed. No app match: treat as instance namespace. Repeat for nested.
+SECTION: Example
+PURPOSE: This subsection provides an example with multiple polls instances.
+CODE:
+from django.urls import include, path
+
+urlpatterns = [
+    path("author-polls/", include("polls.urls", namespace="author-polls")),
+    path("publisher-polls/", include("polls.urls", namespace="publisher-polls")),
+]
+CODE:
+from django.urls import path
+
+from . import views
+
+app_name = "polls"
+urlpatterns = [
+    path("", views.IndexView.as_view(), name="index"),
+    path("<int:pk>/", views.DetailView.as_view(), name="detail"),
+    ...,
+]
+CONCEPT: If current is author-polls, polls:index resolves to /author-polls/. No current: to last registered (publisher-polls). author-polls:index always to /author-polls/. With default polls instance, no current resolves to default.
+SECTION: URL Namespaces and Included URLconfs
+PURPOSE: This subsection explains specifying app namespaces in included URLconfs.
+CONCEPT: Set app_name in included module.
+CODE:
+from django.urls import path
+
+from . import views
+
+app_name = "polls"
+urlpatterns = [
+    path("", views.IndexView.as_view(), name="index"),
+    path("<int:pk>/", views.DetailView.as_view(), name="detail"),
+    ...,
+]
+CODE:
+from django.urls import include, path
+
+urlpatterns = [
+    path("polls/", include("polls.urls")),
+]
+CONCEPT: Or include 2-tuple: (list of patterns, app namespace).
+CODE:
+from django.urls import include, path
+
+from . import views
+
+polls_patterns = (
+    [
+        path("", views.IndexView.as_view(), name="index"),
+        path("<int:pk>/", views.DetailView.as_view(), name="detail"),
+    ],
+    "polls",
+)
+
+urlpatterns = [
+    path("polls/", include(polls_patterns)),
+]
+CONCEPT: Instance namespace via include(namespace=). Defaults to app namespace if unspecified.
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Web applications using Django for URL routing.
+SUMMARY:
+
+Map URLs to views using URLconf with path() or re_path().
+Use converters and regex for capturing parameters.
+Include other URLconfs for modularity.
+Reverse URLs using names and namespaces to avoid hardcoding.

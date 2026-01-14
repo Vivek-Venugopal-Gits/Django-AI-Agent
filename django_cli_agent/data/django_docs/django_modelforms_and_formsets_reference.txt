@@ -1,0 +1,358 @@
+SECTION: Creating Forms from Models with ModelForm
+
+PURPOSE:
+Explain how Django generates forms directly from model definitions using ModelForm.
+
+CONCEPT:
+
+When building database-driven applications, form fields often map directly to model fields. Defining both separately is redundant. Django provides ModelForm to automatically generate a Form class from a model definition.
+
+A ModelForm:
+
+Automatically creates form fields from model fields
+
+Keeps validation rules consistent with the model
+
+Reduces duplicated logic between models and forms
+
+COMMAND:
+from django.forms import ModelForm
+from myapp.models import Article
+
+class ArticleForm(ModelForm):
+    class Meta:
+        model = Article
+        fields = ["pub_date", "headline", "content", "reporter"]
+
+form = ArticleForm()
+
+article = Article.objects.get(pk=1)
+form = ArticleForm(instance=article)
+
+SECTION: Model Field to Form Field Mapping
+
+PURPOSE:
+Define how Django converts model fields into form fields.
+
+CONCEPT:
+
+For each model field included in Meta.fields, Django generates a corresponding form field using predefined mappings.
+
+KEY RULES:
+
+Auto fields are not represented in forms
+
+ForeignKey → ModelChoiceField
+
+ManyToManyField → ModelMultipleChoiceField
+
+blank=True → required=False
+
+choices → Select widget by default
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+You want consistent validation between models and forms
+
+Form structure mirrors database schema
+
+DO NOT USE WHEN:
+
+Form logic diverges significantly from model structure
+
+SECTION: Full ModelForm Example
+
+PURPOSE:
+Demonstrate ModelForm generation using real models.
+
+COMMAND:
+from django.db import models
+from django.forms import ModelForm
+
+TITLE_CHOICES = {
+    "MR": "Mr.",
+    "MRS": "Mrs.",
+    "MS": "Ms.",
+}
+
+class Author(models.Model):
+    name = models.CharField(max_length=100)
+    title = models.CharField(max_length=3, choices=TITLE_CHOICES)
+    birth_date = models.DateField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+class Book(models.Model):
+    name = models.CharField(max_length=100)
+    authors = models.ManyToManyField(Author)
+
+class AuthorForm(ModelForm):
+    class Meta:
+        model = Author
+        fields = ["name", "title", "birth_date"]
+
+class BookForm(ModelForm):
+    class Meta:
+        model = Book
+        fields = ["name", "authors"]
+
+CONCEPT:
+
+These ModelForm classes are functionally equivalent to manually defined forms.Form classes, except that ModelForm also provides an integrated save() method.
+
+SECTION: Validation Lifecycle of a ModelForm
+
+PURPOSE:
+Explain how Django validates both form and model data.
+
+CONCEPT:
+
+ModelForm validation consists of two stages:
+
+Form field validation
+
+Model instance validation
+
+Validation is triggered by:
+
+Calling is_valid()
+
+Accessing form.errors
+
+PROCESS ORDER:
+
+Form.clean()
+
+Model.full_clean(validate_unique=False, validate_constraints=False)
+
+Model.validate_unique()
+
+Model.validate_constraints()
+
+USAGE GUIDELINES:
+
+DO NOT reuse a model instance after failed validation.
+Failed validation may leave the instance in an inconsistent state.
+
+SECTION: Overriding clean() in a ModelForm
+
+PURPOSE:
+Add custom validation logic while preserving model constraints.
+
+CONCEPT:
+
+You may override clean() to add extra validation.
+You MUST call super().clean() to preserve uniqueness and constraint checks.
+
+COMMAND:
+class ArticleForm(ModelForm):
+    def clean(self):
+        cleaned_data = super().clean()
+        return cleaned_data
+
+SECTION: Saving Data with ModelForm.save()
+
+PURPOSE:
+Explain how form data is persisted to the database.
+
+CONCEPT:
+
+save() creates or updates a model instance using validated form data.
+
+BEHAVIOR:
+
+Automatically validates if not already validated
+
+Raises ValueError if validation fails
+
+Uses model defaults when optional fields are missing
+
+COMMAND:
+f = ArticleForm(request.POST)
+new_article = f.save()
+
+a = Article.objects.get(pk=1)
+f = ArticleForm(request.POST, instance=a)
+f.save()
+
+SECTION: Using save(commit=False)
+
+PURPOSE:
+Allow modification of model instances before saving.
+
+CONCEPT:
+
+Passing commit=False returns an unsaved model instance.
+
+REQUIREMENT:
+
+You MUST manually call instance.save()
+
+For ManyToMany fields, you MUST call save_m2m()
+
+COMMAND:
+f = AuthorForm(request.POST)
+author = f.save(commit=False)
+author.some_field = "some_value"
+author.save()
+f.save_m2m()
+
+SECTION: Selecting Fields Securely
+
+PURPOSE:
+Prevent mass-assignment vulnerabilities.
+
+CONCEPT:
+
+You SHOULD explicitly declare editable fields using fields.
+
+SECURITY RULE:
+DO NOT rely on implicit field inclusion.
+
+COMMAND:
+class AuthorForm(ModelForm):
+    class Meta:
+        model = Author
+        fields = "__all__"
+
+
+or
+
+class PartialAuthorForm(ModelForm):
+    class Meta:
+        model = Author
+        exclude = ["title"]
+
+USAGE GUIDELINES:
+
+USE fields whenever possible.
+Only use __all__ when field exposure is fully controlled.
+
+SECTION: Overriding Default Fields and Widgets
+
+PURPOSE:
+Customize field behavior and presentation.
+
+CONCEPT:
+
+You may override widgets, labels, help texts, and error messages via Meta.
+
+COMMAND:
+class AuthorForm(ModelForm):
+    class Meta:
+        model = Author
+        fields = ["name", "title", "birth_date"]
+        widgets = {
+            "name": Textarea(attrs={"cols": 80, "rows": 20}),
+        }
+
+
+IMPORTANT:
+
+widgets are ignored for fields with choices
+
+Declaratively defined fields override all Meta customizations
+
+SECTION: Declarative Field Overrides
+
+PURPOSE:
+Provide full control over form fields.
+
+CONCEPT:
+
+Fields defined directly on the form:
+
+Are NOT auto-generated
+
+Do NOT inherit model attributes automatically
+
+MUST manually mirror model constraints if required
+
+COMMAND:
+class ArticleForm(ModelForm):
+    slug = CharField(validators=[validate_slug])
+
+    class Meta:
+        model = Article
+        fields = ["pub_date", "headline", "content", "reporter", "slug"]
+
+SECTION: ModelForm Factory Function
+
+PURPOSE:
+Generate ModelForms dynamically.
+
+CONCEPT:
+
+modelform_factory() creates a ModelForm without defining a class.
+
+COMMAND:
+from django.forms import modelform_factory
+
+BookForm = modelform_factory(Book, fields=["author", "title"])
+
+SECTION: Model Formsets
+
+PURPOSE:
+Edit multiple model instances simultaneously.
+
+CONCEPT:
+
+Model formsets extend formsets with model awareness.
+
+COMMAND:
+from django.forms import modelformset_factory
+
+AuthorFormSet = modelformset_factory(Author, fields=["name", "title"])
+formset = AuthorFormSet()
+
+SUMMARY:
+
+Model formsets handle bulk edits
+
+Support queryset filtering
+
+Respect the same validation rules as ModelForm
+
+SECTION: Inline Formsets
+
+PURPOSE:
+Edit related objects via foreign key relationships.
+
+CONCEPT:
+
+Inline formsets simplify editing child objects linked to a parent model.
+
+COMMAND:
+from django.forms import inlineformset_factory
+
+BookFormSet = inlineformset_factory(Author, Book, fields=["title"])
+formset = BookFormSet(instance=author)
+
+SECTION: Custom Validation in Formsets
+
+PURPOSE:
+Apply validation across multiple forms.
+
+CONCEPT:
+
+To preserve built-in validation:
+
+Always call super().clean()
+
+Modify form.instance, not just cleaned_data
+
+SECTION: Rendering and Saving Formsets
+
+PURPOSE:
+Describe formset usage patterns.
+
+CONCEPT:
+
+Always render the management form
+
+save() persists all changed instances
+
+commit=False requires manual saves and save_m2m()

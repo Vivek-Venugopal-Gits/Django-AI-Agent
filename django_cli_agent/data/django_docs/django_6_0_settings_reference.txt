@@ -1,0 +1,382 @@
+APPLICABILITY: All Django projects and deployments
+SECTION: CORE SETTINGS OVERRIDE WARNING: Preserve required components when overriding non-empty list or dictionary defaults like STATICFILES_FINDERS.
+CONCEPT: ABSOLUTE_URL_OVERRIDES
+Default: {} (Empty dictionary)
+
+Dictionary mapping "app_label.model_name" strings to functions that take a model object and return its URL. Overrides get_absolute_url() methods per installation.
+
+CODE:
+ABSOLUTE_URL_OVERRIDES = {
+    "blogs.blog": lambda o: "/blogs/%s/" % o.slug,
+    "news.story": lambda o: "/stories/%s/%s/" % (o.pub_year, o.slug),
+}
+Model name uses lowercase regardless of actual model class name case.
+
+CONCEPT: ADMINS
+Default: [] (Empty list)
+
+List of email addresses receiving code error notifications when DEBUG=False and AdminEmailHandler configured in LOGGING. Django emails exception details from request/response cycle.
+
+CODE:
+ADMINS = ["john@example.com", '"Ng, Mary" <mary@example.com>']
+Changed in Django 6.0: Older versions required (name, address) tuples.
+
+CONCEPT: ALLOWED_HOSTS
+Default: [] (Empty list)
+
+List of strings representing host/domain names Django site can serve. Prevents HTTP Host header attacks.
+
+Fully qualified names match Host header exactly (case-insensitive, excluding port)
+
+Values starting with period act as subdomain wildcards ('.example.com' matches all subdomains)
+
+'*' matches anything; requires custom Host header validation in first MIDDLEWARE position
+
+When DEBUG=True and ALLOWED_HOSTS empty, validates against ['.localhost', '127.0.0.1', '[::1]']. Checked during tests and get_host() calls. Direct request.META['Host'] access bypasses validation.
+
+CONCEPT: APPEND_SLASH
+Default: True
+
+When True, redirects non-matching URLconf patterns without trailing slash to same URL with slash appended. Only active with CommonMiddleware. POST data lost on redirect. See PREPEND_WWW.
+
+SECTION: CACHES CONFIGURATION: Defines all cache backends with default configuration.
+Default:
+
+CODE:
+{
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    }
+}
+Nested dictionary mapping cache aliases to individual cache options. Must define 'default' cache.
+
+CACHES BACKEND OPTIONS
+BACKEND Default: ''
+
+Built-in backends:
+
+'django.core.cache.backends.db.DatabaseCache'
+
+'django.core.cache.backends.dummy.DummyCache'
+
+'django.core.cache.backends.filebased.FileBasedCache'
+
+'django.core.cache.backends.locmem.LocMemCache'
+
+'django.core.cache.backends.memcached.PyMemcacheCache'
+
+'django.core.cache.backends.memcached.PyLibMCCache'
+
+'django.core.cache.backends.redis.RedisCache'
+
+Use fully-qualified path for custom backends.
+
+KEY_FUNCTION Dotted path to function composing prefix, version, and key into final cache key.
+
+KEY_PREFIX Default: '' Prepended to all cache keys.
+
+LOCATION Cache location (directory, host:port, etc.).
+
+OPTIONS Backend-specific parameters.
+
+TIMEOUT Default: 300 Cache entry expiration in seconds. None prevents expiration; 0 disables caching.
+
+VERSION Default: 1 Default version for cache keys.
+
+SUMMARY:
+CACHES requires 'default' alias
+
+Multiple additional caches supported
+
+LocMemCache used by default
+
+Backend-specific options vary
+
+CONCEPT: CACHE MIDDLEWARE SETTINGS
+CACHE_MIDDLEWARE_ALIAS Default: 'default'
+
+Cache connection for cache middleware.
+
+CACHE_MIDDLEWARE_KEY_PREFIX Default: ''
+
+Prefix for cache middleware keys (combines with KEY_PREFIX).
+
+CACHE_MIDDLEWARE_SECONDS Default: 600
+
+Default caching duration for cache middleware in seconds.
+
+SECTION: CSRF PROTECTION SETTINGS: Controls Cross Site Request Forgery protection behavior.
+CSRF_COOKIE_AGE Default: 31449600 (1 year)
+
+CSRF cookie age in seconds. Long expiration avoids browser cache/form submission issues.
+
+CSRF_COOKIE_DOMAIN Default: None
+
+Domain for CSRF cookie. Use ".example.com" for cross-subdomain POST requests.
+
+CSRF_COOKIE_HTTPONLY Default: False
+
+Sets HttpOnly flag on CSRF cookie. Prevents JavaScript access (minimal CSRF benefit).
+
+CSRF_COOKIE_NAME Default: 'csrftoken'
+
+Name of CSRF authentication token cookie.
+
+CSRF_COOKIE_PATH Default: '/'
+
+Path for CSRF cookie. Matches Django installation URL path.
+
+CSRF_COOKIE_SAMESITE Default: 'Lax'
+
+SameSite flag value for CSRF cookie.
+
+CSRF_COOKIE_SECURE Default: False
+
+Secure cookie flag for CSRF cookie (HTTPS only).
+
+CSRF_USE_SESSIONS Default: False
+
+Store CSRF token in session instead of cookie. Requires django.contrib.sessions and SessionMiddleware before exception-raising middleware.
+
+CSRF_FAILURE_VIEW Default: 'django.views.csrf.csrf_failure'
+
+Dotted path to view handling CSRF failures. Signature: def csrf_failure(request, reason="").
+
+CSRF_HEADER_NAME Default: 'HTTP_X_CSRFTOKEN'
+
+Request header name for CSRF authentication (normalized from client header).
+
+CSRF_TRUSTED_ORIGINS Default: []
+
+Trusted origins for unsafe requests (POST). Supports subdomains with 'https://*.example.com'.
+
+SUMMARY:
+CSRF cookies valid for 1 year by default
+
+Session storage alternative available
+
+Trusted origins prevent cross-subdomain issues
+
+HttpOnly provides minimal additional protection
+
+Continuing with the systematic RAG-optimized restructuring of Django 6.0 settings reference...
+
+SECTION: DATABASES CONFIGURATION: Complete database connection settings.
+Default: {} (Empty dictionary)
+
+Nested dictionary mapping aliases to database options. Must define 'default' database.
+
+SQLite Example:
+
+CODE:
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": "mydatabase",
+    }
+}
+PostgreSQL Example:
+CODE:
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "mydatabase",
+        "USER": "mydatabaseuser",
+        "PASSWORD": "mypassword",
+        "HOST": "127.0.0.1",
+        "PORT": "5432",
+    }
+}
+DATABASE OPTIONS
+ATOMIC_REQUESTS Default: False
+
+Wraps each view in transaction.
+
+AUTOCOMMIT Default: True
+
+Set False to disable Django transaction management.
+
+ENGINE Database backend:
+
+'django.db.backends.postgresql'
+
+'django.db.backends.mysql'
+
+'django.db.backends.sqlite3'
+
+'django.db.backends.oracle'
+
+HOST Default: '' (localhost). Unix socket for MySQL if starts with /.
+
+NAME Database name (SQLite: full file path, use forward slashes).
+
+CONN_MAX_AGE Default: 0 Connection lifetime in seconds. None for unlimited.
+
+CONN_HEALTH_CHECKS Default: False
+
+Health checks persistent connections before reuse.
+
+OPTIONS Backend-specific connection parameters.
+
+PASSWORD Database password.
+
+PORT Default: '' (default port).
+
+TIME_ZONE Default: None Database connection time zone.
+
+DISABLE_SERVER_SIDE_CURSORS Default: False (PostgreSQL)
+
+Disables server-side cursors with QuerySet.iterator().
+
+USER Database username.
+
+TEST DATABASE OPTIONS
+CHARSET, COLLATION Backend-specific test database encoding.
+
+DEPENDENCIES Creation order dependencies.
+
+MIGRATE Default: True Run migrations on test database.
+
+MIRROR Database to mirror during testing (TransactionTestCase only).
+
+NAME Test database name ('test_' + DATABASE_NAME by default).
+
+TEMPLATE PostgreSQL template database.
+
+Oracle-specific: CREATE_DB, CREATE_USER, TBLSPACE, DATAFILE options.
+
+SUMMARY:
+Must define 'default' database
+SQLite simplest single-database setup
+Persistent connections with CONN_MAX_AGE
+Comprehensive test database configuration
+Backend-specific options available
+
+CONCEPT: DATA UPLOAD LIMITS
+DATA_UPLOAD_MAX_MEMORY_SIZE Default: 2621440 (2.5 MB)
+
+Maximum request body size before SuspiciousOperation (RequestDataTooBig). Excludes file uploads.
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS Default: 1000
+
+Maximum GET/POST parameters before TooManyFields.
+
+DATA_UPLOAD_MAX_NUMBER_FILES Default: 100
+
+Maximum POST files before TooManyFiles.
+
+Set to None to disable checks.
+
+CONCEPT: DATABASE_ROUTERS
+Default: []
+
+List of routers determining database usage for queries.
+
+SECTION: DATE/TIME FORMATTING: Locale-aware date/time display formats.
+DATE_FORMAT Default: 'N j, Y' (Feb. 4, 2003)
+
+DATETIME_FORMAT Default: 'N j, Y, P' (Feb. 4, 2003, 4 p.m.)
+
+TIME_FORMAT Default: 'P' (4 p.m.)
+
+SHORT_DATE_FORMAT Default: 'm/d/Y' (12/31/2003)
+
+SHORT_DATETIME_FORMAT Default: 'm/d/Y P'
+
+YEAR_MONTH_FORMAT Default: 'F Y' (January 2006)
+
+MONTH_DAY_FORMAT Default: 'F j' (January 1)
+
+Locale formats take precedence.
+
+INPUT FORMATS
+DATE_INPUT_FORMATS Multiple strftime formats tried in order.
+
+DATETIME_INPUT_FORMATS Date+time formats (falls back to DATE_INPUT_FORMATS).
+
+TIME_INPUT_FORMATS Time formats.
+
+CONCEPT: DEBUG
+Default: False
+
+Controls debug mode. Never deploy with DEBUG=True.
+
+Detailed error pages with tracebacks
+
+Excludes sensitive settings (API, KEY, PASS, SECRET, SIGNATURE, TOKEN)
+
+Logs all SQL queries (memory intensive)
+
+ALLOWED_HOSTS required when False
+
+django-admin startproject sets DEBUG=True.
+
+DEBUG_PROPAGATE_EXCEPTIONS Default: False
+
+Skips Django exception handling, propagates to web server.
+
+CONCEPT: DECIMAL_SEPARATOR
+Default: '.'
+
+Decimal separator for number formatting. Locale takes precedence.
+
+CONCEPT: DEFAULT_AUTO_FIELD
+Default: django.db.models.BigAutoField
+
+Default primary key for models without primary_key=True.
+
+CONCEPT: DEFAULT_CHARSET
+Default: 'utf-8'
+
+Default charset for HttpResponse Content-Type header.
+
+CONCEPT: DEFAULT_EXCEPTION_REPORTER / FILTER
+DEFAULT_EXCEPTION_REPORTER Default: django.views.debug.ExceptionReporter
+
+DEFAULT_EXCEPTION_REPORTER_FILTER Default: django.views.debug.SafeExceptionReporterFilter
+
+CONCEPT: DEFAULT_FROM_EMAIL
+Default: 'webmaster@localhost'
+
+Default From: address for site correspondence.
+
+CONCEPT: DEFAULT_INDEX_TABLESPACE / DEFAULT_TABLESPACE
+Default: ''
+
+Default tablespaces for indexes/models if backend supports.
+
+CONCEPT: DISALLOWED_USER_AGENTS
+Default: []
+
+Compiled regex list blocking User-Agent access (CommonMiddleware only).
+
+SECTION: EMAIL CONFIGURATION: SMTP and backend settings.
+EMAIL_BACKEND Default: django.core.mail.backends.smtp.EmailBackend
+
+EMAIL_FILE_PATH Directory for file backend output.
+
+EMAIL_HOST Default: 'localhost'
+
+EMAIL_HOST_PASSWORD, EMAIL_HOST_USER SMTP authentication.
+
+EMAIL_PORT Default: 25
+
+EMAIL_SUBJECT_PREFIX Default: '[Django] '
+
+EMAIL_USE_LOCALTIME Default: False (UTC Date header).
+
+EMAIL_USE_TLS Default: False Explicit TLS (port 587).
+
+EMAIL_USE_SSL Default: False Implicit TLS/SSL (port 465).
+
+EMAIL_SSL_CERTFILE, EMAIL_SSL_KEYFILE Client certificate authentication.
+
+EMAIL_TIMEOUT Connection timeout in seconds.
+
+SERVER_EMAIL Default: 'root@localhost' Error message sender (ADMINS/MANAGERS).
+
+SUMMARY:
+Comprehensive Django 6.0 core settings reference
+Structured for precise RAG retrieval by setting name
+Preserves all defaults, examples, and warnings
+Chunked by functional category

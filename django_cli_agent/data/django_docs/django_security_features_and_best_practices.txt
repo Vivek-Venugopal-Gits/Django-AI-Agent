@@ -1,0 +1,408 @@
+SECTION: Security in Django Overview
+
+PURPOSE:
+Provide an overview of Django’s built-in security protections and deployment recommendations.
+
+CONCEPT:
+
+Django includes multiple layers of built-in security protections to mitigate common web application vulnerabilities. These protections are effective when used correctly and combined with secure deployment practices.
+
+Security is not automatic. Developers MUST understand Django’s protections and their limitations.
+
+SECTION: User Input Sanitization
+
+PURPOSE:
+Prevent malicious data from being processed or rendered unsafely.
+
+CONCEPT:
+
+User-controlled data MUST NEVER be trusted.
+
+All user input MUST be validated and sanitized before use. This includes:
+
+Form input
+
+Query parameters
+
+Cookies
+
+Data from external services
+
+Django’s form system provides structured validation mechanisms for sanitizing input.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Processing any user-provided data
+
+DO NOT USE WHEN:
+
+Trusting raw input without validation
+
+SECTION: Cross-Site Scripting (XSS) Protection
+
+PURPOSE:
+Prevent injection of malicious client-side scripts.
+
+CONCEPT:
+
+XSS attacks inject malicious JavaScript into pages viewed by other users. Django templates automatically escape dangerous HTML characters to mitigate most XSS attacks.
+
+LIMITATIONS:
+
+Automatic escaping is not foolproof
+
+Improper HTML attribute handling can allow execution
+
+Disabling auto-escaping removes protection
+
+CONCEPT:
+
+Certain patterns remain dangerous even with escaping.
+
+COMMAND:
+<style class={{ var }}>...</style>
+
+
+If var contains injected JavaScript attributes, execution may occur depending on browser behavior.
+
+CONCEPT:
+
+Additional risk exists when using:
+
+safe template filter
+
+mark_safe
+
+Custom template tags with is_safe
+
+Disabled auto-escaping
+
+Rendering non-HTML output formats
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Rendering user content via Django templates
+
+DO NOT USE WHEN:
+
+Marking untrusted content as safe
+
+Storing raw HTML without sanitization
+
+SECTION: Cross-Site Request Forgery (CSRF) Protection
+
+PURPOSE:
+Prevent unauthorized actions performed using authenticated user credentials.
+
+CONCEPT:
+
+CSRF attacks cause authenticated users to unknowingly submit malicious requests.
+
+Django provides built-in CSRF protection that verifies a secret token for POST requests.
+
+CONCEPT:
+
+CSRF protection:
+
+Uses per-user secrets stored in cookies
+
+Prevents replayed form submissions
+
+Validates HTTP Referer headers for HTTPS requests
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Handling authenticated POST requests
+
+DO NOT USE WHEN:
+
+Disabling CSRF protection without full understanding
+
+WARNING:
+
+Disabling CSRF protection globally or per-view introduces significant risk
+
+SECTION: SQL Injection Protection
+
+PURPOSE:
+Prevent execution of malicious SQL code.
+
+CONCEPT:
+
+Django ORM queries are parameterized, separating SQL logic from user input. Database drivers escape parameters automatically.
+
+CONCEPT:
+
+Risk increases when using:
+
+Raw SQL queries
+
+Custom SQL execution
+
+extra()
+
+RawSQL
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Using Django ORM and parameterized queries
+
+DO NOT USE WHEN:
+
+Passing unescaped user input into raw SQL
+
+SECTION: Clickjacking Protection
+
+PURPOSE:
+Prevent malicious framing of site pages.
+
+CONCEPT:
+
+Clickjacking occurs when a site is embedded in a malicious frame to trick users into unintended actions.
+
+Django provides clickjacking protection using the X-Frame-Options response header.
+
+CONCEPT:
+
+The middleware:
+
+Blocks rendering inside frames
+
+Can be configured per view
+
+Is strongly recommended for most sites
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Pages do not need third-party framing
+
+DO NOT USE WHEN:
+
+Pages must be embedded externally without restriction
+
+SECTION: SSL and HTTPS Security
+
+PURPOSE:
+Protect data in transit from interception or modification.
+
+CONCEPT:
+
+HTTPS prevents:
+
+Credential sniffing
+
+Data interception
+
+Active network manipulation
+
+HTTPS MUST be used for production deployments.
+
+CONCEPT:
+
+Additional protections include:
+
+Redirecting HTTP to HTTPS
+
+Secure cookies
+
+Strict Transport Security (HSTS)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Handling authentication or sensitive data
+
+DO NOT USE WHEN:
+
+Allowing session or CSRF cookies over HTTP
+
+SECTION: Host Header Validation
+
+PURPOSE:
+Prevent host header–based attacks.
+
+CONCEPT:
+
+Django uses the HTTP Host header to construct URLs. Fake Host headers can enable:
+
+CSRF
+
+Cache poisoning
+
+Malicious links in emails
+
+Django validates Host headers against ALLOWED_HOSTS when using get_host().
+
+CONCEPT:
+
+Accessing request.META["HTTP_HOST"] bypasses this protection.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Relying on HttpRequest.get_host()
+
+DO NOT USE WHEN:
+
+Reading Host headers directly from request metadata
+
+SECTION: Referrer Policy
+
+PURPOSE:
+Limit exposure of user navigation data.
+
+CONCEPT:
+
+Browsers send the Referer header to indicate navigation origin.
+
+A referrer policy controls when and how this header is sent, improving user privacy.
+
+SECTION: Cross-Origin Opener Policy (COOP)
+
+PURPOSE:
+Prevent cross-origin window interaction attacks.
+
+CONCEPT:
+
+COOP isolates browsing contexts so that cross-origin popups cannot access the opening window.
+
+When enabled:
+
+window.opener is set to null
+
+Cross-origin attacks are mitigated
+
+SECTION: Session Security
+
+PURPOSE:
+Protect user session integrity.
+
+CONCEPT:
+
+Session security shares limitations with CSRF protections, particularly regarding subdomain trust boundaries.
+
+Improper subdomain control weakens session isolation.
+
+SECTION: User-Uploaded Content Security
+
+PURPOSE:
+Mitigate risks from uploaded files.
+
+CONCEPT:
+
+User-uploaded files can introduce:
+
+Code execution
+
+XSS
+
+Content-type confusion attacks
+
+CONCEPT:
+
+Specific risks include:
+
+Executable static file handlers
+
+Malicious HTML disguised as images
+
+Browser-dependent rendering behavior
+
+CONCEPT:
+
+No framework-level solution can fully validate uploaded content safely.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Serving uploads from a separate top-level domain
+
+Restricting allowed file extensions
+
+DO NOT USE WHEN:
+
+Serving uploads from the same origin as application code
+
+SECTION: Content Security Policy (CSP)
+
+PURPOSE:
+Restrict trusted sources of executable and renderable content.
+
+CONCEPT:
+
+Content Security Policy is a browser-enforced allowlist that controls:
+
+Script execution
+
+Resource loading
+
+Framing behavior
+
+BENEFITS:
+
+Mitigates XSS
+
+Limits external resource usage
+
+Prevents unwanted framing
+
+Enables violation reporting
+
+SECTION: CSP Limitations and Considerations
+CONCEPT:
+
+CSP effectiveness depends on comprehensive coverage.
+
+LIMITATIONS:
+
+Excluding routes weakens global protection
+
+Nonce generation adds minor overhead
+
+Browser support varies for advanced directives
+
+CSP remains a recommended defense layer when properly configured.
+
+SECTION: Additional Security Considerations
+
+PURPOSE:
+Highlight security responsibilities beyond the framework.
+
+CONCEPT:
+
+Developers MUST also ensure:
+
+Python code is not web-accessible
+
+Uploaded files are handled safely
+
+Authentication endpoints are protected from brute-force attacks
+
+Secret keys remain confidential
+
+Databases and caches are network-restricted
+
+Django mitigates many vulnerabilities but does not replace secure system design.
+
+SUMMARY:
+
+Django provides layered security protections by default
+
+Misuse or misconfiguration can negate protections
+
+Deployment practices are critical to security
+
+Defense-in-depth is required for production systems

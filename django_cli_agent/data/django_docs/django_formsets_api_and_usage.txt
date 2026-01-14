@@ -1,0 +1,398 @@
+SECTION: Formsets Overview
+
+PURPOSE:
+Explain what Django formsets are and when to use them.
+
+CONCEPT:
+
+A formset is an abstraction layer for handling multiple instances of the same form on a single page. It is conceptually similar to a data grid and enables bulk creation, editing, ordering, and deletion of form data.
+
+Formsets are created from a base Form class and manage:
+
+Multiple form instances
+
+Validation across all forms
+
+Aggregation of cleaned data
+
+Management metadata
+
+SECTION: Creating a Basic Formset
+
+PURPOSE:
+Create and instantiate a formset from a single form class.
+
+CONCEPT:
+
+A formset is created using formset_factory(), which returns a new formset class.
+
+COMMAND:
+from django import forms
+
+class ArticleForm(forms.Form):
+    title = forms.CharField()
+    pub_date = forms.DateField()
+
+COMMAND:
+from django.forms import formset_factory
+ArticleFormSet = formset_factory(ArticleForm)
+
+CONCEPT:
+
+Instantiating the formset allows iteration over its forms like a list.
+
+COMMAND:
+formset = ArticleFormSet()
+for form in formset:
+    print(form)
+
+SECTION: Controlling the Number of Forms with extra
+
+PURPOSE:
+Control how many blank forms are displayed.
+
+CONCEPT:
+
+The extra parameter specifies how many additional empty forms are rendered beyond those created from initial data.
+
+DEFAULT:
+
+extra=1
+
+COMMAND:
+ArticleFormSet = formset_factory(ArticleForm, extra=2)
+
+SECTION: Using Initial Data with a Formset
+
+PURPOSE:
+Prepopulate formsets with existing data.
+
+CONCEPT:
+
+Initial data is supplied as a list of dictionaries. Each dictionary maps to one form.
+
+RULE:
+
+ALWAYS pass the same initial data when processing POST submissions to allow change detection.
+
+COMMAND:
+import datetime
+from django.forms import formset_factory
+from myapp.forms import ArticleForm
+
+ArticleFormSet = formset_factory(ArticleForm, extra=2)
+formset = ArticleFormSet(
+    initial=[
+        {
+            "title": "Django is now open source",
+            "pub_date": datetime.date.today(),
+        }
+    ]
+)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Editing existing records
+
+Mixing existing and new entries
+
+DO NOT USE WHEN:
+
+You cannot provide consistent initial data on POST
+
+SECTION: Limiting Displayed Forms with max_num
+
+PURPOSE:
+Restrict how many forms are displayed.
+
+CONCEPT:
+
+max_num limits the number of forms rendered but does not affect validation unless explicitly enabled.
+
+COMMAND:
+ArticleFormSet = formset_factory(ArticleForm, extra=2, max_num=1)
+
+
+RULES:
+
+Initial forms are always shown even if they exceed max_num
+
+max_num=None allows up to 1000 forms
+
+SECTION: Limiting Instantiated Forms with absolute_max
+
+PURPOSE:
+Protect against memory exhaustion from forged POST requests.
+
+CONCEPT:
+
+absolute_max limits how many forms can be instantiated from submitted data.
+
+COMMAND:
+ArticleFormSet = formset_factory(ArticleForm, absolute_max=1500)
+
+
+RULES:
+
+Defaults to max_num + 1000
+
+Raises ValueError if absolute_max < max_num
+
+SECTION: Formset Validation
+
+PURPOSE:
+Validate all forms in a formset together.
+
+CONCEPT:
+
+Formsets use is_valid() similarly to regular forms.
+
+COMMAND:
+formset.is_valid()
+
+CONCEPT:
+
+Errors are returned as a list aligned with form order.
+
+COMMAND:
+formset.errors
+
+SECTION: Counting Errors and Detecting Changes
+
+PURPOSE:
+Inspect validation state and detect changes.
+
+CONCEPT:
+
+total_error_count() returns the total number of errors
+
+has_changed() detects whether any form data differs from initial data
+
+COMMAND:
+formset.total_error_count()
+formset.has_changed()
+
+SECTION: Understanding the ManagementForm
+
+PURPOSE:
+Explain required metadata for formset processing.
+
+CONCEPT:
+
+Every formset requires management data to track form counts.
+
+REQUIRED FIELDS:
+
+form-TOTAL_FORMS
+
+form-INITIAL_FORMS
+
+RULE:
+
+Missing management data ALWAYS makes the formset invalid.
+
+COMMAND:
+{{ formset.management_form }}
+
+SECTION: BaseFormSet Utility Attributes
+CONCEPTS:
+
+total_form_count(): Total number of forms
+
+initial_form_count(): Number of pre-filled forms
+
+empty_form: Template form with __prefix__
+
+SECTION: Customizing Error Messages
+
+PURPOSE:
+Override default formset error messages.
+
+CONCEPT:
+
+Use error_messages with supported keys:
+
+too_few_forms
+
+too_many_forms
+
+missing_management_form
+
+COMMAND:
+formset = ArticleFormSet(
+    {}, error_messages={"missing_management_form": "Sorry, something went wrong."}
+)
+
+SECTION: Custom Formset-Level Validation
+
+PURPOSE:
+Validate constraints across multiple forms.
+
+CONCEPT:
+
+Override BaseFormSet.clean() for cross-form validation.
+
+COMMAND:
+from django.core.exceptions import ValidationError
+from django.forms import BaseFormSet
+
+class BaseArticleFormSet(BaseFormSet):
+    def clean(self):
+        if any(self.errors):
+            return
+        titles = set()
+        for form in self.forms:
+            title = form.cleaned_data.get("title")
+            if title in titles:
+                raise ValidationError("Articles in a set must have distinct titles.")
+            titles.add(title)
+
+SECTION: Validating Form Count with validate_max and validate_min
+CONCEPT:
+
+validate_max=True enforces max_num
+
+validate_min=True enforces min_num
+
+COMMAND:
+ArticleFormSet = formset_factory(ArticleForm, max_num=1, validate_max=True)
+
+ArticleFormSet = formset_factory(ArticleForm, min_num=3, validate_min=True)
+
+SECTION: Ordering Forms with can_order
+
+PURPOSE:
+Enable user-controlled ordering of forms.
+
+CONCEPT:
+
+Adds an ORDER field to each form.
+
+DEFAULT:
+
+can_order=False
+
+COMMAND:
+ArticleFormSet = formset_factory(ArticleForm, can_order=True)
+
+RELATED CONTROLS:
+
+ordering_widget
+
+get_ordering_widget()
+
+SECTION: Deleting Forms with can_delete
+
+PURPOSE:
+Allow forms to be marked for deletion.
+
+CONCEPT:
+
+Adds a DELETE boolean field.
+
+DEFAULT:
+
+can_delete=False
+
+COMMAND:
+ArticleFormSet = formset_factory(ArticleForm, can_delete=True)
+
+CONCEPT:
+
+Deleted forms are accessible via deleted_forms.
+
+SECTION: Adding Custom Fields to Formsets
+
+PURPOSE:
+Inject additional fields into each form.
+
+CONCEPT:
+
+Override BaseFormSet.add_fields().
+
+COMMAND:
+class BaseArticleFormSet(BaseFormSet):
+    def add_fields(self, form, index):
+        super().add_fields(form, index)
+        form.fields["my_field"] = forms.CharField()
+
+SECTION: Passing Custom Parameters to Forms
+
+PURPOSE:
+Provide per-form initialization arguments.
+
+CONCEPT:
+
+Use form_kwargs or override get_form_kwargs().
+
+COMMAND:
+formset = ArticleFormSet(form_kwargs={"user": request.user})
+
+SECTION: Customizing Formset Prefixes
+
+PURPOSE:
+Avoid name collisions when using multiple formsets.
+
+CONCEPT:
+
+Set the prefix argument consistently on GET and POST.
+
+COMMAND:
+ArticleFormSet(prefix="article")
+
+SECTION: Using Formsets in Views and Templates
+
+PURPOSE:
+Render and process formsets correctly.
+
+CONCEPT:
+
+Formsets behave similarly to forms but REQUIRE management form rendering.
+
+COMMAND:
+def manage_articles(request):
+    ArticleFormSet = formset_factory(ArticleForm)
+    if request.method == "POST":
+        formset = ArticleFormSet(request.POST)
+        if formset.is_valid():
+            pass
+    else:
+        formset = ArticleFormSet()
+    return render(request, "manage_articles.html", {"formset": formset})
+
+SECTION: Rendering Helpers
+
+AVAILABLE METHODS:
+
+as_div()
+
+as_p()
+
+as_ul()
+
+as_table()
+
+SECTION: Multiple Formsets in One View
+
+PURPOSE:
+Handle multiple formsets simultaneously.
+
+CONCEPT:
+
+Each formset MUST have a unique prefix.
+
+COMMAND:
+article_formset = ArticleFormSet(prefix="articles")
+book_formset = BookFormSet(prefix="books")
+
+SUMMARY:
+
+Formsets manage multiple instances of the same form
+
+ManagementForm data is mandatory
+
+Validation supports form-level and formset-level logic
+
+Ordering, deletion, and limits are first-class features

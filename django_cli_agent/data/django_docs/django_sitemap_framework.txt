@@ -1,0 +1,304 @@
+PURPOSE: Generates sitemap XML files to inform search engines about page frequency and importance.
+Django's high-level framework automates sitemap creation via Python code, similar to syndication framework. Write Sitemap class; add to URLconf.
+Low-level API available for non-web or custom generation.
+SECTION: INSTALLATION
+PURPOSE: Steps to enable sitemap app.
+Add django.contrib.sitemaps to INSTALLED_APPS.
+Ensure DjangoTemplates backend with APP_DIRS=True (default).
+Install sites framework.
+No database tables; INSTALLED_APPS for template loader.
+SECTION: INITIALIZATION
+PURPOSE: Activates sitemap generation.
+Use views.sitemap in URLconf.
+COMMAND:
+CODE:
+from django.contrib.sitemaps.views import sitemap
+
+path(
+    "sitemap.xml",
+    sitemap,
+    {"sitemaps": sitemaps},
+    name="django.contrib.sitemaps.views.sitemap",
+)
+sitemaps: Dict mapping section labels to Sitemap classes/instances.
+Location important for indexing scope.
+Optional: section, template_name, content_type.
+SECTION: SITEMAP CLASSES
+PURPOSE: Defines sitemap sections.
+Subclass django.contrib.sitemaps.Sitemap; can live anywhere.
+Represents entries; sections combined in one sitemap.xml or per-section files.
+SECTION: SITEMAP EXAMPLE
+PURPOSE: Basic blog entry sitemap.
+COMMAND:
+CODE:
+from django.contrib.sitemaps import Sitemap
+from blog.models import Entry
+
+class BlogSitemap(Sitemap):
+    changefreq = "never"
+    priority = 0.5
+
+    def items(self):
+        return Entry.objects.filter(is_draft=False)
+
+    def lastmod(self, obj):
+        return obj.pub_date
+changefreq/priority class attrs or methods.
+items: Sequence/QuerySet of objects.
+location: Defaults to get_absolute_url.
+SECTION: SITEMAP CLASS REFERENCE
+PURPOSE: Details Sitemap methods/attributes.
+COMMAND:
+CODE:
+class Sitemap:
+    # Required
+    def items(self):
+        return ...
+
+    # Optional
+    def location(self, obj):
+        return obj.get_absolute_url()
+
+    def lastmod(self, obj):
+        return obj.modified
+
+    def changefreq(self, obj):
+        return "weekly"  # or attr
+
+    def priority(self, obj):
+        return 0.5  # 0.0-1.0
+
+    protocol = "https"  # Default "https"; request protocol if None
+
+    limit = 50000  # Max URLs per page
+
+    i18n = False  # Use LANGUAGES for alternates
+
+    languages = ...  # Sequence of codes; defaults LANGUAGES
+
+    alternates = False  # Hreflang alternates when i18n
+
+    x_default = False  # x-default fallback
+
+    def get_latest_lastmod(self):
+        return max(lastmod for obj in items)  # For index lastmod
+
+    def get_languages_for_item(self, item):
+        return languages
+changefreq: always/hourly/daily/weekly/monthly/yearly/never.
+priority: 0.0-1.0; default 0.5.
+lastmod: datetime; sets Last-Modified if all have.
+If i18n/alternates, generates language alternates with hreflang.
+get_latest_lastmod for index header.
+SECTION: SHORTCUTS
+PURPOSE: Convenience for common cases.
+GenericSitemap(info_dict, priority=None, changefreq=None, protocol=None)
+info_dict: queryset (required), date_field (optional for lastmod).
+COMMAND:
+CODE:
+from django.contrib.sitemaps import GenericSitemap
+
+info_dict = {
+    "queryset": Entry.objects.all(),
+    "date_field": "pub_date",
+}
+
+path(
+    "sitemap.xml",
+    sitemap,
+    {"sitemaps": {"blog": GenericSitemap(info_dict, priority=0.6)}},
+    name="django.contrib.sitemaps.views.sitemap",
+)
+SECTION: SITEMAP FOR STATIC VIEWS
+PURPOSE: Indexes non-object/flatpage views.
+List URL names in items; use reverse in location.
+COMMAND:
+CODE:
+from django.contrib import sitemaps
+from django.urls import reverse
+
+class StaticViewSitemap(sitemaps.Sitemap):
+    priority = 0.5
+    changefreq = "daily"
+
+    def items(self):
+        return ["main", "about", "license"]
+
+    def location(self, item):
+        return reverse(item)
+Add to sitemaps dict.
+SECTION: CREATING A SITEMAP INDEX
+PURPOSE: Indexes multiple sitemaps if >50,000 URLs.
+Use views.index and views.sitemap.
+COMMAND:
+CODE:
+from django.contrib.sitemaps import views
+
+path(
+    "sitemap.xml",
+    views.index,
+    {"sitemaps": sitemaps},
+    name="django.contrib.sitemaps.views.index",
+),
+
+path(
+    "sitemap-<section>.xml",
+    views.sitemap,
+    {"sitemaps": sitemaps},
+    name="django.contrib.sitemaps.views.sitemap",
+)
+section kwarg for sitemap view.
+Paginate if >50,000; index reflects.
+Last-Modified if all sitemaps have get_latest_lastmod.
+Name sitemap view if cached; pass sitemap_url_name to index.
+SECTION: TEMPLATE CUSTOMIZATION
+PURPOSE: Customizes sitemap/index templates.
+Pass template_name to views.
+TemplateResponse; customize data.
+CONCEPT: CONTEXT VARIABLES
+Index: sitemaps list with location (url & page), lastmod (from get_latest_lastmod).
+Sitemap: urlset list with alternates, changefreq, item, lastmod, location, priority.
+alternates: List of dicts {location, lang_code}.
+item: For custom like Google news.
+Example Google News template.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - SEO; search indexing.
+DOCUMENT NAME: django_sitemap_framework
+<|END_OF_TURN_TOKEN|><|control12|>### SECTION: SITEMAP FRAMEWORK OVERVIEW
+PURPOSE: Describes Django's framework for generating sitemap XML files to inform search engines about site structure, page changes, and importance.
+The framework automates sitemap creation using Python code, similar to the syndication framework. Define Sitemap classes and add to URLconf.
+SECTION: INSTALLATION
+PURPOSE: Steps to enable the sitemap application.
+Add 'django.contrib.sitemaps' to INSTALLED_APPS.
+Ensure DjangoTemplates backend with APP_DIRS=True in TEMPLATES (default).
+Install sites framework.
+No database tables installed; INSTALLED_APPS needed for template loading.
+SECTION: INITIALIZATION
+PURPOSE: Sets up sitemap generation in URLconf.
+Use views.sitemap view.
+COMMAND:
+CODE:
+from django.contrib.sitemaps.views import sitemap
+
+path(
+    "sitemap.xml",
+    sitemap,
+    {"sitemaps": sitemaps},
+    name="django.contrib.sitemaps.views.sitemap",
+)
+sitemaps: Dictionary mapping section labels to Sitemap classes or instances.
+File name/location determines indexing scope (root indexes all; subdir indexes subtree).
+Optional kwargs: section, template_name='sitemap.xml', content_type='application/xml'.
+SECTION: SITEMAP CLASSES
+PURPOSE: Defines a section of sitemap entries.
+Subclass django.contrib.sitemaps.Sitemap; can be anywhere in codebase.
+Simple: All sections in one sitemap.xml; complex: Per-section files via index.
+SECTION: SITEMAP EXAMPLE
+PURPOSE: Illustrates basic Sitemap for blog entries.
+COMMAND:
+CODE:
+from django.contrib.sitemaps import Sitemap
+from blog.models import Entry
+
+class BlogSitemap(Sitemap):
+    changefreq = "never"
+    priority = 0.5
+
+    def items(self):
+        return Entry.objects.filter(is_draft=False)
+
+    def lastmod(self, obj):
+        return obj.pub_date
+changefreq and priority as class attributes (strings) or methods (per-object).
+items: Returns sequence or QuerySet of objects.
+location: Method returns URL (default get_absolute_url); or attribute for all.
+SECTION: SITEMAP CLASS REFERENCE
+PURPOSE: Details methods and attributes of Sitemap.
+items() (required): Returns objects.
+location (optional): URL per object; default get_absolute_url.
+lastmod (optional): datetime per object or all.
+changefreq (optional): String per object or all: always, hourly, daily, weekly, monthly, yearly, never.
+priority (optional): Float/string 0.0-1.0 per object or all; default 0.5.
+protocol: 'http'/'https'; default request protocol or 'https'.
+limit: Max URLs per page; <=50000 (default).
+i18n: Bool; generate using LANGUAGES if True.
+languages: Sequence of codes; default LANGUAGES.
+alternates: Bool; add hreflang alternates if i18n and True.
+x_default: Bool; add x-default fallback if alternates.
+get_latest_lastmod(): Latest lastmod for index Last-Modified.
+get_languages_for_item(item): Languages for item.
+SECTION: SHORTCUTS
+PURPOSE: Convenience for queryset-based sitemaps.
+GenericSitemap(info_dict, priority=None, changefreq=None, protocol=None)
+info_dict: {'queryset': ..., 'date_field': ... (for lastmod)}.
+COMMAND:
+CODE:
+from django.contrib.sitemaps import GenericSitemap
+
+info_dict = {
+    "queryset": Entry.objects.all(),
+    "date_field": "pub_date",
+}
+
+path(
+    "sitemap.xml",
+    sitemap,
+    {"sitemaps": {"blog": GenericSitemap(info_dict, priority=0.6)}},
+    name="django.contrib.sitemaps.views.sitemap",
+)
+SECTION: SITEMAP FOR STATIC VIEWS
+PURPOSE: Includes non-object views in sitemap.
+items returns URL names; location uses reverse.
+COMMAND:
+CODE:
+from django.contrib import sitemaps
+from django.urls import reverse
+
+class StaticViewSitemap(sitemaps.Sitemap):
+    priority = 0.5
+    changefreq = "daily"
+
+    def items(self):
+        return ["main", "about", "license"]
+
+    def location(self, item):
+        return reverse(item)
+Add to sitemaps dict.
+SECTION: CREATING A SITEMAP INDEX
+PURPOSE: Generates index for multiple sitemaps (>50,000 URLs).
+Use views.index and views.sitemap with section.
+COMMAND:
+CODE:
+from django.contrib.sitemaps import views
+
+path(
+    "sitemap.xml",
+    views.index,
+    {"sitemaps": sitemaps},
+    name="django.contrib.sitemaps.views.index",
+),
+
+path(
+    "sitemap-<section>.xml",
+    views.sitemap,
+    {"sitemaps": sitemaps},
+    name="django.contrib.sitemaps.views.sitemap",
+)
+Index has Last-Modified if all sitemaps have get_latest_lastmod.
+Paginate sitemaps >50,000; index reflects.
+Name sitemap view if cached; pass sitemap_url_name to index.
+SECTION: TEMPLATE CUSTOMIZATION
+PURPOSE: Customizes sitemap/index templates.
+Pass template_name to views.
+Returns TemplateResponse; customize data.
+CONCEPT: CONTEXT VARIABLES
+Index: sitemaps list with location (url/page), lastmod (from get_latest_lastmod).
+Sitemap: urlset list with alternates (list of {location, lang_code}), changefreq, item (object), lastmod, location, priority.
+item for custom like Google News.
+Example Google News template.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - SEO optimization.

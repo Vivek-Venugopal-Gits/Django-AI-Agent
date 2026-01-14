@@ -1,0 +1,702 @@
+SECTION: Class-Based Generic Views - Flattened Index
+PURPOSE: This section provides an alternate organization of the reference documentation for class-based views, listing effective attributes and methods under each view.
+CONCEPT: For each view, the effective attributes and methods from the class tree are represented.
+SECTION: Simple Generic Views
+PURPOSE: This section describes base views that provide foundational functionality for rendering templates or redirects.
+SECTION: View
+PURPOSE: The base view class from which all other class-based views inherit.
+CONCEPT: Not strictly a generic view; can be imported from django.views.
+CONCEPT: Ancestors (MRO): django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONhttp_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]
+Methods:
+
+as_view(initkwargs): Returns a callable view that takes a request and returns a response. The returned view has view_class and view_initkwargs attributes. When called, setup() assigns the HttpRequest to request, and URL-captured arguments to args and kwargs. Then dispatch() is called. If the view defines asynchronous (async def) handlers, as_view() marks the callable as a coroutine. Raises ImproperlyConfigured if both async and sync handlers are defined.
+setup(request, args, kwargs): Performs initialization before dispatch(). Assigns request to the view’s request attribute, and URL-captured arguments to args and kwargs. Must call super() if overridden.
+dispatch(request, args, kwargs): The core method that handles the request and returns an HTTP response. Inspects the HTTP method and delegates to methods like get(), post(), etc. HEAD requests are delegated to get() by default. Override head() if different handling is needed.
+http_method_not_allowed(request, args, kwargs): Called when an unsupported HTTP method is used. Returns HttpResponseNotAllowed with a plain-text list of allowed methods.
+options(request, args, kwargs): Handles OPTIONS requests. Returns a response with an Allow header listing allowed HTTP methods. If other HTTP method handlers are async, the response is wrapped in a coroutine.
+
+CODE:
+from django.http import HttpResponse
+from django.views import View
+
+class MyView(View):
+    def get(self, request, *args, **kwargs):
+        return HttpResponse("Hello, World!")
+CODE:
+from django.urls import path
+from myapp.views import MyView
+
+urlpatterns = [
+    path("mine/", MyView.as_view(), name="my-view"),
+]
+SECTION: TemplateView
+PURPOSE: Renders a given template, with the context containing parameters captured in the URL.
+CONCEPT: Ancestors (MRO): django.views.generic.base.TemplateResponseMixin, django.views.generic.base.ContextMixin, django.views.generic.base.View
+CONCEPT: Context populated via ContextMixin with keyword arguments captured from the URL pattern. Can also include context via the extra_context keyword argument in as_view().
+Attributes:
+
+ATTRIBUTEDESCRIPTIONcontent_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the template.
+get_context_data(**kwargs): Returns a dictionary representing the template context. The keyword arguments provided will make up the returned context.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. If keyword arguments are provided, they will be passed to the constructor of the response class. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_template_names(): Returns a list of template names to search for when rendering the template. The default implementation will return a list containing template_name (if specified).
+
+CODE:
+from django.views.generic.base import TemplateView
+from articles.models import Article
+
+class HomePageView(TemplateView):
+    template_name = "home.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["latest_articles"] = Article.objects.all()[:5]
+        return context
+CODE:
+from django.urls import path
+from myapp.views import HomePageView
+
+urlpatterns = [
+    path("", HomePageView.as_view(), name="home"),
+]
+SECTION: RedirectView
+PURPOSE: Redirects to a given URL.
+CONCEPT: The URL may contain dictionary-style string formatting, interpolated against URL-captured parameters. Any literal "%" in the URL must be written as "%%". If url is None, returns HttpResponseGone (410).
+CONCEPT: Ancestors (MRO): django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONhttp_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]pattern_nameThe name of the URL pattern to redirect to. Reverse lookup uses the same args and kwargs passed to the view.permanentWhether the redirect is permanent. True: uses HTTP 301. False: uses HTTP 302 (default).query_stringWhether to pass the GET query string to the new location. True: appends query string. False: discards it (default).urlThe URL to redirect to, as a string. Or None to raise a 410 (Gone) error.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+delete(): Calls get_redirect_url().
+get(): Calls get_redirect_url().
+head(): Calls get_redirect_url().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+options(): Calls get_redirect_url().
+post(): Calls get_redirect_url().
+put(): Calls get_redirect_url().
+setup(): Performs initialization before dispatch().
+get_redirect_url(*args, **kwargs): Constructs the target URL for redirection. Uses url and performs % parameter expansion based on captured URL groups. If url is not set, attempts to reverse pattern_name using captured args and kwargs. If query_string is True, appends the query string. Subclasses can override for custom behavior, but must return a redirect-ready URL string.
+
+CODE:
+from django.shortcuts import get_object_or_404
+from django.views.generic.base import RedirectView
+from articles.models import Article
+
+class ArticleCounterRedirectView(RedirectView):
+    permanent = False
+    query_string = True
+    pattern_name = "article-detail"
+
+    def get_redirect_url(self, *args, **kwargs):
+        article = get_object_or_404(Article, pk=kwargs["pk"])
+        article.update_counter()
+        return super().get_redirect_url(*args, **kwargs)
+CODE:
+from django.urls import path
+from django.views.generic.base import RedirectView
+from article.views import ArticleCounterRedirectView, ArticleDetailView
+
+urlpatterns = [
+    path("counter/<int:pk>/", ArticleCounterRedirectView.as_view(), name="article-counter"),
+    path("details/<int:pk>/", ArticleDetailView.as_view(), name="article-detail"),
+    path("go-to-django/", RedirectView.as_view(url="https://www.djangoproject.com/"), name="go-to-django"),
+]
+SECTION: Detail Views
+PURPOSE: This section describes views for displaying a single object.
+SECTION: DetailView
+PURPOSE: Displays a single object.
+CONCEPT: Key attribute: self.object contains the object being displayed.
+CONCEPT: Ancestors (MRO): SingleObjectTemplateResponseMixin, TemplateResponseMixin, BaseDetailView, SingleObjectMixin, View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONcontent_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameDesignates the name of the variable to use in the context. If not set, the context name will be constructed from the model_name of the model that the queryset is composed from. For example, the model Article would have context object named 'article'.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that this view will display data for. Specifying model = Foo is effectively the same as specifying queryset = Foo.objects.all(), where objects stands for Foo’s default manager.pk_url_kwargThe name of the URLConf keyword argument that contains the primary key. By default, pk_url_kwarg is 'pk'.query_pk_and_slugIf True, causes get_object() to perform its lookup using both the primary key and the slug. Defaults to False. This attribute can help mitigate insecure direct object reference attacks.querysetA QuerySet that represents the objects. If provided, the value of queryset supersedes the value provided for model. Warning: queryset is a class attribute with a mutable value so care must be taken when using it directly. Before using it, either call its all() method or retrieve it with get_queryset() which takes care of the cloning behind the scenes.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.slug_fieldThe name of the field on the model that contains the slug. By default, slug_field is 'slug'.slug_url_kwargThe name of the URLConf keyword argument that contains the slug. By default, slug_url_kwarg is 'slug'.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_fieldThe field on the current object instance that can be used to determine the name of a candidate template. If either template_name_field itself or the value of the template_name_field on the current object instance is None, the object will not be used for a candidate template name.template_name_suffixThe suffix to append to the auto-generated candidate template name. Default: '_detail'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+get_template_names(): Returns a list of candidate template names. Returns a list containing template_name, if set. Otherwise, returns a list containing: the contents of the template_name_field field on the object instance that the view is operating upon (if available), <app_label>/<model_name><template_name_suffix>.html
+get_slug_field(): Returns the name of a slug field to be used to look up by slug. By default this returns the value of slug_field.
+get_queryset(): Returns the queryset that will be used to retrieve the object that this view will display. By default, get_queryset() returns the value of the queryset attribute if it is set, otherwise it constructs a QuerySet by calling the all() method on the model attribute’s default manager.
+get_object(queryset=None): Returns the single object that this view will display. If queryset is provided, that queryset will be used as the source of objects; otherwise, get_queryset() will be used. get_object() looks for a pk_url_kwarg argument in the arguments to the view; if this argument is found, this method performs a primary-key based lookup using that value. If this argument is not found, it looks for a slug_url_kwarg argument, and performs a slug lookup using the slug_field. When query_pk_and_slug is True, get_object() will perform its lookup using both the primary key and the slug.
+get_context_object_name(obj): Return the context variable name that will be used to contain the data that this view is manipulating. If context_object_name is not set, the context name will be constructed from the model_name of the model that the queryset is composed from. For example, the model Article would have context object named 'article'.
+get_context_data(**kwargs): Returns context data for displaying the object. The base implementation of this method requires that the self.object attribute be set by the view (even if None). Be sure to do this if you are using this mixin without one of the built-in views that does so. It returns a dictionary with these contents: object: The object that this view is displaying (self.object). context_object_name: self.object will also be stored under the name returned by get_context_object_name(), which defaults to the lowercased version of the model name. Context variables override values from template context processors. Any variables from get_context_data() take precedence over context variables from context processors. For example, if your view sets the model attribute to User, the default context object name of user would override the user variable from the django.contrib.auth.context_processors.auth() context processor. Use get_context_object_name() to avoid a clash.
+get(): Adds object to context.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. If keyword arguments are provided, they will be passed to the constructor of the response class. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+
+CODE:
+from django.utils import timezone
+from django.views.generic.detail import DetailView
+from articles.models import Article
+
+class ArticleDetailView(DetailView):
+    model = Article
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["now"] = timezone.now()
+        return context
+CODE:
+text<h1>{{ object.headline }}</h1>
+<p>{{ object.content }}</p>
+<p>Reporter: {{ object.reporter }}</p>
+<p>Published: {{ object.pub_date|date }}</p>
+<p>Date: {{ now|date }}</p>
+CONCEPT: Base class: django.views.generic.detail.BaseDetailView - Not intended for direct use. Method: get(request, *args, **kwargs) – adds object to context.
+SECTION: List Views
+PURPOSE: This section describes views for displaying a list of objects.
+SECTION: ListView
+PURPOSE: Displays a list of objects.
+CONCEPT: Key attribute: self.object_list contains the list of objects (usually a queryset).
+CONCEPT: Ancestors (MRO): MultipleObjectTemplateResponseMixin, TemplateResponseMixin, BaseListView, MultipleObjectMixin, View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_emptyBoolean specifying whether to display the page if no objects are available. Default: True. If False and no objects, raises 404.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameName of the variable used in the context. If not set and object_list is a QuerySet, uses model_name + '_list' (e.g., article_list).extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that the view will display data for. Equivalent to queryset = Foo.objects.all().orderingString or list of strings for ordering the queryset. Same as order_by().paginate_byInteger specifying objects per page. Enables pagination.paginate_orphansInteger for maximum "overflow" objects on the last page.paginator_classPaginator class used. Defaults to django.core.paginator.Paginator.querysetA QuerySet representing the objects. Supersedes model if provided. Warning: Mutable; use get_queryset() or .all() to avoid issues.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_suffixThe suffix to append to the auto-generated candidate template name. Default: '_list'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+get_template_names(): Returns a list of candidate template names: Value of template_name (if provided), <app_label>/<model_name><template_name_suffix>.html
+get_queryset(): Returns the list of items (iterable, possibly a QuerySet).
+get_ordering(): Returns ordering string or iterable. Defaults to ordering.
+paginate_queryset(queryset, page_size): Returns a 4-tuple: (paginator, page, object_list, is_paginated). Handles pagination based on request page.
+get_paginate_by(queryset): Returns pagination size or None. Defaults to paginate_by.
+get_paginator(queryset, per_page, orphans=0, allow_empty_first_page=True): Returns paginator instance. Uses paginator_class by default.
+get_paginate_orphans(): Returns number of overflow objects. Defaults to paginate_orphans.
+get_allow_empty(): Returns boolean for empty page allowance. Defaults to True.
+get_context_object_name(object_list): Returns context variable name. If not set and object_list is a QuerySet, uses model_name + '_list' (e.g., article_list).
+get_context_data(**kwargs): Returns context data for the list of objects.
+get(): Adds object_list to context. If allow_empty is False, raises 404 if list is empty. If allow_empty is True, displays empty list.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+
+CODE:
+from django.utils import timezone
+from django.views.generic.list import ListView
+from articles.models import Article
+
+class ArticleListView(ListView):
+    model = Article
+    paginate_by = 100  # if pagination is desired
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["now"] = timezone.now()
+        return context
+CODE:
+text<h1>Articles</h1>
+<ul>
+  {% for article in object_list %}
+    <li>{{ article.pub_date|date }} - {{ article.headline }}</li>
+  {% empty %}
+    <li>No articles yet.</li>
+  {% endfor %}
+</ul>
+CONCEPT: Base class: django.views.generic.list.BaseListView - Not intended for direct use. Method: get(request, *args, **kwargs) – adds object_list to context.
+SECTION: Editing Views
+PURPOSE: This section describes views for form handling and object editing.
+SECTION: FormView
+PURPOSE: Displays a form. On error, redisplays the form with validation errors; on success, redirects to a new URL.
+CONCEPT: Ancestors (MRO): django.views.generic.base.TemplateResponseMixin, django.views.generic.edit.BaseFormView, django.views.generic.edit.FormMixin, django.views.generic.edit.ProcessFormView, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONcontent_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').extra_contextA dictionary to include in the context.form_classThe form class to instantiate.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]initialA dictionary containing initial data for the form.prefixThe prefix for the generated form.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.success_urlThe URL to redirect to when the form is successfully processed.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+form_invalid(form): Renders a response, providing the invalid form as context.
+form_valid(form): Redirects to get_success_url().
+get(): Renders a response using a context created with get_context_data().
+get_context_data(**kwargs): Calls get_form() and adds the result to the context data with the name ‘form’.
+get_form(form_class=None): Instantiate an instance of form_class using get_form_kwargs(). If form_class isn’t provided, get_form_class() will be used.
+get_form_kwargs(): Build the keyword arguments required to instantiate the form. The initial argument is set to get_initial(). If the request is a POST or PUT, the request data (request.POST and request.FILES) will also be provided.
+get_initial(): Retrieve initial data for the form. By default, returns a copy of initial.
+get_prefix(): Determine the prefix for the generated form. Returns prefix by default.
+get_success_url(): Determine the URL to redirect to when the form is successfully validated. Returns success_url by default.
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+post(request, *args, **kwargs): Constructs a form, checks the form for validity, and handles it accordingly.
+put(*args, **kwargs): The PUT action is also handled and passes all parameters through to post().
+setup(): Performs initialization before dispatch().
+
+CODE:
+from myapp.forms import ContactForm
+from django.views.generic.edit import FormView
+
+class ContactFormView(FormView):
+    template_name = "contact.html"
+    form_class = ContactForm
+    success_url = "/thanks/"
+
+    def form_valid(self, form):
+        form.send_email()
+        return super().form_valid(form)
+CONCEPT: Base class: BaseFormView - Base for form-displaying views like FormView.
+SECTION: CreateView
+PURPOSE: Displays a form for creating an object, redisplaying the form with validation errors (if any) and saving the object.
+CONCEPT: Ancestors (MRO): django.views.generic.detail.SingleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.edit.BaseCreateView, django.views.generic.edit.ModelFormMixin, django.views.generic.edit.FormMixin, django.views.generic.detail.SingleObjectMixin, django.views.generic.edit.ProcessFormView, django.views.generic.base.View
+CONCEPT: Attributes: template_name_suffix defaults to '_form'. object accessible as self.object; set to None until the object is created.
+Attributes:
+
+ATTRIBUTEDESCRIPTIONcontent_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameDesignates the name of the variable to use in the context. If not set, the context name will be constructed from the model_name of the model that the queryset is composed from. For example, the model Article would have context object named 'article'.extra_contextA dictionary to include in the context.fieldsA list of names of fields. This is interpreted the same way as the Meta.fields attribute of ModelForm. This is a required attribute if generating the form class automatically (e.g. using model). Omitting this attribute will result in an ImproperlyConfigured exception.form_classThe form class to instantiate. If form_class is provided, that class will be used. Otherwise, a ModelForm will be instantiated using the model associated with the queryset, or with the model, depending on which attribute is provided.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]initialA dictionary containing initial data for the form.modelA model class. Can be explicitly provided, otherwise will be determined by examining self.object or queryset.pk_url_kwargThe name of the URLConf keyword argument that contains the primary key. By default, pk_url_kwarg is 'pk'.prefixThe prefix for the generated form.query_pk_and_slugIf True, causes get_object() to perform its lookup using both the primary key and the slug. Defaults to False.querysetA QuerySet that represents the objects. If provided, the value of queryset supersedes the value provided for model. Warning: queryset is a class attribute with a mutable value so care must be taken when using it directly. Before using it, either call its all() method or retrieve it with get_queryset() which takes care of the cloning behind the scenes.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.slug_fieldThe name of the field on the model that contains the slug. By default, slug_field is 'slug'.slug_url_kwargThe name of the URLConf keyword argument that contains the slug. By default, slug_url_kwarg is 'slug'.success_urlThe URL to redirect to when the form is successfully processed. success_url may contain dictionary string formatting, which will be interpolated against the object’s field attributes. For example, you could use success_url="/polls/{slug}/" to redirect to a URL composed out of the slug field on a model.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_fieldThe field on the current object instance that can be used to determine the name of a candidate template. If either template_name_field itself or the value of the template_name_field on the current object instance is None, the object will not be used for a candidate template name.template_name_suffixThe suffix to append to the auto-generated candidate template name. Default: '_detail'. For CreateView and UpdateView, defaults to '_form'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+form_invalid(form): Renders a response, providing the invalid form as context.
+form_valid(form): Saves the form instance, sets the current object for the view, and redirects to get_success_url().
+get(): Renders a response using a context created with get_context_data().
+get_context_data(**kwargs): Calls get_form() and adds the result to the context data with the name ‘form’.
+get_form(form_class=None): Instantiate an instance of form_class using get_form_kwargs(). If form_class isn’t provided, get_form_class() will be used.
+get_form_kwargs(): Add the current instance (self.object) to the standard get_form_kwargs().
+get_form_class(): Retrieve the form class to instantiate. If form_class is provided, that class will be used. Otherwise, a ModelForm will be instantiated using the model associated with the queryset, or with the model, depending on which attribute is provided.
+get_initial(): Retrieve initial data for the form. By default, returns a copy of initial.
+get_prefix(): Determine the prefix for the generated form. Returns prefix by default.
+get_success_url(): Determine the URL to redirect to when the form is successfully validated. Returns success_url if provided; otherwise, attempts to use the get_absolute_url() of the object.
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+post(request, *args, **kwargs): Constructs a form, checks the form for validity, and handles it accordingly.
+put(*args, **kwargs): The PUT action is also handled and passes all parameters through to post().
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_object(queryset=None): Returns the single object that this view will display. If queryset is provided, that queryset will be used as the source of objects; otherwise, get_queryset() will be used. get_object() looks for a pk_url_kwarg argument in the arguments to the view; if this argument is found, this method performs a primary-key based lookup using that value. If this argument is not found, it looks for a slug_url_kwarg argument, and performs a slug lookup using the slug_field. When query_pk_and_slug is True, get_object() will perform its lookup using both the primary key and the slug.
+get_queryset(): Returns the queryset that will be used to retrieve the object that this view will display. By default, get_queryset() returns the value of the queryset attribute if it is set, otherwise it constructs a QuerySet by calling the all() method on the model attribute’s default manager.
+
+CODE:
+from django.views.generic.edit import CreateView
+from myapp.models import Author
+
+class AuthorCreateView(CreateView):
+    model = Author
+    fields = ["name"]
+CONCEPT: Base class: BaseCreateView - Base for creating objects; sets self.object to None in get and post.
+SECTION: UpdateView
+PURPOSE: Displays a form for editing an existing object, redisplaying the form with validation errors (if any) and saving changes. Uses a form generated from the model unless a custom form is specified.
+CONCEPT: Ancestors (MRO): django.views.generic.detail.SingleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.edit.BaseUpdateView, django.views.generic.edit.ModelFormMixin, django.views.generic.edit.FormMixin, django.views.generic.detail.SingleObjectMixin, django.views.generic.edit.ProcessFormView, django.views.generic.base.View
+CONCEPT: Attributes: template_name_suffix defaults to '_form'. object accessible as self.object, representing the object being updated.
+Attributes:
+
+ATTRIBUTEDESCRIPTIONcontent_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameDesignates the name of the variable to use in the context. If not set, the context name will be constructed from the model_name of the model that the queryset is composed from. For example, the model Article would have context object named 'article'.extra_contextA dictionary to include in the context.fieldsA list of names of fields. This is interpreted the same way as the Meta.fields attribute of ModelForm. This is a required attribute if generating the form class automatically (e.g. using model). Omitting this attribute will result in an ImproperlyConfigured exception.form_classThe form class to instantiate. If form_class is provided, that class will be used. Otherwise, a ModelForm will be instantiated using the model associated with the queryset, or with the model, depending on which attribute is provided.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]initialA dictionary containing initial data for the form.modelA model class. Can be explicitly provided, otherwise will be determined by examining self.object or queryset.pk_url_kwargThe name of the URLConf keyword argument that contains the primary key. By default, pk_url_kwarg is 'pk'.prefixThe prefix for the generated form.query_pk_and_slugIf True, causes get_object() to perform its lookup using both the primary key and the slug. Defaults to False.querysetA QuerySet that represents the objects. If provided, the value of queryset supersedes the value provided for model. Warning: queryset is a class attribute with a mutable value so care must be taken when using it directly. Before using it, either call its all() method or retrieve it with get_queryset() which takes care of the cloning behind the scenes.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.slug_fieldThe name of the field on the model that contains the slug. By default, slug_field is 'slug'.slug_url_kwargThe name of the URLConf keyword argument that contains the slug. By default, slug_url_kwarg is 'slug'.success_urlThe URL to redirect to when the form is successfully processed. success_url may contain dictionary string formatting, which will be interpolated against the object’s field attributes. For example, you could use success_url="/polls/{slug}/" to redirect to a URL composed out of the slug field on a model.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_fieldThe field on the current object instance that can be used to determine the name of a candidate template. If either template_name_field itself or the value of the template_name_field on the current object instance is None, the object will not be used for a candidate template name.template_name_suffixThe suffix to append to the auto-generated candidate template name. Default: '_detail'. For UpdateView, defaults to '_form'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+form_invalid(form): Renders a response, providing the invalid form as context.
+form_valid(form): Saves the form instance, sets the current object for the view, and redirects to get_success_url().
+get(): Renders a response using a context created with get_context_data().
+get_context_data(**kwargs): Calls get_form() and adds the result to the context data with the name ‘form’.
+get_form(form_class=None): Instantiate an instance of form_class using get_form_kwargs(). If form_class isn’t provided, get_form_class() will be used.
+get_form_kwargs(): Add the current instance (self.object) to the standard get_form_kwargs().
+get_form_class(): Retrieve the form class to instantiate. If form_class is provided, that class will be used. Otherwise, a ModelForm will be instantiated using the model associated with the queryset, or with the model, depending on which attribute is provided.
+get_initial(): Retrieve initial data for the form. By default, returns a copy of initial.
+get_prefix(): Determine the prefix for the generated form. Returns prefix by default.
+get_success_url(): Determine the URL to redirect to when the form is successfully validated. Returns success_url if provided; otherwise, attempts to use the get_absolute_url() of the object.
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+post(request, *args, **kwargs): Constructs a form, checks the form for validity, and handles it accordingly.
+put(*args, **kwargs): The PUT action is also handled and passes all parameters through to post().
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_object(queryset=None): Returns the single object that this view will display. If queryset is provided, that queryset will be used as the source of objects; otherwise, get_queryset() will be used. get_object() looks for a pk_url_kwarg argument in the arguments to the view; if this argument is found, this method performs a primary-key based lookup using that value. If this argument is not found, it looks for a slug_url_kwarg argument, and performs a slug lookup using the slug_field. When query_pk_and_slug is True, get_object() will perform its lookup using both the primary key and the slug.
+get_queryset(): Returns the queryset that will be used to retrieve the object that this view will display. By default, get_queryset() returns the value of the queryset attribute if it is set, otherwise it constructs a QuerySet by calling the all() method on the model attribute’s default manager.
+
+CODE:
+from django.views.generic.edit import UpdateView
+from myapp.models import Author
+
+class AuthorUpdateView(UpdateView):
+    model = Author
+    fields = ["name"]
+    template_name_suffix = "_update_form"
+CONCEPT: Base class: BaseUpdateView - Base for updating objects; sets self.object in get and post.
+SECTION: DeleteView
+PURPOSE: Displays a confirmation page and deletes an existing object only if the request method is POST. On GET, shows a confirmation page with a form posting to the same URL.
+CONCEPT: Ancestors (MRO): django.views.generic.detail.SingleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.edit.BaseDeleteView, django.views.generic.edit.DeletionMixin, django.views.generic.edit.FormMixin, django.views.generic.base.ContextMixin, django.views.generic.detail.BaseDetailView, django.views.generic.detail.SingleObjectMixin, django.views.generic.base.View
+CONCEPT: Attributes: form_class defaults to django.forms.Form, resulting in an empty, always-valid form. Can be customized. template_name_suffix defaults to '_confirm_delete'.
+Attributes:
+
+ATTRIBUTEDESCRIPTIONcontent_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameDesignates the name of the variable to use in the context. If not set, the context name will be constructed from the model_name of the model that the queryset is composed from. For example, the model Article would have context object named 'article'.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelA model class. Can be explicitly provided, otherwise will be determined by examining self.object or queryset.pk_url_kwargThe name of the URLConf keyword argument that contains the primary key. By default, pk_url_kwarg is 'pk'.query_pk_and_slugIf True, causes get_object() to perform its lookup using both the primary key and the slug. Defaults to False.querysetA QuerySet that represents the objects. If provided, the value of queryset supersedes the value provided for model. Warning: queryset is a class attribute with a mutable value so care must be taken when using it directly. Before using it, either call its all() method or retrieve it with get_queryset() which takes care of the cloning behind the scenes.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.slug_fieldThe name of the field on the model that contains the slug. By default, slug_field is 'slug'.slug_url_kwargThe name of the URLConf keyword argument that contains the slug. By default, slug_url_kwarg is 'slug'.success_urlThe URL to redirect to when the nominated object has been successfully deleted. success_url may contain dictionary string formatting, which will be interpolated against the object’s field attributes. For example, you could use success_url="/parent/{parent_id}/" to redirect to a URL composed out of the parent_id field on a model.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_fieldThe field on the current object instance that can be used to determine the name of a candidate template. If either template_name_field itself or the value of the template_name_field on the current object instance is None, the object will not be used for a candidate template name.template_name_suffixThe suffix to append to the auto-generated candidate template name. Default: '_detail'. For DeleteView, defaults to '_confirm_delete'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+delete(request, *args, **kwargs): Retrieves the target object and calls its delete() method, then redirects to the success URL.
+get(): Renders the confirmation page.
+get_context_data(**kwargs): Returns context data for displaying the object.
+get_object(queryset=None): Returns the single object that this view will display. If queryset is provided, that queryset will be used as the source of objects; otherwise, get_queryset() will be used. get_object() looks for a pk_url_kwarg argument in the arguments to the view; if this argument is found, this method performs a primary-key based lookup using that value. If this argument is not found, it looks for a slug_url_kwarg argument, and performs a slug lookup using the slug_field. When query_pk_and_slug is True, get_object() will perform its lookup using both the primary key and the slug.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+post(): Deletes the object if method is POST.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_success_url(): Returns the URL to redirect to when the nominated object has been successfully deleted. Returns success_url by default.
+
+CODE:
+from django.urls import reverse_lazy
+from django.views.generic.edit import DeleteView
+from myapp.models import Author
+
+class AuthorDeleteView(DeleteView):
+    model = Author
+    success_url = reverse_lazy("author-list")
+CONCEPT: Base class: BaseDeleteView - Base for deleting objects; inherits from DeletionMixin and FormMixin.
+SECTION: Date-Based Views
+PURPOSE: This section describes views for handling date-based archives.
+SECTION: ArchiveIndexView
+PURPOSE: A top-level index page showing the latest objects, by date. Objects with a date in the future are not included unless allow_future=True.
+CONCEPT: Ancestors (MRO): django.views.generic.list.MultipleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.dates.BaseArchiveIndexView, django.views.generic.dates.BaseDateListView, django.views.generic.list.MultipleObjectMixin, django.views.generic.dates.DateMixin, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_emptyBoolean specifying whether to display the page if no objects are available. Default: True. If False and no objects, raises 404.allow_futureBoolean; if False (default), excludes objects where the date_field is in the future.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameDefaults to "latest".date_fieldName of the DateField or DateTimeField in the model used to filter objects by date. If time zone support is enabled and it's a DateTimeField, dates are assumed in the current time zone.date_list_periodOptional string defining aggregation period for date_list; must be 'year' (default), 'month', or 'day'.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that the view will display data for. Equivalent to queryset = Foo.objects.all().orderingString or list of strings for ordering the queryset. Same as order_by().paginate_byInteger specifying objects per page. Enables pagination.paginate_orphansInteger for maximum "overflow" objects on the last page.paginator_classPaginator class used. Defaults to django.core.paginator.Paginator.querysetA QuerySet representing the objects. Supersedes model if provided. Warning: Mutable; use get_queryset() or .all() to avoid issues.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_suffixDefaults to "_archive".
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the view.
+get_context_data(**kwargs): Returns context data for the list of objects.
+get_date_list(queryset, date_type=None, ordering='ASC'): Returns list of dates of type date_type (e.g., years, months) from queryset. If date_type is not provided, uses result of get_date_list_period(). Uses QuerySet.dates() with specified ordering.
+get_dated_items(): Returns a 3-tuple: (date_list, object_list, extra_context). date_list contains available dates; object_list contains objects; extra_context adds context data.
+get_dated_queryset(lookup): Returns a filtered queryset based on query arguments; enforces allow_empty and allow_future.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+paginate_queryset(queryset, page_size): Returns a 4-tuple: (paginator, page, object_list, is_paginated). Handles pagination based on request page.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+
+CODE:
+from django.urls import path
+from django.views.generic.dates import ArchiveIndexView
+from myapp.models import Article
+
+urlpatterns = [
+    path("archive/", ArchiveIndexView.as_view(model=Article, date_field="pub_date"), name="article_archive"),
+]
+CODE:
+text<ul>
+{% for article in latest %}
+    <li>{{ article.pub_date }}: {{ article.title }}</li>
+{% endfor %}
+</ul>
+SECTION: YearArchiveView
+PURPOSE: A yearly archive page showing all available months in a given year. Objects with a future date are excluded unless allow_future=True.
+CONCEPT: Ancestors (MRO): django.views.generic.list.MultipleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.dates.BaseYearArchiveView, django.views.generic.dates.YearMixin, django.views.generic.dates.BaseDateListView, django.views.generic.list.MultipleObjectMixin, django.views.generic.dates.DateMixin, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_emptyBoolean specifying whether to display the page if no objects are available. Default: True. If False and no objects, raises 404.allow_futureBoolean; if False (default), excludes objects where the date_field is in the future.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameName of the variable used in the context. If not set and object_list is a QuerySet, uses model_name + '_list' (e.g., article_list).date_fieldName of the DateField or DateTimeField in the model used to filter objects by date. If time zone support is enabled and it's a DateTimeField, dates are assumed in the current time zone.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]make_object_listBoolean, defaults to False. If True, retrieves full object list for the year.modelThe model that the view will display data for. Equivalent to queryset = Foo.objects.all().orderingString or list of strings for ordering the queryset. Same as order_by().paginate_byInteger specifying objects per page. Enables pagination.paginate_orphansInteger for maximum "overflow" objects on the last page.paginator_classPaginator class used. Defaults to django.core.paginator.Paginator.querysetA QuerySet representing the objects. Supersedes model if provided. Warning: Mutable; use get_queryset() or .all() to avoid issues.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_suffixDefaults to "_archive_year".yearOptional string value for the year; default is None (determined by other means).year_formatstrftime format for parsing the year; default is '%Y'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the view.
+get_context_data(**kwargs): Returns context data for the list of objects.
+get_date_list(queryset, date_type=None, ordering='ASC'): Returns list of dates of type date_type (e.g., years, months) from queryset. If date_type is not provided, uses result of get_date_list_period(). Uses QuerySet.dates() with specified ordering.
+get_dated_items(): Returns a 3-tuple: (date_list, object_list, extra_context). date_list contains available dates; object_list contains objects; extra_context adds context data.
+get_dated_queryset(lookup): Returns a filtered queryset based on query arguments; enforces allow_empty and allow_future.
+get_make_object_list(): Returns make_object_list value.
+get_next_year(date): Returns a date object with the first day of the following year. May return None or raise Http404 based on allow_empty and allow_future.
+get_previous_year(date): Returns a date object with the first day of the previous year. May return None or raise Http404 based on allow_empty and allow_future.
+get_paginator(queryset, per_page, orphans=0, allow_empty_first_page=True): Returns paginator instance. Uses paginator_class by default.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+paginate_queryset(queryset, page_size): Returns a 4-tuple: (paginator, page, object_list, is_paginated). Handles pagination based on request page.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_year(): Returns the year as a string, trying sources in order: YearMixin.year, URL year argument, GET year query argument. Raises Http404 if no valid year is found.
+get_year_format(): Returns the strftime format to use when parsing the year; defaults to year_format.
+
+CODE:
+from django.views.generic.dates import YearArchiveView
+from myapp.models import Article
+
+class ArticleYearArchiveView(YearArchiveView):
+    queryset = Article.objects.all()
+    date_field = "pub_date"
+    make_object_list = True
+    allow_future = True
+CODE:
+from django.urls import path
+from myapp.views import ArticleYearArchiveView
+
+urlpatterns = [
+    path("<int:year>/", ArticleYearArchiveView.as_view(), name="article_year_archive"),
+]
+CODE:
+text<ul>
+{% for date in date_list %}
+    <li>{{ date|date:"Y" }}</li>
+{% endfor %}
+</ul>
+<div>
+    <h1>All Articles for {{ year|date:"Y" }}</h1>
+    {% for obj in object_list %}
+        <p>{{ obj.title }} - {{ obj.pub_date|date:"F j, Y" }}</p>
+    {% endfor %}
+</div>
+SECTION: MonthArchiveView
+PURPOSE: A monthly archive page showing all objects in a given month. Future dates excluded unless allow_future=True.
+CONCEPT: Ancestors (MRO): django.views.generic.list.MultipleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.dates.BaseMonthArchiveView, django.views.generic.dates.YearMixin, django.views.generic.dates.MonthMixin, django.views.generic.dates.BaseDateListView, django.views.generic.list.MultipleObjectMixin, django.views.generic.dates.DateMixin, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_emptyBoolean specifying whether to display the page if no objects are available. Default: True. If False and no objects, raises 404.allow_futureBoolean; if False (default), excludes objects where the date_field is in the future.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameName of the variable used in the context. If not set and object_list is a QuerySet, uses model_name + '_list' (e.g., article_list).date_fieldName of the DateField or DateTimeField in the model used to filter objects by date. If time zone support is enabled and it's a DateTimeField, dates are assumed in the current time zone.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that the view will display data for. Equivalent to queryset = Foo.objects.all().monthOptional string value for the month; default is None.month_formatstrftime format for parsing the month; default is '%b'.orderingString or list of strings for ordering the queryset. Same as order_by().paginate_byInteger specifying objects per page. Enables pagination.paginate_orphansInteger for maximum "overflow" objects on the last page.paginator_classPaginator class used. Defaults to django.core.paginator.Paginator.querysetA QuerySet representing the objects. Supersedes model if provided. Warning: Mutable; use get_queryset() or .all() to avoid issues.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_suffixDefaults to "_archive_month".yearOptional string value for the year; default is None.year_formatstrftime format for parsing the year; default is '%Y'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the view.
+get_context_data(**kwargs): Returns context data for the list of objects.
+get_date_list(queryset, date_type=None, ordering='ASC'): Returns list of dates of type date_type (e.g., years, months) from queryset. If date_type is not provided, uses result of get_date_list_period(). Uses QuerySet.dates() with specified ordering.
+get_dated_items(): Returns a 3-tuple: (date_list, object_list, extra_context). date_list contains available dates; object_list contains objects; extra_context adds context data.
+get_dated_queryset(lookup): Returns a filtered queryset based on query arguments; enforces allow_empty and allow_future.
+get_next_month(date): Returns a date object with the first day of the next month. May return None or raise Http404 based on allow_empty and allow_future.
+get_previous_month(date): Returns a date object with the first day of the previous month. May return None or raise Http404 based on allow_empty and allow_future.
+get_paginator(queryset, per_page, orphans=0, allow_empty_first_page=True): Returns paginator instance. Uses paginator_class by default.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+paginate_queryset(queryset, page_size): Returns a 4-tuple: (paginator, page, object_list, is_paginated). Handles pagination based on request page.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_month(): Returns the month as a string, trying: MonthMixin.month, URL month argument, GET month query argument. Raises Http404 if invalid.
+get_month_format(): Returns the strftime format for parsing the month; defaults to month_format.
+get_year(): Returns the year as a string, trying sources in order: YearMixin.year, URL year argument, GET year query argument. Raises Http404 if no valid year is found.
+get_year_format(): Returns the strftime format to use when parsing the year; defaults to year_format.
+
+CODE:
+from django.views.generic.dates import MonthArchiveView
+from myapp.models import Article
+
+class ArticleMonthArchiveView(MonthArchiveView):
+    queryset = Article.objects.all()
+    date_field = "pub_date"
+    allow_future = True
+CODE:
+from django.urls import path
+from myapp.views import ArticleMonthArchiveView
+
+urlpatterns = [
+    path("<int:year>/<int:month>/", ArticleMonthArchiveView.as_view(month_format="%m"), name="archive_month_numeric"),
+    path("<int:year>/<str:month>/", ArticleMonthArchiveView.as_view(), name="archive_month"),
+]
+CODE:
+text<ul>
+{% for article in object_list %}
+    <li>{{ article.pub_date|date:"F j, Y" }}: {{ article.title }}</li>
+{% endfor %}
+</ul>
+<p>
+    {% if previous_month %}
+        Previous Month: {{ previous_month|date:"F Y" }}
+    {% endif %}
+    {% if next_month %}
+        Next Month: {{ next_month|date:"F Y" }}
+    {% endif %}
+</p>
+SECTION: WeekArchiveView
+PURPOSE: A weekly archive page showing all objects in a given week. Future dates excluded unless allow_future=True.
+CONCEPT: Ancestors (MRO): django.views.generic.list.MultipleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.dates.BaseWeekArchiveView, django.views.generic.dates.YearMixin, django.views.generic.dates.WeekMixin, django.views.generic.dates.BaseDateListView, django.views.generic.list.MultipleObjectMixin, django.views.generic.dates.DateMixin, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_emptyBoolean specifying whether to display the page if no objects are available. Default: True. If False and no objects, raises 404.allow_futureBoolean; if False (default), excludes objects where the date_field is in the future.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameName of the variable used in the context. If not set and object_list is a QuerySet, uses model_name + '_list' (e.g., article_list).date_fieldName of the DateField or DateTimeField in the model used to filter objects by date. If time zone support is enabled and it's a DateTimeField, dates are assumed in the current time zone.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that the view will display data for. Equivalent to queryset = Foo.objects.all().orderingString or list of strings for ordering the queryset. Same as order_by().paginate_byInteger specifying objects per page. Enables pagination.paginate_orphansInteger for maximum "overflow" objects on the last page.paginator_classPaginator class used. Defaults to django.core.paginator.Paginator.querysetA QuerySet representing the objects. Supersedes model if provided. Warning: Mutable; use get_queryset() or .all() to avoid issues.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_suffixDefaults to "_archive_week".weekOptional string value for the week; default is None.week_formatstrftime format for parsing the week; default is '%U' (week starts on Sunday). Use '%W' or '%V' (ISO 8601) for Monday-starting weeks.yearOptional string value for the year; default is None.year_formatstrftime format for parsing the year; default is '%Y'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the view.
+get_context_data(**kwargs): Returns context data for the list of objects.
+get_date_list(queryset, date_type=None, ordering='ASC'): Returns list of dates of type date_type (e.g., years, months) from queryset. If date_type is not provided, uses result of get_date_list_period(). Uses QuerySet.dates() with specified ordering.
+get_dated_items(): Returns a 3-tuple: (date_list, object_list, extra_context). date_list contains available dates; object_list contains objects; extra_context adds context data.
+get_dated_queryset(lookup): Returns a filtered queryset based on query arguments; enforces allow_empty and allow_future.
+get_next_week(date): Returns a date object with the first day of the next week. May return None or raise Http404 based on allow_empty and allow_future.
+get_prev_week(date): Returns a date object with the first day of the previous week. May return None or raise Http404 based on allow_empty and allow_future.
+get_paginator(queryset, per_page, orphans=0, allow_empty_first_page=True): Returns paginator instance. Uses paginator_class by default.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+paginate_queryset(queryset, page_size): Returns a 4-tuple: (paginator, page, object_list, is_paginated). Handles pagination based on request page.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_week(): Returns the week as a string, trying: WeekMixin.week, URL week argument, GET week query argument. Raises Http404 if invalid.
+get_week_format(): Returns the strftime format for parsing the week; defaults to week_format.
+get_year(): Returns the year as a string, trying sources in order: YearMixin.year, URL year argument, GET year query argument. Raises Http404 if no valid year is found.
+get_year_format(): Returns the strftime format to use when parsing the year; defaults to year_format.
+
+CODE:
+from django.views.generic.dates import WeekArchiveView
+from myapp.models import Article
+
+class ArticleWeekArchiveView(WeekArchiveView):
+    queryset = Article.objects.all()
+    date_field = "pub_date"
+    week_format = "%W"
+    allow_future = True
+CODE:
+from django.urls import path
+from myapp.views import ArticleWeekArchiveView
+
+urlpatterns = [
+    path("<int:year>/week/<int:week>/", ArticleWeekArchiveView.as_view(), name="archive_week"),
+]
+CODE:
+text<h1>Week {{ week|date:'W' }}</h1>
+<ul>
+{% for article in object_list %}
+    <li>{{ article.pub_date|date:"F j, Y" }}: {{ article.title }}</li>
+{% endfor %}
+</ul>
+<p>
+    {% if previous_week %}
+        Previous Week: {{ previous_week|date:"W" }} of year {{ previous_week|date:"Y" }}
+    {% endif %}
+    {% if next_week %}
+        Next week: {{ next_week|date:"W" }} of year {{ next_week|date:"Y" }}
+    {% endif %}
+</p>
+CONCEPT: Note: Week numbers from date filter with 'W' may differ from strftime/strptime with '%W'. Avoid using date filter for URL generation.
+SECTION: DayArchiveView
+PURPOSE: A day archive page showing all objects in a given day. Future days raise 404 unless allow_future=True.
+CONCEPT: Ancestors (MRO): django.views.generic.list.MultipleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.dates.BaseDayArchiveView, django.views.generic.dates.YearMixin, django.views.generic.dates.MonthMixin, django.views.generic.dates.DayMixin, django.views.generic.dates.BaseDateListView, django.views.generic.list.MultipleObjectMixin, django.views.generic.dates.DateMixin, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_emptyBoolean specifying whether to display the page if no objects are available. Default: True. If False and no objects, raises 404.allow_futureBoolean; if False (default), excludes objects where the date_field is in the future.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameName of the variable used in the context. If not set and object_list is a QuerySet, uses model_name + '_list' (e.g., article_list).date_fieldName of the DateField or DateTimeField in the model used to filter objects by date. If time zone support is enabled and it's a DateTimeField, dates are assumed in the current time zone.dayOptional string value for the day; default is None.day_formatstrftime format for parsing the day; default is '%d'.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that the view will display data for. Equivalent to queryset = Foo.objects.all().monthOptional string value for the month; default is None.month_formatstrftime format for parsing the month; default is '%b'.orderingString or list of strings for ordering the queryset. Same as order_by().paginate_byInteger specifying objects per page. Enables pagination.paginate_orphansInteger for maximum "overflow" objects on the last page.paginator_classPaginator class used. Defaults to django.core.paginator.Paginator.querysetA QuerySet representing the objects. Supersedes model if provided. Warning: Mutable; use get_queryset() or .all() to avoid issues.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_suffixDefaults to "_archive_day".yearOptional string value for the year; default is None.year_formatstrftime format for parsing the year; default is '%Y'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the view.
+get_context_data(**kwargs): Returns context data for the list of objects.
+get_date_list(queryset, date_type=None, ordering='ASC'): Returns list of dates of type date_type (e.g., years, months) from queryset. If date_type is not provided, uses result of get_date_list_period(). Uses QuerySet.dates() with specified ordering.
+get_dated_items(): Returns a 3-tuple: (date_list, object_list, extra_context). date_list contains available dates; object_list contains objects; extra_context adds context data.
+get_dated_queryset(lookup): Returns a filtered queryset based on query arguments; enforces allow_empty and allow_future.
+get_next_day(date): Returns a date object with the next valid day. May return None or raise Http404 based on allow_empty and allow_future.
+get_next_month(date): Returns a date object with the first day of the next month. May return None or raise Http404 based on allow_empty and allow_future.
+get_previous_day(date): Returns a date object with the previous valid day. May return None or raise Http404 based on allow_empty and allow_future.
+get_previous_month(date): Returns a date object with the first day of the previous month. May return None or raise Http404 based on allow_empty and allow_future.
+get_paginator(queryset, per_page, orphans=0, allow_empty_first_page=True): Returns paginator instance. Uses paginator_class by default.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+paginate_queryset(queryset, page_size): Returns a 4-tuple: (paginator, page, object_list, is_paginated). Handles pagination based on request page.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_day(): Returns the day as a string, trying: DayMixin.day, URL day argument, GET day query argument. Raises Http404 if invalid.
+get_day_format(): Returns the strftime format for parsing the day; defaults to day_format.
+get_month(): Returns the month as a string, trying: MonthMixin.month, URL month argument, GET month query argument. Raises Http404 if invalid.
+get_month_format(): Returns the strftime format for parsing the month; defaults to month_format.
+get_year(): Returns the year as a string, trying sources in order: YearMixin.year, URL year argument, GET year query argument. Raises Http404 if no valid year is found.
+get_year_format(): Returns the strftime format to use when parsing the year; defaults to year_format.
+
+CODE:
+from django.views.generic.dates import DayArchiveView
+from myapp.models import Article
+
+class ArticleDayArchiveView(DayArchiveView):
+    queryset = Article.objects.all()
+    date_field = "pub_date"
+    allow_future = True
+CODE:
+from django.urls import path
+from myapp.views import ArticleDayArchiveView
+
+urlpatterns = [
+    path("<int:year>/<str:month>/<int:day>/", ArticleDayArchiveView.as_view(), name="archive_day"),
+]
+CODE:
+text<h1>{{ day }}</h1>
+<ul>
+{% for article in object_list %}
+    <li>{{ article.pub_date|date:"F j, Y" }}: {{ article.title }}</li>
+{% endfor %}
+</ul>
+<p>
+    {% if previous_day %}
+        Previous Day: {{ previous_day }}
+    {% endif %}
+    {% if next_day and previous_day %}
+        --
+    {% endif %}
+    {% if next_day %}
+        Next Day: {{ next_day }}
+    {% endif %}
+</p>
+SECTION: TodayArchiveView
+PURPOSE: A day archive page showing all objects for today. Identical to DayArchiveView but uses current date.
+CONCEPT: Ancestors (MRO): django.views.generic.list.MultipleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.dates.BaseTodayArchiveView, django.views.generic.dates.BaseDayArchiveView, django.views.generic.dates.YearMixin, django.views.generic.dates.MonthMixin, django.views.generic.dates.DayMixin, django.views.generic.dates.BaseDateListView, django.views.generic.list.MultipleObjectMixin, django.views.generic.dates.DateMixin, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_emptyBoolean specifying whether to display the page if no objects are available. Default: True. If False and no objects, raises 404.allow_futureBoolean; if False (default), excludes objects where the date_field is in the future.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameName of the variable used in the context. If not set and object_list is a QuerySet, uses model_name + '_list' (e.g., article_list).date_fieldName of the DateField or DateTimeField in the model used to filter objects by date. If time zone support is enabled and it's a DateTimeField, dates are assumed in the current time zone.dayOptional string value for the day; default is None.day_formatstrftime format for parsing the day; default is '%d'.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that the view will display data for. Equivalent to queryset = Foo.objects.all().monthOptional string value for the month; default is None.month_formatstrftime format for parsing the month; default is '%b'.orderingString or list of strings for ordering the queryset. Same as order_by().paginate_byInteger specifying objects per page. Enables pagination.paginate_orphansInteger for maximum "overflow" objects on the last page.paginator_classPaginator class used. Defaults to django.core.paginator.Paginator.querysetA QuerySet representing the objects. Supersedes model if provided. Warning: Mutable; use get_queryset() or .all() to avoid issues.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_suffixDefaults to "_archive_day".yearOptional string value for the year; default is None.year_formatstrftime format for parsing the year; default is '%Y'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the view.
+get_context_data(**kwargs): Returns context data for the list of objects.
+get_date_list(queryset, date_type=None, ordering='ASC'): Returns list of dates of type date_type (e.g., years, months) from queryset. If date_type is not provided, uses result of get_date_list_period(). Uses QuerySet.dates() with specified ordering.
+get_dated_items(): Returns a 3-tuple: (date_list, object_list, extra_context). date_list contains available dates; object_list contains objects; extra_context adds context data.
+get_dated_queryset(lookup): Returns a filtered queryset based on query arguments; enforces allow_empty and allow_future.
+get_next_day(date): Returns a date object with the next valid day. May return None or raise Http404 based on allow_empty and allow_future.
+get_next_month(date): Returns a date object with the first day of the next month. May return None or raise Http404 based on allow_empty and allow_future.
+get_previous_day(date): Returns a date object with the previous valid day. May return None or raise Http404 based on allow_empty and allow_future.
+get_previous_month(date): Returns a date object with the first day of the previous month. May return None or raise Http404 based on allow_empty and allow_future.
+get_paginator(queryset, per_page, orphans=0, allow_empty_first_page=True): Returns paginator instance. Uses paginator_class by default.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+paginate_queryset(queryset, page_size): Returns a 4-tuple: (paginator, page, object_list, is_paginated). Handles pagination based on request page.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_day(): Returns the day as a string, trying: DayMixin.day, URL day argument, GET day query argument. Raises Http404 if invalid.
+get_day_format(): Returns the strftime format for parsing the day; defaults to day_format.
+get_month(): Returns the month as a string, trying: MonthMixin.month, URL month argument, GET month query argument. Raises Http404 if invalid.
+get_month_format(): Returns the strftime format for parsing the month; defaults to month_format.
+get_year(): Returns the year as a string, trying sources in order: YearMixin.year, URL year argument, GET year query argument. Raises Http404 if no valid year is found.
+get_year_format(): Returns the strftime format to use when parsing the year; defaults to year_format.
+
+SECTION: DateDetailView
+PURPOSE: Displays a detail page for a single object on a given date.
+CONCEPT: Ancestors (MRO): django.views.generic.detail.SingleObjectTemplateResponseMixin, django.views.generic.base.TemplateResponseMixin, django.views.generic.dates.BaseDateDetailView, django.views.generic.detail.BaseDetailView, django.views.generic.dates.YearMixin, django.views.generic.dates.MonthMixin, django.views.generic.dates.DayMixin, django.views.generic.dates.DateMixin, django.views.generic.detail.SingleObjectMixin, django.views.generic.base.View
+Attributes:
+
+ATTRIBUTEDESCRIPTIONallow_futureBoolean; if False (default), excludes objects where the date_field is in the future.content_typeThe content type to use for the response. Passed as a keyword argument to response_class. Default: None (uses 'text/html').context_object_nameDesignates the name of the variable to use in the context. If not set, the context name will be constructed from the model_name of the model that the queryset is composed from. For example, the model Article would have context object named 'article'.date_fieldName of the DateField or DateTimeField in the model used to filter objects by date. If time zone support is enabled and it's a DateTimeField, dates are assumed in the current time zone.dayOptional string value for the day; default is None.day_formatstrftime format for parsing the day; default is '%d'.extra_contextA dictionary to include in the context.http_method_namesThe list of HTTP method names that this view will accept. Default: ["get", "post", "put", "patch", "delete", "head", "options", "trace"]modelThe model that this view will display data for. Specifying model = Foo is effectively the same as specifying queryset = Foo.objects.all(), where objects stands for Foo’s default manager.monthOptional string value for the month; default is None.month_formatstrftime format for parsing the month; default is '%b'.pk_url_kwargThe name of the URLConf keyword argument that contains the primary key. By default, pk_url_kwarg is 'pk'.query_pk_and_slugIf True, causes get_object() to perform its lookup using both the primary key and the slug. Defaults to False.querysetA QuerySet that represents the objects. If provided, the value of queryset supersedes the value provided for model. Warning: queryset is a class attribute with a mutable value so care must be taken when using it directly. Before using it, either call its all() method or retrieve it with get_queryset() which takes care of the cloning behind the scenes.response_classThe response class to be returned by render_to_response method. Default: TemplateResponse.slug_fieldThe name of the field on the model that contains the slug. By default, slug_field is 'slug'.slug_url_kwargThe name of the URLConf keyword argument that contains the slug. By default, slug_url_kwarg is 'slug'.template_engineThe NAME of a template engine to use for loading the template. Passed as the using keyword argument to response_class. Default: None (searches all configured engines).template_nameThe full name of a template to use as defined by a string. Not defining a template_name will raise ImproperlyConfigured.template_name_fieldThe field on the current object instance that can be used to determine the name of a candidate template. If either template_name_field itself or the value of the template_name_field on the current object instance is None, the object will not be used for a candidate template name.template_name_suffixThe suffix to append to the auto-generated candidate template name. Default: '_detail'.yearOptional string value for the year; default is None.year_formatstrftime format for parsing the year; default is '%Y'.
+Methods:
+
+as_view(): Returns a callable view that takes a request and returns a response.
+dispatch(): The core method that handles the request and returns an HTTP response.
+get(): Renders the view.
+get_context_data(**kwargs): Returns context data for displaying the object.
+get_next_day(date): Returns a date object with the next valid day. May return None or raise Http404 based on allow_empty and allow_future.
+get_next_month(date): Returns a date object with the first day of the next month. May return None or raise Http404 based on allow_empty and allow_future.
+get_object(queryset=None): Returns the single object that this view will display. If queryset is provided, that queryset will be used as the source of objects; otherwise, get_queryset() will be used. get_object() looks for a pk_url_kwarg argument in the arguments to the view; if this argument is found, this method performs a primary-key based lookup using that value. If this argument is not found, it looks for a slug_url_kwarg argument, and performs a slug lookup using the slug_field. When query_pk_and_slug is True, get_object() will perform its lookup using both the primary key and the slug.
+get_previous_day(date): Returns a date object with the previous valid day. May return None or raise Http404 based on allow_empty and allow_future.
+get_previous_month(date): Returns a date object with the first day of the previous month. May return None or raise Http404 based on allow_empty and allow_future.
+head(): Delegates to get().
+http_method_not_allowed(): Returns HttpResponseNotAllowed with a list of allowed methods.
+render_to_response(context, **response_kwargs): Returns a self.response_class instance. Calls get_template_names() to obtain the list of template names.
+setup(): Performs initialization before dispatch().
+get_allow_future(): Determines if future objects are included; defaults to allow_future.
+get_date_field(): Returns the name of the date field; defaults to date_field.
+get_day(): Returns the day as a string, trying: DayMixin.day, URL day argument, GET day query argument. Raises Http404 if invalid.
+get_day_format(): Returns the strftime format for parsing the day; defaults to day_format.
+get_month(): Returns the month as a string, trying: MonthMixin.month, URL month argument, GET month query argument. Raises Http404 if invalid.
+get_month_format(): Returns the strftime format for parsing the month; defaults to month_format.
+get_year(): Returns the year as a string, trying sources in order: YearMixin.year, URL year argument, GET year query argument. Raises Http404 if no valid year is found.
+get_year_format(): Returns the strftime format to use when parsing the year; defaults to year_format.
+
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Reference for class-based generic views in Django applications.
+SUMMARY:
+
+Simple views: View, TemplateView, RedirectView for base functionality.
+Detail views: DetailView for single objects.
+List views: ListView for object lists.
+Editing views: FormView, CreateView, UpdateView, DeleteView for forms and CRUD.
+Date views: ArchiveIndexView, YearArchiveView, etc., for date-based archives.

@@ -1,0 +1,122 @@
+PURPOSE: This section explains controlling database transactions in Django, including default behavior, HTTP tying, explicit control, autocommit, post-commit actions, and low-level APIs.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django database connections for atomicity and integrity.
+
+SECTION: MANAGING DATABASE TRANSACTIONS
+PURPOSE: This section describes ways to manage transactions.
+CONCEPT: DJANGO’S DEFAULT TRANSACTION BEHAVIOR
+Autocommit mode: each query committed immediately unless transaction active.
+Uses transactions/savepoints for multi-query ORM ops like delete()/update().
+TestCase wraps tests in transaction for performance.
+CONCEPT: TYING TRANSACTIONS TO HTTP REQUESTS
+Wrap each request in transaction: ATOMIC_REQUESTS = True per database.
+Starts transaction before view, commits if success, rolls back on exception.
+Subtransactions with savepoints possible, but all/none at view end.
+Inefficient on high traffic; overhead.
+StreamingHttpResponse: code after return outside transaction; avoid DB writes.
+Middleware/template rendering outside transaction.
+non_atomic_requests decorator negates for view.
+CODE EXAMPLE:
+from django.db import transaction
+
+@transaction.non_atomic_requests
+def my_view(request):
+    do_stuff()
+
+@transaction.non_atomic_requests(using="other")
+def my_other_view(request):
+    do_stuff_on_the_other_database()
+CONCEPT: CONTROLLING TRANSACTIONS EXPLICITLY
+Use atomic() decorator/context manager.
+CODE EXAMPLE:
+Pythonfrom django.db import transaction
+
+@transaction.atomic
+def viewfunc(request):
+    # This code executes inside a transaction.
+    do_stuff()
+
+def viewfunc(request):
+    # This code executes in autocommit mode (Django's default).
+    do_stuff()
+
+    with transaction.atomic():
+        # This code executes inside a transaction.
+        do_more_stuff()
+Nested; inner effects rolled back if outer exception.
+durable=True ensures outermost.
+Handles IntegrityError etc.
+Avoid catching inside atomic; hides from Django, may cause TransactionManagementError.
+Catch around atomic.
+Raw SQL exceptions unspecified.
+using: database name.
+SECTION: AUTOCOMMIT
+PURPOSE: This section explains autocommit and deactivation.
+CONCEPT: WHY DJANGO USES AUTOCOMMIT
+SQL standards start transaction per query; autocommit wraps each.
+PEP 249 off by default; Django on.
+CONCEPT: DEACTIVATING TRANSACTION MANAGEMENT
+AUTOCOMMIT = False per connection; no autocommit, no commits.
+Commit explicitly; not recommended.
+SECTION: PERFORMING ACTIONS AFTER COMMIT
+PURPOSE: This section describes on_commit() for post-commit actions.
+CONCEPT: ON_COMMIT FUNCTION
+Registers callbacks after successful commit.
+CODE EXAMPLE:
+transaction.on_commit(func, using=None, robust=False)
+func: callable.
+robust=True: continue on exception, log.
+Called in registration order.
+Exception in one (robust=False) stops later.
+Executed after commit, no rollback on failure.
+Immediate if no transaction.
+No work with non-atomic or autocommit off without atomic.
+TestCase: no run; use captureOnCommitCallbacks() or TransactionTestCase.
+No rollback hook; use on_commit to delay actions.
+SECTION: LOW-LEVEL APIS
+PURPOSE: This section warns to prefer atomic(); for custom management.
+CONCEPT: AUTOCOMMIT API
+get_autocommit(using=None)
+set_autocommit(autocommit, using=None)
+Off: manual commits.
+Ensure no active transaction before on.
+Refuse off if atomic active.
+CONCEPT: TRANSACTIONS API
+No start API; disable autocommit.
+commit(using=None)
+rollback(using=None)
+Refuse if atomic active.
+CONCEPT: SAVEPOINTS API
+savepoint(using=None): create, return sid.
+savepoint_commit(sid, using=None)
+savepoint_rollback(sid, using=None)
+No-op if unsupported or autocommit.
+clean_savepoints(using=None): reset counter.
+Usable inside atomic.
+Example: partial rollback.
+SECTION: DATABASE-SPECIFIC NOTES
+PURPOSE: This section notes backend peculiarities.
+CONCEPT: SAVEPOINTS IN SQLITE
+sqlite3 bug: commits implicitly before savepoint.
+Usable only inside transaction (atomic).
+Cannot use atomic if autocommit off.
+CONCEPT: TRANSACTIONS IN MYSQL
+Depends on version/table type (InnoDB/MyISAM).
+If no support: always autocommit.
+CONCEPT: HANDLING EXCEPTIONS WITHIN POSTGRESQL TRANSACTIONS
+After exception in transaction: subsequent SQL fails until end.
+Use savepoints for partial rollback.
+Low-level for custom; atomic handles.
+CONCEPT: TRANSACTION ROLLBACK
+Full rollback.
+CONCEPT: SAVEPOINT ROLLBACK
+Partial.
+SUMMARY:
+
+Default autocommit; atomic for control.
+ATOMIC_REQUESTS for per-request.
+on_commit for post-commit.
+Low-level for custom; prefer atomic.

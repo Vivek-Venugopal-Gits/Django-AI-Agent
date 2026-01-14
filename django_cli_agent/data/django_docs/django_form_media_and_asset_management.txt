@@ -1,0 +1,293 @@
+SECTION: Form Assets and the Media Class
+
+PURPOSE:
+Explain how Django associates CSS and JavaScript assets with forms and widgets using the Media class.
+
+CONCEPT:
+
+Rendering usable and interactive forms requires CSS and JavaScript in addition to HTML. Django provides the Media class to declaratively associate required assets with widgets and forms.
+
+When a widget or form defines asset requirements:
+
+Django collects required CSS and JavaScript
+
+Assets are rendered in a format suitable for inclusion in HTML pages
+
+Only required assets are included per page
+
+SECTION: Assets Defined as a Static Media Class
+
+PURPOSE:
+Define form and widget assets using a static inner Media class.
+
+CONCEPT:
+
+The simplest way to declare assets is by defining an inner Media class on a widget or form. The Media class specifies CSS and JavaScript dependencies declaratively.
+
+COMMAND:
+from django import forms
+
+class CalendarWidget(forms.TextInput):
+    class Media:
+        css = {
+            "all": ["pretty.css"],
+        }
+        js = ["animations.js", "actions.js"]
+
+
+Every time this widget is used, Django includes the specified assets.
+
+CONCEPT:
+
+At runtime, the static Media definition becomes available via the media attribute.
+
+COMMAND:
+>>> w = CalendarWidget()
+>>> print(w.media)
+<link href="https://static.example.com/pretty.css" media="all" rel="stylesheet">
+<script src="https://static.example.com/animations.js"></script>
+<script src="https://static.example.com/actions.js"></script>
+
+SECTION: Media Class Options
+
+PURPOSE:
+Describe supported configuration options of the Media class.
+
+SECTION: CSS Asset Definitions
+CONCEPT:
+
+The css attribute defines stylesheet requirements per output media type.
+
+RULES:
+
+Value MUST be a list or tuple of file paths
+
+Keys represent CSS media types
+
+Multiple media types may be comma-separated
+
+COMMAND:
+class Media:
+    css = {
+        "screen": ["pretty.css"],
+        "print": ["newspaper.css"],
+    }
+
+COMMAND:
+class Media:
+    css = {
+        "screen": ["pretty.css"],
+        "tv,projector": ["lo_res.css"],
+        "print": ["newspaper.css"],
+    }
+
+SECTION: JavaScript Asset Definitions
+CONCEPT:
+
+The js attribute defines JavaScript files required by the widget or form.
+
+COMMAND:
+class Media:
+    js = ["animations.js", "actions.js"]
+
+SECTION: Script Objects for JavaScript Assets
+
+PURPOSE:
+Attach additional HTML attributes to JavaScript assets.
+
+CONCEPT:
+
+Introduced in Django 5.2, Script objects represent JavaScript files and allow custom <script> tag attributes.
+
+COMMAND:
+class Media:
+    js = [
+        Script(
+            "https://cdn.example.com/something.min.js",
+            **{
+                "crossorigin": "anonymous",
+                "async": True,
+            },
+        ),
+    ]
+
+SECTION: Media Inheritance with extend
+
+PURPOSE:
+Control whether asset definitions are inherited from parent widgets.
+
+CONCEPT:
+
+By default, child widgets inherit all assets from parent widgets.
+
+COMMAND:
+class FancyCalendarWidget(CalendarWidget):
+    class Media:
+        css = {
+            "all": ["fancy.css"],
+        }
+        js = ["whizbang.js"]
+
+CONCEPT:
+
+To disable inheritance, explicitly set extend = False.
+
+COMMAND:
+class FancyCalendarWidget(CalendarWidget):
+    class Media:
+        extend = False
+        css = {
+            "all": ["fancy.css"],
+        }
+        js = ["whizbang.js"]
+
+SECTION: Media as a Dynamic Property
+
+PURPOSE:
+Define assets programmatically for advanced control.
+
+CONCEPT:
+
+Instead of using a static Media class, a widget may define a media property that returns a forms.Media instance.
+
+COMMAND:
+class CalendarWidget(forms.TextInput):
+    @property
+    def media(self):
+        return forms.Media(
+            css={"all": ["pretty.css"]}, js=["animations.js", "actions.js"]
+        )
+
+SECTION: Asset Paths in Media Definitions
+
+PURPOSE:
+Explain how Django resolves asset paths.
+
+SECTION: Paths as Strings
+CONCEPT:
+
+Asset paths may be:
+
+Absolute (starting with /, http://, or https://)
+
+Relative (prefixed automatically using static settings)
+
+RULES:
+
+Absolute paths are used unchanged
+
+Relative paths are prefixed using static configuration
+
+Static configuration is required to render complete pages
+
+COMMAND:
+class CalendarWidget(forms.TextInput):
+    class Media:
+        css = {
+            "all": ["/css/pretty.css"],
+        }
+        js = ["animations.js", "https://othersite.com/actions.js"]
+
+SECTION: Paths as Objects
+CONCEPT:
+
+Object-based paths allow custom HTML attributes using Script.
+
+COMMAND:
+class Media:
+    js = [
+        Script(
+            "https://cdn.example.com/something.min.js",
+            **{
+                "crossorigin": "anonymous",
+                "async": True,
+            },
+        ),
+    ]
+
+SECTION: Media Objects and Their Behavior
+
+PURPOSE:
+Describe how forms.Media objects behave when accessed or combined.
+
+SECTION: Accessing Subsets of Assets
+CONCEPT:
+
+You may retrieve subsets of assets using the subscript operator.
+
+COMMAND:
+>>> w = CalendarWidget()
+>>> print(w.media["css"])
+<link href="https://static.example.com/pretty.css" media="all" rel="stylesheet">
+
+
+The result is a new Media object containing only the requested asset type.
+
+SECTION: Combining Media Objects
+CONCEPT:
+
+Two Media objects can be added together. The result contains the union of both asset sets.
+
+COMMAND:
+>>> print(w1.media + w2.media)
+<link href="https://static.example.com/pretty.css" media="all" rel="stylesheet">
+<script src="https://static.example.com/animations.js"></script>
+<script src="https://static.example.com/actions.js"></script>
+<script src="https://static.example.com/whizbang.js"></script>
+
+SECTION: Asset Ordering and Conflict Detection
+CONCEPT:
+
+Django preserves relative asset order when combining Media objects.
+
+RULE:
+
+Conflicting asset orders trigger MediaOrderConflictWarning
+
+COMMAND:
+>>> print(w1.media + w2.media)
+<script src="https://static.example.com/jQuery.js"></script>
+<script src="https://static.example.com/calendar.js"></script>
+<script src="https://static.example.com/time.js"></script>
+<script src="https://static.example.com/noConflict.js"></script>
+
+SECTION: Media Definitions on Forms
+
+PURPOSE:
+Explain how forms aggregate widget media and define additional assets.
+
+CONCEPT:
+
+All forms expose a media property.
+
+DEFAULT BEHAVIOR:
+
+Form media is the sum of all widget media
+
+COMMAND:
+class ContactForm(forms.Form):
+    date = DateField(widget=CalendarWidget)
+    name = CharField(max_length=40, widget=OtherWidget)
+
+CONCEPT:
+
+Forms may also define their own Media class to add layout or styling assets.
+
+COMMAND:
+class ContactForm(forms.Form):
+    date = DateField(widget=CalendarWidget)
+    name = CharField(max_length=40, widget=OtherWidget)
+    class Media:
+        css = {
+            "all": ["layout.css"],
+        }
+
+SUMMARY:
+
+Media associates CSS and JavaScript with widgets and forms
+
+Assets can be defined statically or dynamically
+
+Media objects support inheritance, combination, and filtering
+
+Forms automatically aggregate widget assets

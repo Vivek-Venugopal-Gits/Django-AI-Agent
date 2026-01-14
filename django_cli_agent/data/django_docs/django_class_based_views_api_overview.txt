@@ -1,0 +1,57 @@
+SECTION: Django Class-Based Views API Overview
+PURPOSE:
+Provides reference for Django's built-in class-based views, organized by category, with introductory material on usage and structure.
+​
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Covers versions from 1.8 to dev, with primary focus on 6.0.
+​
+CONCEPT: Specification
+Each request served by a class-based view has an independent state, making it safe to store state variables on the instance, such as self.foo = 3.
+​
+A class-based view deploys into a URL pattern using the as_view() classmethod.
+​
+COMMAND:
+python
+urlpatterns = [  
+    path("view/", MyView.as_view(size=42)),  
+]  
+USAGE GUIDELINES:
+USE WHEN:
+
+Deploying class-based views in URL configurations.
+​
+DO NOT USE WHEN:
+
+Passing mutable objects like lists or dictionaries as arguments, as they share state across instances and can affect other users.
+​
+Arguments passed to as_view() assign to the instance and must correspond to existing class attributes.
+​
+SECTION: Base vs Generic Views
+PURPOSE:
+Explains relationship between base views, mixins, and generic views for common patterns.
+​
+Base class-based views serve as parent views that can be used alone or inherited from, with mixins extending their capabilities.
+​
+Generic views build on base views to abstract common idioms like displaying object details, reducing repetition, and often require a queryset QuerySet.
+​
+SECTION: View Categories
+Base views: View, TemplateView, RedirectView.
+​
+Generic display views: DetailView, ListView.
+​
+Generic editing views: FormView, CreateView, UpdateView, DeleteView.
+​
+Generic date views: ArchiveIndexView, YearArchiveView, MonthArchiveView, WeekArchiveView, DayArchiveView, TodayArchiveView, DateDetailView.
+​
+Mixins: Organized into simple, single object, multiple object, editing, and date-based categories.
+​
+Flattened index: Lists all simple generic, detail, list, editing, and date-based views.
+​
+SUMMARY:
+Class-based views ensure thread safety via independent request states.
+​
+Deploy with as_view() in URL patterns, avoiding mutable args.
+​
+Generic views abstract common patterns; most need a queryset.

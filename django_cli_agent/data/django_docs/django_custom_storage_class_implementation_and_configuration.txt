@@ -1,0 +1,156 @@
+SECTION: CUSTOM STORAGE CLASS
+PURPOSE: Provide step-by-step instructions for implementing a custom Storage subclass for remote or specialized file storage.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: Projects requiring storage backends beyond FileSystemStorage (e.g., cloud storage, remote filesystems).
+​
+CONCEPT: CUSTOM STORAGE REQUIREMENTS
+Custom storage classes must subclass django.core.files.storage.Storage and be parameterless-instantiable using Django settings.
+​
+They must implement _open() and _save() plus relevant public methods; the class must be deconstructible for migrations.
+​
+STEPS: IMPLEMENTING CUSTOM STORAGE
+Subclass Storage:
+
+python
+from django.core.files.storage import Storage
+
+class MyStorage(Storage):
+    ...
+Read settings in init:
+
+python
+from django.conf import settings
+from django.core.files.storage import Storage
+
+class MyStorage(Storage):
+    def __init__(self, option=None):
+        if not option:
+            option = settings.CUSTOM_STORAGE_OPTIONS
+        ...
+Implement required methods: _open(), _save(), and storage-specific public methods.
+​
+Make deconstructible (use @deconstructible decorator):
+
+python
+from django.utils.deconstruct import deconstructible
+from django.core.files.storage import Storage
+
+@deconstructible
+class MyStorage(Storage):
+    ...
+SUMMARY:
+Subclass Storage, read settings from django.conf.settings, implement _open()/_save().
+​
+Decorate with @deconstructible for migration compatibility.
+​
+SECTION: REQUIRED PRIVATE METHODS
+PURPOSE: Define the core private methods that all custom storages must implement.
+​
+CONCEPT: _open() METHOD
+_open(name, mode='rb') is called by Storage.open() and must return a File object (or subclass).
+​
+Raise FileNotFoundError if the file doesn't exist.
+​
+COMMAND: _open() EXAMPLE
+python
+def _open(self, name, mode='rb'):
+    # Remote storage example
+    file_obj = self.remote_client.open(name, mode)
+    return File(file_obj, name=name)
+CONCEPT: _save() METHOD
+_save(name, content) is called by Storage.save() where name is already validated and content is a File object.
+​
+Return the actual stored filename (may differ from input name if storage renames it).
+​
+COMMAND: _save() EXAMPLE
+python
+def _save(self, name, content):
+    # Save to remote storage
+    remote_path = self.remote_client.upload(name, content)
+    return remote_path  # Could be different from 'name'
+SUMMARY:
+_open() returns File objects; _save() handles content and returns final name.
+​
+Both methods form the core of storage read/write operations.
+​
+SECTION: OPTIONAL PUBLIC METHODS
+PURPOSE: List public Storage methods that should be overridden based on storage capabilities.
+​
+CONCEPT: COMMONLY IMPLEMENTED METHODS
+By default, these raise NotImplementedError and can be omitted if unsupported:
+​
+Method	Purpose	When Required
+delete(name)	Remove file	Deletion supported
+exists(name)	Check file existence	Listing/checking supported
+listdir(path)	List directories/files	Directory listing supported
+size(name)	Get file size in bytes	Size queries supported
+url(name)	Get public URL	URL access supported
+path(name)	Local filesystem path	Local storage only
+CONCEPT: LOCAL STORAGE REQUIREMENT
+Local file storage classes must override path(name) to return the filesystem path.
+​
+SUMMARY:
+Implement only methods your storage supports; omit others to raise NotImplementedError.
+​
+path() is mandatory for local filesystem-compatible storage.
+​
+SECTION: FILENAME HOOKS
+PURPOSE: Customize filename validation, uniqueness, and generation for storage safety.
+​
+CONCEPT: get_valid_name(name)
+Returns a filename safe for the storage system by sanitizing name.
+​
+Default removes non-alphanumeric characters except periods/underscores.
+​
+CONCEPT: get_alternative_name(file_root, file_ext)
+Generates alternative filename when collision detected; default appends _<random 7 chars> before extension.
+​
+CONCEPT: get_available_name(name, max_length=None)
+Returns unique available filename; calls get_alternative_name() on collision and respects max_length.
+​
+Raises SuspiciousFileOperation if unique name cannot be generated under length limit.
+​
+COMMAND: FILENAME CUSTOMIZATION EXAMPLE
+python
+def get_valid_name(self, name):
+    return re.sub(r'[^a-zA-Z0-9._-]', '_', name)
+
+def get_alternative_name(self, file_root, file_ext):
+    return f"{file_root}_{uuid.uuid4().hex[:7]}{file_ext}"
+SUMMARY:
+Override filename hooks to enforce storage-specific naming rules.
+​
+get_available_name() ensures uniqueness while respecting length limits.
+​
+SECTION: CONFIGURING CUSTOM STORAGE
+PURPOSE: Integrate custom storage via STORAGES setting and access via storages registry.
+​
+CONCEPT: STORAGES CONFIGURATION
+Define custom storage in STORAGES with backend and options:
+
+python
+STORAGES = {
+    "custom": {
+        "BACKEND": "myapp.storage.MyStorage",
+        "OPTIONS": {
+            "remote_host": "storage.example.com",
+            "bucket": "my-bucket",
+        }
+    }
+}
+COMMAND: ACCESSING CUSTOM STORAGE
+python
+from django.core.files.storage import storages
+
+example_storage = storages["custom"]  # Returns MyStorage instance
+COMMAND: USING WITH MODELS
+python
+class MyModel(models.Model):
+    file = models.FileField(storage=storages["custom"])
+SUMMARY:
+Configure in STORAGES; access via storages["alias"].
+​
+Use directly on FileField.storage or as default storage

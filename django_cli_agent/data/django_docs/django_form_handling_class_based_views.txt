@@ -1,0 +1,187 @@
+SECTION: Form Handling with Class-Based Views
+PURPOSE: This section describes using generic class-based views to process forms, reducing boilerplate code for common paths like initial GET, invalid POST, and valid POST.
+CONCEPT: Form processing involves initial GET for blank or prepopulated form, POST with invalid data for redisplay with errors, and POST with valid data for processing and redirect.
+CONCEPT: Django provides generic views like FormView to handle these paths efficiently.
+SECTION: Basic Forms
+PURPOSE: This section provides an example of using FormView for a non-model form.
+CODE:
+from django import forms
+
+class ContactForm(forms.Form):
+    name = forms.CharField()
+    message = forms.CharField(widget=forms.Textarea)
+
+    def send_email(self):
+        # send email using the self.cleaned_data dictionary
+        pass
+CODE:
+from myapp.forms import ContactForm
+from django.views.generic.edit import FormView
+
+class ContactFormView(FormView):
+    template_name = "contact.html"
+    form_class = ContactForm
+    success_url = "/thanks/"
+
+    def form_valid(self, form):
+        # This method is called when valid form data has been POSTed.
+        # It should return an HttpResponse.
+        form.send_email()
+        return super().form_valid(form)
+CONCEPT: FormView inherits TemplateResponseMixin, allowing template_name specification.
+CONCEPT: Default form_valid redirects to success_url.
+SECTION: Model Forms
+PURPOSE: This section explains automatic ModelForm creation in generic views for models.
+CONCEPT: Determine model from model attribute, get_object return value, or queryset model.
+CONCEPT: Model form views implement form_valid to save the model; override for custom requirements.
+CONCEPT: CreateView and UpdateView use model's get_absolute_url for success_url if available.
+CONCEPT: Set form_class for custom ModelForm, but still specify model.
+CONCEPT: Specifying both fields and form_class raises ImproperlyConfigured.
+CODE:
+from django.db import models
+from django.urls import reverse
+
+class Author(models.Model):
+    name = models.CharField(max_length=200)
+
+    def get_absolute_url(self):
+        return reverse("author-detail", kwargs={"pk": self.pk})
+CODE:
+from django.urls import reverse_lazy
+from django.views.generic.edit import CreateView, DeleteView, UpdateView
+from myapp.models import Author
+
+class AuthorCreateView(CreateView):
+    model = Author
+    fields = ["name"]
+
+class AuthorUpdateView(UpdateView):
+    model = Author
+    fields = ["name"]
+
+class AuthorDeleteView(DeleteView):
+    model = Author
+    success_url = reverse_lazy("author-list")
+CONCEPT: Use reverse_lazy for success_url as URLs are not loaded during import.
+CONCEPT: fields attribute functions like ModelForm Meta fields; required if not defining form_class, else raises ImproperlyConfigured.
+CODE:
+from django.urls import path
+from myapp.views import AuthorCreateView, AuthorDeleteView, AuthorUpdateView
+
+urlpatterns = [
+    # ...
+    path("author/add/", AuthorCreateView.as_view(), name="author-add"),
+    path("author/<int:pk>/", AuthorUpdateView.as_view(), name="author-update"),
+    path("author/<int:pk>/delete/", AuthorDeleteView.as_view(), name="author-delete"),
+]
+CONCEPT: Views inherit SingleObjectTemplateResponseMixin, using template_name_suffix for template_name: _form for CreateView/UpdateView, _confirm_delete for DeleteView.
+CONCEPT: Set template_name or template_name_suffix for separate CreateView/UpdateView templates.
+SECTION: Models and request.user
+PURPOSE: This section demonstrates tracking the creating user in CreateView using request.user.
+CODE:
+from django.contrib.auth.models import User
+from django.db import models
+
+class Author(models.Model):
+    name = models.CharField(max_length=200)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    # ...
+CODE:
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic.edit import CreateView
+from myapp.models import Author
+
+class AuthorCreateView(LoginRequiredMixin, CreateView):
+    model = Author
+    fields = ["name"]
+
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        return super().form_valid(form)
+CONCEPT: LoginRequiredMixin restricts to logged-in users; handle unauthorized in form_valid if omitted.
+SECTION: Content Negotiation Example
+PURPOSE: This section shows implementing a form handling both HTML and API workflows via content negotiation.
+CODE:
+from django.http import JsonResponse
+from django.views.generic.edit import CreateView
+from myapp.models import Author
+
+class JsonableResponseMixin:
+    """
+    Mixin to add JSON support to a form.
+    Must be used with an object-based FormView (e.g. CreateView)
+    """
+    def form_invalid(self, form):
+        response = super().form_invalid(form)
+        if self.request.accepts("text/html"):
+            return response
+        else:
+            return JsonResponse(form.errors, status=400)
+
+    def form_valid(self, form):
+        # We make sure to call the parent's form_valid() method because
+        # it might do some processing (in the case of CreateView, it will
+        # call form.save() for example).
+        response = super().form_valid(form)
+        if self.request.accepts("text/html"):
+            return response
+        else:
+            data = {
+                "pk": self.object.pk,
+            }
+            return JsonResponse(data)
+
+class AuthorCreateView(JsonableResponseMixin, CreateView):
+    model = Author
+    fields = ["name"]
+CONCEPT: Assumes text/html preferred if supported; browsers may prefer other types via Accept header.
+CONCEPT: Use HttpRequest.get_preferred_type for client-preferred format.
+CODE:
+class JsonableResponseMixin:
+    """
+    Mixin to add JSON support to a form.
+    Must be used with an object-based FormView (e.g. CreateView).
+    """
+
+    accepted_media_types = ["text/html", "application/json"]
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.get_preferred_type(self.accepted_media_types) is None:
+            # No format in common.
+            return HttpResponse(
+                status_code=406, headers={"Accept": ",".join(self.accepted_media_types)}
+            )
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        response = super().form_invalid(form)
+        accepted_type = self.request.get_preferred_type(self.accepted_media_types)
+        if accepted_type == "text/html":
+            return response
+        elif accepted_type == "application/json":
+            return JsonResponse(form.errors, status=400)
+
+    def form_valid(self, form):
+        # We make sure to call the parent's form_valid() method because
+        # it might do some processing (in the case of CreateView, it will
+        # call form.save() for example).
+        response = super().form_valid(form)
+        accepted_type = self.request.get_preferred_type(self.accepted_media_types)
+        if accepted_type == "text/html":
+            return response
+        elif accepted_type == "application/json":
+            data = {
+                "pk": self.object.pk,
+            }
+            return JsonResponse(data)
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Streamlining form processing in Django applications.
+SUMMARY:
+
+Use FormView for basic forms with custom valid handling.
+Use CreateView, UpdateView, DeleteView for model-based CRUD.
+Override form_valid for additional logic like user tracking.
+Implement mixins for features like JSON responses.

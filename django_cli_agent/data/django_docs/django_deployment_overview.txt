@@ -1,0 +1,61 @@
+PURPOSE: Provide high-level guidance on deploying Django applications to production, focusing on server interfaces, static files, error reporting, and security checks.
+DJANGO VERSION: 6.0
+Ease of deployment is a core Django goal.
+Deployment choices depend on architecture and business needs.
+Django requires a web server; runserver is only for development.
+Supported interfaces:
+
+WSGI: Synchronous standard (main Python web server communication protocol).
+ASGI: Asynchronous standard (supports async Python and future async Django features).
+
+Additional considerations:
+
+Static files handling.
+Error reporting.
+Deployment checklist for production readiness.
+
+
+SECTION: WSGI deployment
+PURPOSE: Deploy synchronous Django applications using WSGI servers.
+Options:
+
+Gunicorn
+uWSGI
+Apache with mod_wsgi
+Apache authentication against Django users
+The application callable
+Settings module configuration
+Applying WSGI middleware
+
+
+SECTION: ASGI deployment
+PURPOSE: Deploy asynchronous-capable Django applications using ASGI servers.
+Options:
+
+Daphne
+Hypercorn
+Uvicorn
+The application callable
+Settings module configuration
+Applying ASGI middleware
+
+
+SECTION: Deployment checklist
+PURPOSE: Ensure production configurations are secure and performant.
+Run manage.py check --deploy for automated checks.
+Key areas:
+
+Replace runserver with production server.
+Critical settings (SECRET_KEY, DEBUG=False, ALLOWED_HOSTS, DATABASES).
+Environment-specific settings.
+HTTPS enforcement.
+Performance optimizations (caching, compression, database tuning).
+Error reporting configuration.
+
+
+SUMMARY:
+
+Use WSGI for synchronous deployments; ASGI for async support.
+Handle static files separately in production.
+Follow the deployment checklist and run check --deploy.
+Choose server based on needs (Gunicorn/uWSGI common for WSGI; Daphne/Uvicorn for ASGI).

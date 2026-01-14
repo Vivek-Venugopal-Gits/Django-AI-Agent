@@ -1,0 +1,119 @@
+PURPOSE: This section explains the API references of Index, including options for creating database indexes in Django models.
+CONCEPT: REFERENCING BUILT-IN INDEXES
+Indexes are defined in django.db.models.indexes, but for convenience they are imported into django.db.models. The standard convention is to use from django.db import models and refer to the indexes as models.<IndexClass>.
+CONCEPT: INDEX CLASS OVERVIEW
+Index classes ease creating database indexes. They can be added using the Meta.indexes option.
+CONCEPT: INDEX CLASS DEFINITION
+The Index class creates an index (B-Tree) in the database.
+CODE EXAMPLE:
+class Index(*expressions, fields=(), name=None, db_tablespace=None, opclasses=(), condition=None, include=None)
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django models for database index creation.
+
+SECTION: INDEX OPTIONS
+PURPOSE: This section details the options available for configuring the Index class.
+CONCEPT: EXPRESSIONS OPTION
+Positional argument *expressions allows creating functional indexes on expressions and database functions.
+CODE EXAMPLE:
+Index(Lower("title").desc(), "pub_date", name="lower_title_date_idx")
+This creates an index on the lowercased value of the title field in descending order and the pub_date field in the default ascending order.
+CODE EXAMPLE:
+Index(F("height") * F("weight"), Round("weight"), name="calc_idx")
+This creates an index on the result of multiplying fields height and weight and the weight rounded to the nearest integer.
+Index.name is required when using *expressions.
+USAGE GUIDELINES:
+USE WHEN:
+
+Creating functional indexes on expressions or database functions.
+DO NOT USE WHEN:
+On Oracle with non-deterministic functions like Random(), as Oracle requires functions to be marked DETERMINISTIC.
+On PostgreSQL with mutable functions like Concat(), as PostgreSQL requires functions and operators to be marked IMMUTABLE.
+On MySQL before 8.0.13 or MariaDB, as functional indexes are ignored.
+
+CONCEPT: FIELDS OPTION
+A list or tuple of the name of the fields on which the index is desired. By default, indexes are created with an ascending order for each column. To define an index with a descending order for a column, add a hyphen before the field’s name.
+CODE EXAMPLE:
+PythonIndex(fields=['headline', '-pub_date'])
+This creates SQL with (headline, pub_date DESC).
+USAGE GUIDELINES:
+USE WHEN:
+
+Specifying fields for standard or multi-column indexes.
+DO NOT USE WHEN:
+On MariaDB before 10.8, as index ordering is not supported and descending indexes are created as normal indexes.
+
+CONCEPT: NAME OPTION
+The name of the index. If name isn’t provided, Django will auto-generate a name. For compatibility with different databases, index names cannot be longer than 30 characters and shouldn’t start with a number (0-9) or underscore (_).
+CONCEPT: PARTIAL INDEXES IN ABSTRACT BASE CLASSES
+DO NOT specify a partial index on an abstract base class without a unique name, as the Meta.indexes option is inherited by subclasses with the same values. To work around name collisions, part of the name may contain '%(app_label)s' and '%(class)s', which are replaced by the lowercased app label and class name of the concrete model.
+CODE EXAMPLE:
+PythonIndex(fields=['title'], name='%(app_label)s_%(class)s_title_index')
+USAGE GUIDELINES:
+USE WHEN:
+
+Avoiding name collisions in inherited models.
+DO NOT USE WHEN:
+Names exceed 30 characters or start with invalid characters.
+
+CONCEPT: DB_TABLESPACE OPTION
+The name of the database tablespace to use for this index. For single field indexes, if db_tablespace isn’t provided, the index is created in the db_tablespace of the field. If Field.db_tablespace isn’t specified (or if the index uses multiple fields), the index is created in tablespace specified in the db_tablespace option inside the model’s class Meta. If neither of those tablespaces are set, the index is created in the same tablespace as the table.
+USAGE GUIDELINES:
+USE WHEN:
+
+Customizing tablespace for performance in large databases.
+DO NOT USE WHEN:
+Default tablespace configuration suffices.
+
+CONCEPT: OPCLASSES OPTION
+The names of the PostgreSQL operator classes to use for this index. Provide one for each field in the index.
+CODE EXAMPLE:
+GinIndex(name='json_index', fields=['jsonfield'], opclasses=['jsonb_path_ops'])
+This creates a gin index on jsonfield using jsonb_path_ops.
+Index.name is required when using opclasses.
+USAGE GUIDELINES:
+USE WHEN:
+
+Requiring custom operator classes on PostgreSQL.
+DO NOT USE WHEN:
+On databases other than PostgreSQL, as opclasses are ignored.
+
+CONCEPT: CONDITION OPTION
+If the table is very large and queries mostly target a subset of rows, restrict an index to that subset. Specify a condition as a Q.
+CODE EXAMPLE:
+condition=Q(pages__gt=400)
+This indexes records with more than 400 pages.
+Index.name is required when using condition.
+USAGE GUIDELINES:
+USE WHEN:
+
+Optimizing large tables with partial indexes.
+DO NOT USE WHEN:
+On PostgreSQL with mutable functions in the condition, as IMMUTABLE is required.
+On SQLite if restrictions on partial index construction are violated.
+On Oracle, as partial indexes are not supported (use functional indexes with Case expressions instead).
+On MySQL or MariaDB, as conditional indexes are not supported.
+
+CONCEPT: INCLUDE OPTION
+A list or tuple of the names of the fields to be included in the covering index as non-key columns. This allows index-only scans for queries that select only included fields (include) and filter only by indexed fields (fields).
+CODE EXAMPLE:
+Index(name="covering_index", fields=["headline"], include=["pub_date"])
+This allows filtering on headline, also selecting pub_date, while fetching data only from the index.
+Using include produces a smaller index than a multiple column index but non-key columns cannot be used for sorting or filtering.
+Index.name is required when using include.
+USAGE GUIDELINES:
+USE WHEN:
+
+Enabling covering indexes for index-only scans on PostgreSQL.
+DO NOT USE WHEN:
+On databases other than PostgreSQL, as include is ignored.
+When non-key columns need to be used for sorting or filtering.
+
+SUMMARY:
+
+Use Index class to create B-Tree indexes with options like fields, expressions, and name.
+Functional indexes via expressions require name and have database-specific restrictions.
+Partial indexes via condition optimize subsets but are limited on some databases.
+Covering indexes via include enable efficient scans on PostgreSQL.

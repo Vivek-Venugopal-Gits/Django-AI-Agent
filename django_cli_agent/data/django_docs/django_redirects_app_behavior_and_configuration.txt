@@ -1,0 +1,209 @@
+PURPOSE:
+Describe the built-in Django application that manages URL redirects using database-backed configuration.
+
+Django includes an optional redirects application that stores URL redirects in the database and applies them automatically. By default, redirects use the HTTP status code 301 Moved Permanently.
+
+SECTION: Version and Applicability
+
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django projects requiring database-managed URL redirects
+
+Projects using the Django middleware stack
+
+Projects using the Django Sites framework
+
+SECTION: Installation and Configuration
+
+PURPOSE:
+Explain the required steps to install and enable the redirects application.
+
+To install and enable the redirects application, ALL of the following steps are required:
+
+Ensure the Django Sites framework is installed.
+
+Add django.contrib.redirects to INSTALLED_APPS.
+
+Add django.contrib.redirects.middleware.RedirectFallbackMiddleware to MIDDLEWARE.
+
+Run database migrations.
+
+COMMAND: Database Migration
+CODE:
+manage.py migrate
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+You need centralized, database-driven redirect management
+
+Redirects must be editable without code changes
+
+DO NOT USE WHEN:
+
+Redirect logic depends on complex runtime conditions
+
+Redirects should apply to non-404 responses
+
+SECTION: Redirect Processing Behavior
+
+PURPOSE:
+Explain how redirects are matched and applied at runtime.
+
+Running migrations creates a database table named django_redirect with the following fields:
+
+site_id
+
+old_path
+
+new_path
+
+Redirect processing is handled entirely by RedirectFallbackMiddleware.
+
+CONCEPT:
+
+The middleware activates only when a request results in a 404 response.
+
+It checks for a redirect where:
+
+old_path matches the requested URL path
+
+site_id matches the configured SITE_ID
+
+Redirects are evaluated as a last resort.
+
+BEHAVIOR RULES:
+
+If a matching redirect exists and new_path is not empty:
+
+Respond with a 301 Moved Permanently redirect.
+
+If a matching redirect exists and new_path is empty:
+
+Respond with a 410 Gone status and an empty response body.
+
+If no matching redirect exists:
+
+Normal 404 handling continues.
+
+The middleware does not run for:
+
+500 errors
+
+Any response that is not a 404
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Handling legacy URLs
+
+Preserving SEO after URL changes
+
+DO NOT USE WHEN:
+
+Redirects must apply before view execution
+
+Redirects should apply to non-404 responses
+
+SECTION: Middleware Ordering
+
+PURPOSE:
+Explain correct placement of the redirects middleware.
+
+RedirectFallbackMiddleware should be placed at the end of the MIDDLEWARE list.
+
+This ensures it runs only after all other middleware and view logic have failed to resolve the request.
+
+SECTION: Managing Redirect Records
+
+PURPOSE:
+Explain how redirects can be created, modified, and deleted.
+
+Redirects can be managed either through Django’s admin interface or directly via the Python API.
+
+SECTION: Redirect Model
+
+PURPOSE:
+Describe the database model used to represent redirects.
+
+CONCEPT:
+
+Redirects are stored using a standard Django model.
+
+FILE: django/contrib/redirects/models.py
+ROLE: Defines the Redirect model used for database-backed redirects
+
+COMMAND: Using the Redirect Model via Python API
+CODE:
+from django.conf import settings
+from django.contrib.redirects.models import Redirect
+
+Add a new redirect.
+redirect = Redirect.objects.create(
+    site_id=1,
+    old_path="/contact-us/",
+    new_path="/contact/",
+)
+
+# Change a redirect.
+redirect.new_path = "/contact-details/"
+redirect.save()
+redirect
+
+# Delete a redirect.
+Redirect.objects.filter(site_id=1, old_path="/contact-us/").delete()
+
+SECTION: Redirect Middleware Customization
+
+PURPOSE:
+Explain how redirect response behavior can be customized.
+
+CONCEPT:
+
+The middleware response behavior can be customized by subclassing RedirectFallbackMiddleware.
+
+You may override the response classes used for redirect and gone responses.
+
+SECTION: Middleware Response Classes
+
+response_gone_class
+ROLE:
+Defines the HTTP response used when a redirect exists but has an empty new_path, or when no redirect is found.
+
+Default:
+
+HttpResponseGone
+
+response_redirect_class
+ROLE:
+Defines the HTTP response used when redirecting to new_path.
+
+Default:
+
+HttpResponsePermanentRedirect
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+You need to change redirect status codes (e.g., use 302 instead of 301)
+
+You need custom response behavior for gone URLs
+
+DO NOT USE WHEN:
+
+Default redirect behavior is sufficient
+
+SUMMARY:
+
+Redirects are stored in the database and applied via middleware
+
+Redirects activate only on 404 responses
+
+Empty new_path values produce 410 Gone responses
+
+Middleware ordering is critical for correct behavior

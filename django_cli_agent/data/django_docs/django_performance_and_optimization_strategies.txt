@@ -1,0 +1,355 @@
+SECTION: Performance and Optimization Overview
+
+PURPOSE:
+Introduce core principles and techniques for improving Django application performance.
+
+CONCEPT:
+
+Performance optimization focuses on making Django applications faster and more resource-efficient. Optimization targets may include execution speed, memory usage, database load, or network utilization.
+
+Performance improvements often involve trade-offs. Increasing speed may increase memory usage, reduce maintainability, or require more developer effort. Optimization must be guided by clear goals and justified by measurable benefits.
+
+SECTION: Defining Performance Goals
+
+PURPOSE:
+Clarify what “performance” means in practical terms.
+
+CONCEPT:
+
+Performance is multi-dimensional. Improvements may target:
+
+Faster execution
+
+Reduced memory consumption
+
+Lower database or network usage
+
+Improvements in one area may negatively impact another. For example, faster code may consume more memory. Excessive optimization can degrade system stability or maintainability.
+
+Developer time is a critical resource. Some optimizations are not worth their implementation cost.
+
+SECTION: Performance Benchmarking
+
+PURPOSE:
+Measure and identify performance bottlenecks accurately.
+
+CONCEPT:
+
+Performance issues must be identified through measurement, not assumptions. Benchmarking reveals where inefficiencies actually occur.
+
+SECTION: Django Performance Tools
+
+PURPOSE:
+Analyze internal Django behavior during requests.
+
+CONCEPT:
+
+django-debug-toolbar provides detailed insights into:
+
+SQL queries executed per request
+
+Execution time of each query
+
+Template rendering performance
+
+Cache usage (via third-party panels)
+
+These tools help identify inefficient database access patterns and rendering overhead.
+
+SECTION: Third-Party Performance Services
+
+PURPOSE:
+Measure real-world performance from a user perspective.
+
+CONCEPT:
+
+External services analyze page performance as seen by remote clients. They measure overall response time and network behavior but do not inspect internal Django execution.
+
+Paid services may integrate directly with Django to provide deeper profiling.
+
+SECTION: Optimization from the Start
+
+PURPOSE:
+Encourage performance-aware design before optimization is needed.
+
+CONCEPT:
+
+Good design practices reduce the need for later optimization. In Python and Django, clean and idiomatic code is often the most performant.
+
+SECTION: Working at the Appropriate Level
+
+PURPOSE:
+Choose the most efficient abstraction level for operations.
+
+CONCEPT:
+
+Lower-level operations are usually faster than higher-level abstractions. Databases outperform Python for aggregation, and Python outperforms templates.
+
+COMMAND:
+# Database-level count (fastest)
+my_bicycles.count()
+
+# Python-level count (slower)
+len(my_bicycles)
+
+COMMAND:
+{{ my_bicycles|length }}
+
+
+Template-level operations introduce additional overhead and should be avoided for heavy computation.
+
+The optimal approach depends on surrounding context. Sometimes invoking QuerySet.count() directly from templates is appropriate.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+The operation can be delegated to the database
+DO NOT USE WHEN:
+
+The database query cost outweighs the benefit
+
+SECTION: Caching Fundamentals
+
+PURPOSE:
+Avoid expensive recomputation of values.
+
+CONCEPT:
+
+Caching stores computed values for reuse, significantly reducing resource consumption. Django provides a comprehensive caching framework supporting multiple levels of granularity:
+
+Entire site
+
+Individual views
+
+Partial template fragments
+
+Caching is a final optimization step, not a substitute for poorly written code.
+
+SECTION: The Django Caching Framework
+
+PURPOSE:
+Enable structured caching strategies.
+
+CONCEPT:
+
+Django’s caching framework allows developers to store and retrieve computed content efficiently, reducing database and CPU load.
+
+SECTION: cached_property
+
+PURPOSE:
+Cache expensive method results at the object level.
+
+CONCEPT:
+
+The cached_property decorator stores the result of a method on first access. Subsequent accesses return the cached value.
+
+Constraints:
+
+Method must accept only self
+
+Method becomes a property
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Method computation is expensive and reused
+DO NOT USE WHEN:
+
+Method depends on frequently changing state
+
+SECTION: Understanding Laziness
+
+PURPOSE:
+Delay computation until results are needed.
+
+CONCEPT:
+
+Laziness postpones computation rather than avoiding it through storage. It reduces unnecessary work when results may never be used.
+
+Python supports lazy evaluation through generators and generator expressions.
+
+SECTION: Laziness in Django
+
+PURPOSE:
+Explain lazy evaluation in Django internals.
+
+CONCEPT:
+
+Django QuerySet objects are lazy. Creating or chaining QuerySets does not execute database queries until evaluation is forced.
+
+Certain operations trigger evaluation. Avoiding premature evaluation prevents unnecessary database access.
+
+Django provides the keep_lazy() decorator to propagate laziness through functions when lazy arguments are passed.
+
+SECTION: Database Optimization
+
+PURPOSE:
+Improve database performance and query efficiency.
+
+CONCEPT:
+
+Django’s ORM includes tools and patterns for efficient database usage. Optimization includes reducing query counts, avoiding unnecessary joins, and batching operations.
+
+SECTION: Persistent Database Connections
+
+PURPOSE:
+Reduce database connection overhead.
+
+CONCEPT:
+
+Persistent connections reuse database connections across requests. This improves performance when connection setup time is significant, such as on virtualized or network-limited environments.
+
+SECTION: HTTP Performance via Middleware
+
+PURPOSE:
+Optimize HTTP responses.
+
+SECTION: ConditionalGetMiddleware
+
+PURPOSE:
+Enable conditional HTTP responses.
+
+CONCEPT:
+
+Adds support for conditional GET requests using ETag and Last-Modified headers. Prevents unnecessary data transfer when content has not changed.
+
+SECTION: GZipMiddleware
+
+PURPOSE:
+Compress HTTP responses.
+
+CONCEPT:
+
+Compresses responses to reduce bandwidth usage and transfer time.
+
+WARNING:
+
+GZipMiddleware is considered a security risk and vulnerable to attacks that bypass TLS protections.
+
+SECTION: Session Performance
+
+PURPOSE:
+Reduce session storage overhead.
+
+SECTION: Cached Sessions
+
+PURPOSE:
+Speed up session access.
+
+CONCEPT:
+
+Cached session backends store session data in memory instead of slower storage systems like databases.
+
+SECTION: Static File Optimization
+
+PURPOSE:
+Improve delivery of non-dynamic assets.
+
+CONCEPT:
+
+Static files are ideal for aggressive optimization because they do not change per request.
+
+SECTION: ManifestStaticFilesStorage
+
+PURPOSE:
+Enable long-term browser caching.
+
+CONCEPT:
+
+Appends content-based hashes to filenames. When files change, filenames change, forcing browsers to reload assets automatically.
+
+SECTION: Minification
+
+PURPOSE:
+Reduce asset size.
+
+CONCEPT:
+
+Minification removes whitespace, comments, and unnecessary characters from HTML, CSS, and JavaScript, reducing payload size.
+
+SECTION: Template Performance Considerations
+
+PURPOSE:
+Optimize template rendering.
+
+CONCEPT:
+
+{% block %} is faster than {% include %}
+
+Excessive template fragmentation degrades performance
+
+SECTION: Cached Template Loader
+
+PURPOSE:
+Avoid repeated template compilation.
+
+CONCEPT:
+
+The cached template loader prevents recompiling templates on every render, significantly improving performance.
+
+SECTION: Software Version Optimization
+
+PURPOSE:
+Evaluate performance across software versions.
+
+CONCEPT:
+
+Newer versions of Django, Python, and dependencies often perform better, but improvements are not guaranteed. Always benchmark real-world performance.
+
+Replacing software should not be the first optimization strategy.
+
+SECTION: Alternative Template Engines
+
+PURPOSE:
+Improve template rendering performance when necessary.
+
+CONCEPT:
+
+Django’s template language is sufficient for most use cases. If templates are a proven bottleneck, alternative engines such as Jinja2 may offer speed improvements.
+
+Template logic should be minimized regardless of engine choice.
+
+SECTION: Alternative Python Implementations
+
+PURPOSE:
+Explore execution-level performance improvements.
+
+SECTION: PyPy
+
+PURPOSE:
+Use an alternative Python interpreter.
+
+CONCEPT:
+
+PyPy can provide substantial performance gains for CPU-intensive applications. Django supports PyPy versions aligned with supported Python releases.
+
+Third-party library compatibility must be verified.
+
+SECTION: C Implementations of Python Libraries
+
+PURPOSE:
+Accelerate specific operations.
+
+CONCEPT:
+
+Some libraries offer C-based implementations for faster execution. Compatibility and behavior differences may exist.
+
+Execution speed improvements rarely solve architectural inefficiencies such as poor database usage.
+
+SUMMARY:
+
+Performance optimization requires clear goals and measurement
+
+Databases should handle heavy aggregation
+
+Caching and laziness prevent unnecessary computation
+
+Middleware, sessions, and static files offer significant gains
+
+Template logic should be minimal
+
+Software upgrades require benchmarking
+
+Execution speed optimizations are secondary to architectural fixes

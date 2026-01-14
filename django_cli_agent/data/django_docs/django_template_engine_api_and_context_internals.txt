@@ -1,0 +1,393 @@
+SECTION: Django Template System for Python Programmers
+
+PURPOSE:
+Explain how Django’s template system works internally and how it can be configured and extended using Python APIs.
+
+CONCEPT:
+
+This documentation describes the low-level Django template APIs used by Python code. It assumes familiarity with templates, contexts, variables, tags, and rendering. High-level template backend APIs are preferred in most Django projects.
+
+SECTION: Template Rendering Lifecycle
+
+PURPOSE:
+Describe the three-step process used to render templates in Django.
+
+CONCEPT:
+
+The Django template system follows a strict lifecycle:
+
+Configure a template Engine
+
+Compile template source into a Template
+
+Render the Template with a Context
+
+Django projects typically use backend-agnostic APIs rather than direct use of these low-level classes.
+
+SECTION: Engine Configuration
+CONCEPT:
+
+An Engine instance controls template loading, parsing, and rendering behavior. It is normally managed by the DjangoTemplates backend but can be instantiated directly.
+
+CLASS SIGNATURE:
+Engine(
+    dirs=None,
+    app_dirs=False,
+    context_processors=None,
+    debug=False,
+    loaders=None,
+    string_if_invalid='',
+    file_charset='utf-8',
+    libraries=None,
+    builtins=None,
+    autoescape=True,
+)
+
+PARAMETERS:
+
+dirs
+List of directories searched for templates.
+Default: empty list.
+
+app_dirs
+Enables app template discovery when True.
+Default: False.
+
+autoescape
+Enables HTML autoescaping.
+Default: True.
+
+WARNING:
+DO NOT set to False unless rendering non-HTML templates.
+
+context_processors
+List of callables that populate context when rendering with a request.
+Default: empty list.
+
+debug
+Enables template debug information.
+Default: False.
+
+loaders
+Template loader classes used to locate templates.
+Default loaders:
+
+filesystem loader
+
+app directories loader (only if app_dirs=True)
+These are wrapped by the cached loader.
+
+string_if_invalid
+Output for invalid variables.
+Default: empty string.
+
+file_charset
+Charset used when reading template files.
+Default: utf-8.
+
+libraries
+Dictionary mapping labels to template tag modules.
+
+builtins
+List of template tag libraries loaded automatically.
+
+SECTION: Engine Utility Methods
+METHOD: Engine.get_default()
+CONCEPT:
+
+Returns the first configured Engine from DjangoTemplates.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Maintaining legacy APIs requiring a global engine
+
+DO NOT USE WHEN:
+
+Writing new code or explicit engine configurations
+
+METHOD: Engine.from_string(template_code)
+CONCEPT:
+
+Compiles template source code directly into a Template.
+
+METHOD: Engine.get_template(template_name)
+CONCEPT:
+
+Loads, compiles, and returns a named template.
+
+METHOD: Engine.select_template(template_name_list)
+CONCEPT:
+
+Returns the first template found from a list of names.
+
+SECTION: Template Compilation
+CLASS: django.template.Template
+CONCEPT:
+
+Represents compiled template code. Parsing happens once, producing an internal tree structure optimized for reuse.
+
+COMMAND:
+from django.template import Template
+
+template = Template("My name is {{ my_name }}.")
+
+SECTION: Context Rendering
+CLASS: django.template.Context
+CONCEPT:
+
+Provides variable resolution and rendering behavior for templates.
+
+CLASS SIGNATURE:
+Context(dict=None, autoescape=True, use_l10n=None, use_tz=None)
+
+PARAMETERS:
+
+autoescape
+Controls HTML escaping.
+Default: True.
+
+use_l10n
+Enables localization for numbers and dates.
+
+use_tz
+Forces timezone-aware rendering.
+
+METHOD: Template.render(context)
+COMMAND:
+from django.template import Context, Template
+
+template = Template("My name is {{ my_name }}.")
+context = Context({"my_name": "Adrian"})
+template.render(context)
+
+SECTION: Variable Resolution and Lookups
+CONCEPT:
+
+Variable names may contain letters, digits, underscores, and dots. Dots trigger lookup resolution.
+
+Lookup order:
+
+Dictionary lookup
+
+Attribute lookup
+
+List index lookup
+
+IMPORTANT RULE:
+
+Dot segments are treated as literal strings, not variables.
+
+SECTION: Callable Variables
+CONCEPT:
+
+If a resolved variable is callable, Django attempts to call it without arguments.
+
+RULES:
+
+Exceptions propagate unless silent_variable_failure=True
+
+Methods with alters_data=True are never called
+
+Methods with do_not_call_in_templates=True are treated as non-callable
+
+SECTION: Invalid Variable Handling
+CONCEPT:
+
+Invalid variables render as string_if_invalid (default: empty string).
+
+SPECIAL CASES:
+
+In if, for, and regroup, invalid variables evaluate as None
+
+Filters are applied only if string_if_invalid == ''
+
+%s in string_if_invalid is replaced with the variable name
+
+USAGE GUIDELINES:
+
+DO NOT enable string_if_invalid globally.
+Use only for targeted debugging.
+
+SECTION: Built-in Context Variables
+CONCEPT:
+
+Every context automatically includes:
+
+True
+
+False
+
+None
+
+SECTION: String Literal Limitations
+CONCEPT:
+
+Django templates cannot escape template syntax characters.
+
+CONSEQUENCES:
+
+{% and %} cannot appear in string literals
+
+Reserved sequences cause TemplateSyntaxError
+
+WORKAROUNDS:
+
+Store values in variables
+
+Use custom tags or filters
+
+Use templatetag for literal output
+
+SECTION: Context as a Stack
+CONCEPT:
+
+Context behaves as a stack with push() and pop() operations.
+
+METHODS:
+
+get(key, default)
+
+setdefault(key, default)
+
+push()
+
+pop()
+
+update(dict)
+
+flatten()
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Writing custom template tags
+
+Managing scoped context data
+
+SECTION: RequestContext
+CLASS: django.template.RequestContext
+CONCEPT:
+
+Extends Context by:
+
+Accepting an HttpRequest
+
+Automatically applying context processors
+
+Always enabling CSRF protection
+
+SECTION: Context Processors
+CONCEPT:
+
+Context processors are callables that inject variables into the template context.
+
+BUILT-IN PROCESSORS:
+
+django.contrib.auth.context_processors.auth
+
+django.template.context_processors.debug
+
+django.template.context_processors.i18n
+
+django.template.context_processors.media
+
+django.template.context_processors.static
+
+django.template.context_processors.csrf
+
+django.template.context_processors.csp (Django 6.0)
+
+django.template.context_processors.request
+
+django.template.context_processors.tz
+
+django.contrib.messages.context_processors.messages
+
+RULE:
+
+Later processors override earlier ones.
+
+SECTION: Writing Custom Context Processors
+CONCEPT:
+
+A context processor:
+
+Accepts an HttpRequest
+
+Returns a dictionary
+
+COMMAND:
+def from_email(request):
+    return {"DEFAULT_FROM_EMAIL": settings.DEFAULT_FROM_EMAIL}
+
+SECTION: Template Loading Configuration
+CONCEPT:
+
+Templates are typically stored on disk and discovered using loaders.
+
+SECTION: Template Directories (DIRS)
+CONCEPT:
+
+Defines filesystem paths searched for templates.
+
+COMMAND:
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+    }
+]
+
+SECTION: Template Loaders
+LOADER: filesystem.Loader
+
+ROLE: Loads templates from directories defined in DIRS.
+
+LOADER: app_directories.Loader
+
+ROLE: Loads templates from templates/ directories inside installed apps.
+
+LOADER: cached.Loader
+
+ROLE: Caches compiled templates in memory for performance.
+
+LOADER: locmem.Loader
+
+ROLE: Loads templates from an in-memory dictionary.
+USE WHEN: Testing only.
+
+SECTION: Custom Template Loaders
+CONCEPT:
+
+Custom loaders must inherit from django.template.loaders.base.Loader.
+
+REQUIRED METHODS:
+
+get_template_sources()
+
+get_contents()
+
+SECTION: Template Origin Metadata
+CLASS: django.template.Origin
+ATTRIBUTES:
+
+name: Full template path
+
+template_name: Relative template name
+
+loader: Loader instance used
+
+SUMMARY:
+
+Django templates follow a strict engine → template → context lifecycle
+
+Variable resolution uses ordered lookup rules
+
+Context behaves as a scoped stack
+
+Loaders determine where templates come from
+
+Context processors inject request-aware data

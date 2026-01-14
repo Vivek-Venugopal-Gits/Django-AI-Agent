@@ -1,0 +1,355 @@
+PURPOSE:
+Explain what Django admin actions are and when they should be used to perform bulk operations.
+
+Django admin actions allow bulk operations on multiple selected objects from the admin change list. Instead of editing objects one by one, actions enable batch processing through custom functions registered with the Django admin.
+
+Django provides a built-in example: the delete selected objects action, which applies to all models by default.
+
+IMPORTANT BEHAVIOR:
+The built-in delete action uses QuerySet.delete() for performance. This DOES NOT call the model’s delete() method.
+
+To override this behavior:
+
+Override ModelAdmin.delete_queryset(), OR
+
+Write a custom admin action that explicitly calls Model.delete() on each object.
+
+SECTION: Writing Admin Actions
+
+PURPOSE:
+Explain how to create custom admin actions for bulk model operations.
+
+Admin actions are Python functions invoked with the selected objects from the admin interface.
+
+CONCEPT: Action Function Signature
+
+Admin action functions MUST accept exactly three parameters:
+
+modeladmin: The active ModelAdmin instance
+
+request: The current HttpRequest
+
+queryset: A QuerySet of selected objects
+
+COMMAND: Example Model Definition
+CODE:
+from django.db import models
+
+STATUS_CHOICES = {
+    "d": "Draft",
+    "p": "Published",
+    "w": "Withdrawn",
+}
+
+class Article(models.Model):
+    title = models.CharField(max_length=100)
+    body = models.TextField()
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES)
+
+    def __str__(self):
+        return self.title
+
+CONCEPT: Basic Action Implementation
+
+This action updates all selected articles to a published state using a bulk update.
+
+COMMAND: Simple Action Function
+CODE:
+def make_published(modeladmin, request, queryset):
+    queryset.update(status="p")
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Performing bulk updates efficiently
+
+Model save() logic is not required
+
+DO NOT USE WHEN:
+
+You need per-object logic
+
+Signals or overridden save() methods must run
+
+CONCEPT: Iterating Over Objects
+
+For actions requiring per-object processing, iterate manually:
+
+for obj in queryset:
+    do_something_with(obj)
+
+SECTION: Adding Human-Readable Action Labels
+
+PURPOSE:
+Improve admin usability by providing clear action descriptions.
+
+By default, Django derives action names from function names. Use the @admin.action decorator to define a readable label.
+
+COMMAND: Action With Description
+CODE:
+from django.contrib import admin
+
+@admin.action(description="Mark selected stories as published")
+def make_published(modeladmin, request, queryset):
+    queryset.update(status="p")
+
+SECTION: Registering Actions With ModelAdmin
+
+PURPOSE:
+Make actions available on a specific model’s admin page.
+
+COMMAND: Complete admin.py Example
+CODE:
+from django.contrib import admin
+from myapp.models import Article
+
+@admin.action(description="Mark selected stories as published")
+def make_published(modeladmin, request, queryset):
+    queryset.update(status="p")
+
+class ArticleAdmin(admin.ModelAdmin):
+    list_display = ["title", "status"]
+    ordering = ["title"]
+    actions = [make_published]
+
+admin.site.register(Article, ArticleAdmin)
+
+SECTION: Handling Errors in Actions
+
+PURPOSE:
+Ensure graceful failure and user feedback during action execution.
+
+Action errors MUST be handled explicitly. Use ModelAdmin.message_user() to notify users of failures.
+
+SECTION: Advanced Admin Action Techniques
+
+PURPOSE:
+Describe advanced patterns for organizing, extending, and controlling admin actions.
+
+SECTION: Actions as ModelAdmin Methods
+
+PURPOSE:
+Improve code organization and access to ModelAdmin utilities.
+
+Actions can be defined as instance methods instead of standalone functions.
+
+COMMAND: Method-Based Action
+CODE:
+class ArticleAdmin(admin.ModelAdmin):
+    actions = ["make_published"]
+
+    @admin.action(description="Mark selected stories as published")
+    def make_published(self, request, queryset):
+        queryset.update(status="p")
+
+CONCEPT: Messaging Users After Action Completion
+
+Method-based actions allow direct access to message_user().
+
+COMMAND: Action With Success Feedback
+CODE:
+from django.contrib import messages
+from django.utils.translation import ngettext
+
+class ArticleAdmin(admin.ModelAdmin):
+
+    def make_published(self, request, queryset):
+        updated = queryset.update(status="p")
+        self.message_user(
+            request,
+            ngettext(
+                "%d story was successfully marked as published.",
+                "%d stories were successfully marked as published.",
+                updated,
+            ) % updated,
+            messages.SUCCESS,
+        )
+
+SECTION: Actions With Intermediate Pages
+
+PURPOSE:
+Explain how to interrupt default redirects and return custom responses.
+
+Actions may return an HttpResponse to display intermediate pages.
+
+COMMAND: Export Action Returning JSON
+CODE:
+from django.core import serializers
+from django.http import HttpResponse
+
+def export_as_json(modeladmin, request, queryset):
+    response = HttpResponse(content_type="application/json")
+    serializers.serialize("json", queryset, stream=response)
+    return response
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Immediate file or data responses are required
+
+DO NOT USE WHEN:
+
+Complex user interaction is needed
+
+Preferred approach: redirect to a custom view.
+
+COMMAND: Redirect-Based Export Action
+CODE:
+from django.contrib.contenttypes.models import ContentType
+from django.http import HttpResponseRedirect
+
+def export_selected_objects(modeladmin, request, queryset):
+    selected = queryset.values_list("pk", flat=True)
+    ct = ContentType.objects.get_for_model(queryset.model)
+    return HttpResponseRedirect(
+        "/export/?ct=%s&ids=%s"
+        % (ct.pk, ",".join(str(pk) for pk in selected))
+    )
+
+SECTION: Making Actions Site-Wide
+
+PURPOSE:
+Expose actions globally across all admin models.
+
+COMMAND: Register Global Action
+CODE:
+from django.contrib import admin
+
+admin.site.add_action(export_selected_objects)
+
+
+Optional explicit name:
+
+admin.site.add_action(export_selected_objects, "export_selected")
+
+SECTION: Disabling Admin Actions
+
+PURPOSE:
+Control which actions are available globally or per model.
+
+CONCEPT: Disabling a Site-Wide Action
+COMMAND: Disable Global Delete Action
+CODE:
+admin.site.disable_action("delete_selected")
+
+CONCEPT: Re-Enabling for a Specific Model
+class AnotherModelAdmin(admin.ModelAdmin):
+    actions = ["delete_selected", "a_third_action"]
+
+CONCEPT: Disabling All Actions for a Model
+COMMAND:
+CODE:
+class MyModelAdmin(admin.ModelAdmin):
+    actions = None
+
+SECTION: Conditional Action Availability
+
+PURPOSE:
+Enable or disable actions dynamically per request or user.
+
+COMMAND: Override get_actions()
+CODE:
+class MyModelAdmin(admin.ModelAdmin):
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if request.user.username[0].upper() != "J":
+            if "delete_selected" in actions:
+                del actions["delete_selected"]
+        return actions
+
+SECTION: Action Permissions
+
+PURPOSE:
+Restrict actions based on user permissions.
+
+CONCEPT: Permission-Based Actions
+COMMAND: Restrict Action to Change Permission
+CODE:
+@admin.action(permissions=["change"])
+def make_published(modeladmin, request, queryset):
+    queryset.update(status="p")
+
+
+Available permission checks:
+
+add
+
+change
+
+delete
+
+view
+
+Custom permissions are supported via has_<permission>_permission().
+
+COMMAND: Custom Permission 
+CODE:
+from django.contrib import admin
+from django.contrib.auth import get_permission_codename
+
+class ArticleAdmin(admin.ModelAdmin):
+    actions = ["make_published"]
+
+    @admin.action(permissions=["publish"])
+    def make_published(self, request, queryset):
+        queryset.update(status="p")
+
+    def has_publish_permission(self, request):
+        opts = self.opts
+        codename = get_permission_codename("publish", opts)
+        return request.user.has_perm("%s.%s" % (opts.app_label, codename))
+
+SECTION: The action Decorator
+
+PURPOSE:
+Standardize metadata for admin actions.
+
+CONCEPT: action() Decorator Behavior
+
+The @admin.action decorator assigns:
+
+Allowed permissions
+
+Human-readable descriptions
+
+COMMAND: Decorator Usage
+CODE:
+@admin.action(
+    permissions=["publish"],
+    description="Mark selected stories as published",
+)
+def make_published(self, request, queryset):
+    queryset.update(status="p")
+
+
+Equivalent to:
+
+make_published.allowed_permissions = ["publish"]
+make_published.short_description = "Mark selected stories as published"
+
+
+The decorator may be used without arguments as a marker:
+
+@admin.action
+def make_inactive(self, request, queryset):
+    queryset.update(is_active=False)
+
+
+Action descriptions support string interpolation using:
+
+%(verbose_name)s
+
+%(verbose_name_plural)s
+
+SUMMARY:
+
+Admin actions enable bulk operations in Django admin
+
+Actions can be functions or ModelAdmin methods
+
+Permissions and availability are fully customizable
+
+Global, conditional, and intermediate-response actions are supported

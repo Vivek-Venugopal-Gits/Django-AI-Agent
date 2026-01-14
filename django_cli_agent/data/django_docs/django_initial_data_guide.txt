@@ -1,0 +1,52 @@
+PURPOSE: This section explains prepopulating databases with initial data using migrations or fixtures.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+New apps needing hardcoded data.
+
+SECTION: PROVIDE INITIAL DATA WITH MIGRATIONS
+PURPOSE: This section recommends data migrations for automatic loading.
+CONCEPT: DATA MIGRATIONS
+Create data migration; runs on test DB setup (with limitations).
+SECTION: PROVIDE DATA WITH FIXTURES
+PURPOSE: This section explains fixtures for data collections.
+CONCEPT: FIXTURES OVERVIEW
+Collection importable to DB.
+Create: manage.py dumpdata.
+Or hand-write: JSON, XML, YAML (PyYAML needed).
+CODE EXAMPLE:
+JSON[
+  {
+    "model": "myapp.person",
+    "pk": 1,
+    "fields": {
+      "first_name": "John",
+      "last_name": "Lennon"
+    }
+  },
+  {
+    "model": "myapp.person",
+    "pk": 2,
+    "fields": {
+      "first_name": "Paul",
+      "last_name": "McCartney"
+    }
+  }
+]
+YAML equivalent.
+Store in app/fixtures/.
+Load: manage.py loaddata <fixturename>.
+Reloads each time; overwrites changes.
+Not auto-loaded except TransactionTestCase.fixtures.
+See serialization docs for formats.
+CONCEPT: TELL DJANGO WHERE TO LOOK FOR FIXTURE FILES
+Default: app/fixtures/.
+Relative: my_app/sample → my_app/fixtures/my_app/sample.json.
+FIXTURE_DIRS for additional directories.
+Absolute path: no default search.
+Namespace: app directory to avoid name conflicts.
+SUMMARY:
+
+Preferred: data migrations (auto on test).
+Alternative: fixtures (manual loaddata).

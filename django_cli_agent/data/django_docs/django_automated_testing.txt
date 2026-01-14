@@ -1,0 +1,279 @@
+SECTION: Tutorial Overview - Writing Your First Django App, Part 5
+PURPOSE:
+This section continues the poll application tutorial by introducing automated testing to verify code behavior and prevent bugs.
+SECTION: Automated Testing Introduction
+CONCEPT:
+Automated tests are routines that verify code operation at various levels, from individual methods to overall application behavior. They run systematically, unlike manual checks.
+VERSION AND SCOPE ANCHORS:
+DJANGO VERSION: 6.0
+PYTHON VERSION: 3.12 and later
+APPLICABILITY:
+
+Applies to model methods, views, and user interactions.
+
+SECTION: Benefits of Automated Testing
+CONCEPT:
+Create tests to save time, prevent problems, enhance code attractiveness, and facilitate team collaboration.
+Tests automate verification, identifying issues quickly during changes.
+Without tests, application behavior remains opaque, complicating maintenance.
+Tests illuminate code internals and pinpoint failures.
+Other developers require tests for trust; code without tests is considered broken by design.
+In teams, tests prevent accidental breaks in shared code.
+SUMMARY:
+
+Tests automate checks to save manual effort.
+Prevent and identify bugs efficiently.
+Increase code credibility.
+Support collaborative development.
+
+SECTION: Basic Testing Strategies
+CONCEPT:
+Approach testing via test-driven development: write tests before code to formalize requirements.
+Alternatively, add tests after coding, especially for new features or bug fixes.
+Start testing when adding features or fixing bugs in existing code.
+DO NOT delay testing; integrate it early.
+SECTION: Identifying a Bug in Model Method
+CONCEPT:
+The Question.was_published_recently() method incorrectly returns True for future pub_date values.
+COMMAND:
+
+python manage.py shell
+In shell:
+
+import datetime
+from django.utils import timezone
+future_question = Question(pub_date=timezone.now() + datetime.timedelta(days=30))
+future_question.was_published_recently()  # Returns True, but should be False
+SECTION: Creating a Test to Expose the Bug
+CONCEPT:
+Place tests in polls/tests.py.
+Subclass django.test.TestCase and define methods starting with test_.
+Code for polls/tests.py:
+
+import datetime
+from django.test import TestCase
+from django.utils import timezone
+from .models import Question
+
+class QuestionModelTests(TestCase):
+    def test_was_published_recently_with_future_question(self):
+        """
+        was_published_recently() returns False for questions whose pub_date
+        is in the future.
+        """
+        time = timezone.now() + datetime.timedelta(days=30)
+        future_question = Question(pub_date=time)
+        self.assertIs(future_question.was_published_recently(), False)
+SECTION: Running Tests
+CONCEPT:
+Execute tests to detect failures.
+COMMAND:
+python manage.py test polls
+Output shows failure if bug exists, including traceback and line number.
+System creates a test database, runs methods, and destroys the database.
+SECTION: Fixing the Bug in Model Method
+CONCEPT:
+Update Question.was_published_recently() to return True only for past or current dates within one day.
+Code for polls/models.py:
+Pythondef was_published_recently(self):
+    now = timezone.now()
+    return now - datetime.timedelta(days=1) <= self.pub_date <= now
+Rerun tests to confirm fix.
+SECTION: Adding Comprehensive Model Tests
+CONCEPT:
+Add tests for old and recent questions to ensure method behavior.
+Code for polls/tests.py:
+def test_was_published_recently_with_old_question(self):
+    """
+    was_published_recently() returns False for questions whose pub_date
+    is older than 1 day.
+    """
+    time = timezone.now() - datetime.timedelta(days=1, seconds=1)
+    old_question = Question(pub_date=time)
+    self.assertIs(old_question.was_published_recently(), False)
+
+def test_was_published_recently_with_recent_question(self):
+    """
+    was_published_recently() returns True for questions whose pub_date
+    is within the last day.
+    """
+    time = timezone.now() - datetime.timedelta(hours=23, minutes=59, seconds=59)
+    recent_question = Question(pub_date=time)
+    self.assertIs(recent_question.was_published_recently(), True)
+SUMMARY:
+
+Write tests first to expose bugs.
+Fix code to pass tests.
+Add multiple tests for thorough coverage.
+
+SECTION: Testing Views
+CONCEPT:
+Test views to simulate user interactions via browser.
+Future questions should not appear in index or detail views.
+SECTION: Using the Django Test Client
+CONCEPT:
+Use django.test.Client to simulate requests.
+In shell, setup environment first.
+COMMAND:
+python manage.py shell
+In shell:
+from django.test.utils import setup_test_environment
+setup_test_environment()
+
+from django.test import Client
+client = Client()
+
+response = client.get("/")  # 404 expected
+response.status_code  # 404
+
+from django.urls import reverse
+response = client.get(reverse("polls:index"))  # 200 expected
+response.status_code  # 200
+response.content
+response.context["latest_question_list"]
+No test database setup in shell; uses existing database.
+SECTION: Improving the Index View
+CONCEPT:
+Filter index queryset to exclude future questions.
+Code for polls/views.py:
+from django.utils import timezone
+
+class IndexView(generic.ListView):
+    template_name = "polls/index.html"
+    context_object_name = "latest_question_list"
+
+    def get_queryset(self):
+        """
+        Return the last five published questions (not including those set to be
+        published in the future).
+        """
+        return Question.objects.filter(pub_date__lte=timezone.now()).order_by("-pub_date")[:5]
+SECTION: Testing the Improved Index View
+CONCEPT:
+Add tests for various question scenarios in index view.
+Code for polls/tests.py:
+from django.urls import reverse
+
+def create_question(question_text, days):
+    """
+    Create a question with the given `question_text` and published the
+    given number of `days` offset to now (negative for questions published
+    in the past, positive for questions that have yet to be published).
+    """
+    time = timezone.now() + datetime.timedelta(days=days)
+    return Question.objects.create(question_text=question_text, pub_date=time)
+
+class QuestionIndexViewTests(TestCase):
+    def test_no_questions(self):
+        """
+        If no questions exist, an appropriate message is displayed.
+        """
+        response = self.client.get(reverse("polls:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No polls are available.")
+        self.assertQuerySetEqual(response.context["latest_question_list"], [])
+
+    def test_past_question(self):
+        """
+        Questions with a pub_date in the past are displayed on the
+        index page.
+        """
+        question = create_question(question_text="Past question.", days=-30)
+        response = self.client.get(reverse("polls:index"))
+        self.assertQuerySetEqual(
+            response.context["latest_question_list"],
+            [question],
+        )
+
+    def test_future_question(self):
+        """
+        Questions with a pub_date in the future aren't displayed on
+        the index page.
+        """
+        create_question(question_text="Future question.", days=30)
+        response = self.client.get(reverse("polls:index"))
+        self.assertContains(response, "No polls are available.")
+        self.assertQuerySetEqual(response.context["latest_question_list"], [])
+
+    def test_future_question_and_past_question(self):
+        """
+        Even if both past and future questions exist, only past questions
+        are displayed.
+        """
+        question = create_question(question_text="Past question.", days=-30)
+        create_question(question_text="Future question.", days=30)
+        response = self.client.get(reverse("polls:index"))
+        self.assertQuerySetEqual(
+            response.context["latest_question_list"],
+            [question],
+        )
+
+    def test_two_past_questions(self):
+        """
+        The questions index page may display multiple questions.
+        """
+        question1 = create_question(question_text="Past question 1.", days=-30)
+        question2 = create_question(question_text="Past question 2.", days=-5)
+        response = self.client.get(reverse("polls:index"))
+        self.assertQuerySetEqual(
+            response.context["latest_question_list"],
+            [question2, question1],
+        )
+Use assertContains and assertQuerySetEqual for response checks.
+SECTION: Testing the Detail View
+CONCEPT:
+Filter detail queryset to exclude future questions.
+Code for polls/views.py:
+class DetailView(generic.DetailView):
+    model = Question
+    template_name = "polls/detail.html"
+
+    def get_queryset(self):
+        """
+        Excludes any questions that aren't published yet.
+        """
+        return Question.objects.filter(pub_date__lte=timezone.now())
+Add tests:
+Code for polls/tests.py:
+class QuestionDetailViewTests(TestCase):
+    def test_future_question(self):
+        """
+        The detail view of a question with a pub_date in the future
+        returns a 404 not found.
+        """
+        future_question = create_question(question_text="Future question.", days=5)
+        url = reverse("polls:detail", args=(future_question.id,))
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_past_question(self):
+        """
+        The detail view of a question with a pub_date in the past
+        displays the question's text.
+        """
+        past_question = create_question(question_text="Past Question.", days=-5)
+        url = reverse("polls:detail", args=(past_question.id,))
+        response = self.client.get(url)
+        self.assertContains(response, past_question.question_text)
+SECTION: Additional Test Ideas
+CONCEPT:
+Add similar filter to ResultsView.
+Test questions without choices are not published.
+Test admin users see unpublished questions, but visitors do not.
+Accompany every code change with tests.
+SECTION: Managing Test Growth
+CONCEPT:
+Allow tests to grow; redundancy is beneficial.
+Update tests as code changes; failures indicate needed amendments.
+Organize tests with separate TestClass per model/view, methods per condition, descriptive names.
+SECTION: Advanced Testing
+CONCEPT:
+Use tools like Selenium for in-browser testing with LiveServerTestCase.
+Automate tests in continuous integration.
+Check code coverage to identify untested areas.
+Refactor or remove untestable code.
+SUMMARY:
+
+Integrate external tools for browser simulation.
+Automate for quality control.
+Use coverage for completeness.

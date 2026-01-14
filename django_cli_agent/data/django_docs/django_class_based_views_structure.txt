@@ -1,0 +1,173 @@
+SECTION: CLASS-BASED VIEWS
+PURPOSE: Explains how Django’s class-based views (CBVs) work, how to create and use them, and how they support reusable, structured code in web applications.
+
+CONCEPT: DEFINITION OF A VIEW
+A view is a callable that takes an HTTP request and returns an HTTP response.
+In Django, views can be functions or classes. Class-based views allow views to be structured using inheritance and mixins for better code reuse.
+
+CONCEPT: BASE VIEW CLASSES
+All class-based views inherit from the base class django.views.generic.base.View.
+This base class provides mechanisms for:
+
+Integrating views with URL patterns.
+
+Dispatching HTTP requests based on request methods (e.g., GET, POST).
+
+Common shared functionality for reusable and readable view definitions.
+
+SECTION: BASIC EXAMPLES
+PURPOSE: Demonstrates simple class-based views provided by Django and how to use them.
+
+CONCEPT: TEMPLATEVIEW AND REDIRECTVIEW
+TemplateView: Renders a template in response to a request.
+
+RedirectView: Implements HTTP redirects.
+
+COMMAND: EXAMPLE – SIMPLE TEMPLATEVIEW
+python
+from django.urls import path
+from django.views.generic import TemplateView
+
+urlpatterns = [
+    path("about/", TemplateView.as_view(template_name="about.html")),
+]
+TemplateView.as_view() returns a callable suitable for URL configuration.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+Serving static or read-only templates (e.g., About, Contact pages).
+
+DO NOT USE WHEN:
+
+You need complex logic or dynamic content generation beyond context injection.
+
+SECTION: USING CBVS IN URLCONF
+PURPOSE: Describes how to connect class-based views directly into your urls.py.
+
+CONCEPT: PASSING ATTRIBUTES INTO AS_VIEW()
+Passing arguments to as_view() overrides attributes defined on the view class.
+For example, template_name or url can be overridden directly in URL configuration.
+
+SECTION: SUBCLASSING GENERIC VIEWS
+PURPOSE: Demonstrates how to create custom views by extending Django’s built-in generic views.
+
+CONCEPT: SUBCLASSING TEMPLATEVIEW
+A new view can inherit from an existing class and override attributes or methods.
+
+COMMAND: EXAMPLE – CUSTOM ABOUT VIEW
+python
+# some_app/views.py
+from django.views.generic import TemplateView
+
+class AboutView(TemplateView):
+    template_name = "about.html"
+COMMAND: ADDING THE VIEW TO URLCONF
+python
+# urls.py
+from django.urls import path
+from some_app.views import AboutView
+
+urlpatterns = [
+    path("about/", AboutView.as_view()),
+]
+This pattern converts the class into a callable function for Django’s URL system.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to reuse view logic across multiple endpoints.
+
+You want to override methods like get_context_data() for extra context.
+
+DO NOT USE WHEN:
+
+The view logic doesn’t require customization.
+
+SECTION: SUPPORTING OTHER HTTP METHODS
+PURPOSE: Demonstrates how class-based views handle multiple HTTP methods (GET, POST, HEAD, etc.).
+
+CONCEPT: ADDING HEAD METHOD
+You can define custom handlers like head() in your view class for specific HTTP methods.
+
+COMMAND: EXAMPLE – LIST VIEW WITH HEAD HANDLER
+python
+from django.http import HttpResponse
+from django.views.generic import ListView
+from books.models import Book
+
+class BookListView(ListView):
+    model = Book
+
+    def head(self, *args, **kwargs):
+        last_book = self.get_queryset().latest("publication_date")
+        response = HttpResponse(
+            headers={
+                "Last-Modified": last_book.publication_date.strftime(
+                    "%a, %d %b %Y %H:%M:%S GMT"
+                )
+            },
+        )
+        return response
+COMMAND: URL CONFIGURATION
+python
+from django.urls import path
+from books.views import BookListView
+
+urlpatterns = [
+    path("books/", BookListView.as_view()),
+]
+When accessed with a GET request, the view renders book_list.html with book data.
+With a HEAD request, it returns an empty body and a Last-Modified header indicating the most recent publication date.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+Building APIs where clients request metadata (e.g., timestamp, headers) without full payloads.
+
+DO NOT USE WHEN:
+
+Every request must return content in the response body.
+
+SECTION: ASYNCHRONOUS CLASS-BASED VIEWS
+PURPOSE: Explains how to use class-based views asynchronously in Django.
+
+CONCEPT: USING ASYNC VIEWS
+CBVs can define asynchronous methods (async def) to support non-blocking I/O.
+All user-defined handlers in a single view must follow the same model — either all def or all async def. Mixing both raises an ImproperlyConfigured error.
+
+Django automatically detects and executes async views within an asynchronous loop.
+
+COMMAND: EXAMPLE – SIMPLE ASYNC VIEW
+python
+import asyncio
+from django.http import HttpResponse
+from django.views import View
+
+class AsyncView(View):
+    async def get(self, request, *args, **kwargs):
+        await asyncio.sleep(1)
+        return HttpResponse("Hello async world!")
+USAGE GUIDELINES:
+USE WHEN:
+
+Your view performs I/O-bound operations such as external API requests or file reads.
+
+DO NOT USE WHEN:
+
+The task is CPU-bound or purely synchronous (e.g., heavy data processing).
+
+SUMMARY:
+All CBVs derive from View, enabling clear request handling and routing.
+
+TemplateView and RedirectView simplify static rendering and redirection.
+
+Views can be subclassed to override attributes or methods.
+
+Additional HTTP methods (e.g., head()) can enhance performance for APIs.
+
+Async views provide non-blocking performance improvements for I/O-heavy logic.
+
+DJANGO VERSION: 6.0
+PYTHON VERSION: Compatible with standard Python async syntax.
+APPLICABILITY: All Django applications using class-based views.

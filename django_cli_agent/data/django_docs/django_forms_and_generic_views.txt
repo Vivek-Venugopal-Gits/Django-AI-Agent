@@ -1,0 +1,167 @@
+SECTION: Tutorial Overview - Writing Your First Django App, Part 4
+PURPOSE:
+This section continues the poll application tutorial by implementing form processing for voting and refactoring views using generic views to reduce code.
+SECTION: Creating a Voting Form
+CONCEPT:
+Update the poll detail template to include a form for voting. The form displays radio buttons for choices and submits to the vote view.
+Code for polls/templates/polls/detail.html:
+<form action="{% url 'polls:vote' question.id %}" method="post">
+{% csrf_token %}
+<fieldset>
+    <legend><h1>{{ question.question_text }}</h1></legend>
+    {% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
+    {% for choice in question.choice_set.all %}
+        <input type="radio" name="choice" id="choice{{ forloop.counter }}" value="{{ choice.id }}">
+        <label for="choice{{ forloop.counter }}">{{ choice.choice_text }}</label><br>
+    {% endfor %}
+</fieldset>
+<input type="submit" value="Vote">
+</form>
+Each radio button has value as choice ID and name "choice". Submitting sends POST data choice=ID.
+Set form action to vote URL and method="post" for data modification.
+Use forloop.counter for unique IDs.
+Include {% csrf_token %} for protection against cross-site request forgeries in POST forms targeting internal URLs.
+USAGE GUIDELINES:
+USE WHEN:
+
+Forms modify server data.
+DO NOT USE WHEN:
+Forms only retrieve data; use GET instead.
+
+SECTION: Implementing the Vote View
+CONCEPT:
+Handle form submission in vote view to process selected choice, update votes, and redirect.
+Code for polls/views.py:
+from django.db.models import F
+from django.http import HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+
+from .models import Choice, Question
+
+def vote(request, question_id):
+    question = get_object_or_404(Question, pk=question_id)
+    try:
+        selected_choice = question.choice_set.get(pk=request.POST["choice"])
+    except (KeyError, Choice.DoesNotExist):
+        # Redisplay the question voting form.
+        return render(
+            request,
+            "polls/detail.html",
+            {
+                "question": question,
+                "error_message": "You didn't select a choice.",
+            },
+        )
+    else:
+        selected_choice.votes = F("votes") + 1
+        selected_choice.save()
+        # Always return an HttpResponseRedirect after successfully dealing
+        # with POST data. This prevents data from being posted twice if a
+        # user hits the Back button.
+        return HttpResponseRedirect(reverse("polls:results", args=(question.id,)))
+request.POST accesses submitted data; values are strings.
+Handle KeyError if no choice selected by redisplaying form with error.
+Use F("votes") + 1 to increment votes atomically.
+Always return HttpResponseRedirect after POST success to prevent duplicate submissions.
+Use reverse() to generate URLs dynamically.
+USAGE GUIDELINES:
+USE WHEN:
+
+Processing form data that modifies the database.
+DO NOT USE WHEN:
+Handling GET requests; separate views for read operations.
+
+SUMMARY:
+
+Forms submit POST data for modifications.
+Views handle errors and redirects.
+Use CSRF protection and atomic updates.
+
+SECTION: Implementing the Results View
+CONCEPT:
+Display voting results for a question.
+Code for polls/views.py:
+from django.shortcuts import get_object_or_404, render
+
+def results(request, question_id):
+    question = get_object_or_404(Question, pk=question_id)
+    return render(request, "polls/results.html", {"question": question})
+Code for polls/templates/polls/results.html:
+HTML<h1>{{ question.question_text }}</h1>
+
+<ul>
+{% for choice in question.choice_set.all %}
+    <li>{{ choice.choice_text }} -- {{ choice.votes }} vote{{ choice.votes|pluralize }}</li>
+{% endfor %}
+</ul>
+
+<a href="{% url 'polls:detail' question.id %}">Vote again?</a>
+SECTION: Refactoring with Generic Views
+CONCEPT:
+Replace custom views with generic views to abstract common patterns like listing and detailing objects.
+Generic views reduce code for database retrieval, template loading, and rendering.
+Evaluate generic views early in development for common cases.
+SECTION: Updating URLconf for Generic Views
+CONCEPT:
+Adjust URL patterns to use generic views and pk for primary key.
+Code for polls/urls.py:
+from django.urls import path
+
+from . import views
+
+app_name = "polls"
+urlpatterns = [
+    path("", views.IndexView.as_view(), name="index"),
+    path("<int:pk>/", views.DetailView.as_view(), name="detail"),
+    path("<int:pk>/results/", views.ResultsView.as_view(), name="results"),
+    path("<int:question_id>/vote/", views.vote, name="vote"),
+]
+Change pattern names to <pk> for DetailView compatibility.
+SECTION: Implementing Generic Views
+CONCEPT:
+Define class-based generic views for index, detail, and results.
+Code for polls/views.py:
+from django.db.models import F
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+from django.views import generic
+
+from .models import Choice, Question
+
+class IndexView(generic.ListView):
+    template_name = "polls/index.html"
+    context_object_name = "latest_question_list"
+
+    def get_queryset(self):
+        """Return the last five published questions."""
+        return Question.objects.order_by("-pub_date")[:5]
+
+class DetailView(generic.DetailView):
+    model = Question
+    template_name = "polls/detail.html"
+
+class ResultsView(generic.DetailView):
+    model = Question
+    template_name = "polls/results.html"
+
+def vote(request, question_id):
+    # same as above, no changes needed.
+    ...
+Specify model for DetailView or get_queryset for ListView.
+Override template_name to use custom templates instead of defaults like polls/question_detail.html.
+Set context_object_name to customize variable names in templates.
+Defaults provide question for DetailView and question_list for ListView.
+USAGE GUIDELINES:
+USE WHEN:
+
+Handling list or detail displays.
+DO NOT USE WHEN:
+Complex logic requires full custom views.
+
+SUMMARY:
+
+Generic views abstract common patterns.
+Specify model, template, and queryset.
+Reduce redundancy in code.

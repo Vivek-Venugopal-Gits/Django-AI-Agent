@@ -1,0 +1,50 @@
+SECTION: Tutorial Overview - Writing Your First Django App, Part 8
+PURPOSE:
+This section concludes the beginner tutorial by introducing third-party packages, highlighting Django's ecosystem strength, and demonstrating installation of Django Debug Toolbar as an example.
+SECTION: Django's Third-Party Ecosystem
+CONCEPT:
+Django excels due to its rich community-developed third-party packages. These reusable components quickly add features to applications.
+Discover packages via Django Packages, a directory comparing reusable apps, sites, tools, and more.
+SECTION: Installing Django Debug Toolbar
+CONCEPT:
+Django Debug Toolbar ranks highly in developer surveys (second in 2025 with 27% of top favorites). Community-maintained by Django Commons, it displays panels with debug info on requests/responses for development debugging.
+Install in activated virtual environment.
+COMMAND:
+python -m pip install django-debug-toolbar
+Current version (as of December 2025) is around 6.x, supporting Django ≥4.2.
+Post-installation setup includes:
+
+Adding "debug_toolbar" to INSTALLED_APPS.
+Adding DebugToolbarMiddleware to MIDDLEWARE.
+Including debug_toolbar.urls in project URLconf.
+Configuring INTERNAL_IPS.
+
+Follow official installation guide for exact steps, as they evolve independently of Django.
+Once set up, toolbar appears as a handle on the right in development browser views (e.g., /admin/). Click to open panels.
+USAGE GUIDELINES:
+USE WHEN:
+
+Local development for inspecting SQL queries, performance, templates, etc.
+DO NOT USE WHEN:
+Production; disable via DEBUG=False or conditional checks.
+
+SECTION: Troubleshooting and Getting Help
+CONCEPT:
+For issues (e.g., toolbar not appearing):
+
+Check package documentation (e.g., Tips/Troubleshooting section).
+Search issue tracker (GitHub for Django Debug Toolbar).
+Ask on Django Forum or Discord.
+
+SECTION: Selecting and Installing Other Packages
+CONCEPT:
+Choose packages based on needs: alpha for experimentation, stable for production.
+Evaluate maintenance: recent updates, activity, documentation, best practices.
+Django Packages displays metrics like last update.
+Gaps in packages offer contribution opportunities.
+SUMMARY:
+
+Ecosystem enables rapid feature addition.
+Install via pip; configure per package docs.
+Prioritize well-maintained packages.
+Use community resources for support.

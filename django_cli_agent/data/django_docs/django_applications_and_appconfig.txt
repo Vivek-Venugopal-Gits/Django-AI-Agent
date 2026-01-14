@@ -1,0 +1,128 @@
+PURPOSE: Explain the distinction between projects and applications, the role of the application registry, and how applications are configured and loaded in Django.
+DJANGO VERSION: 6.0
+The application registry (django.apps.apps) stores configuration for installed applications, provides introspection, and maintains a list of available models.
+Access the registry as follows:
+>>> from django.apps import apps
+>>> apps.get_app_config("admin").verbose_name
+'Administration'
+
+SECTION: Projects vs applications
+PURPOSE: Clarify the difference between a Django project and an application.
+A project is a complete Django web application, defined primarily by its settings module. It typically includes manage.py, a project package with settings.py, urls.py, asgi.py, wsgi.py, fixtures, templates, and static files.
+The project's root directory (containing manage.py) holds all project-specific applications.
+An application is a Python package providing a set of features (models, views, templates, static files, URLs, middleware, etc.). Applications can be reused across multiple projects.
+A project package can also function as an application if added to INSTALLED_APPS.
+Applications integrate into projects primarily via the INSTALLED_APPS setting.
+Django interacts with installed applications through AppConfig instances for configuration and introspection.
+
+SECTION: Configuring applications
+PURPOSE: Describe how to define and customize application configuration using AppConfig.
+Create an apps.py module in the application package and subclass AppConfig.
+When INSTALLED_APPS contains the dotted path to an application module (e.g., 'polls'), Django automatically detects and uses an AppConfig subclass in apps.py.
+
+If exactly one AppConfig subclass exists, Django uses it.
+If multiple subclasses exist, Django selects the one with default=True.
+If none found, Django creates a default AppConfig.
+
+Specify a configuration class explicitly in INSTALLED_APPS:
+INSTALLED_APPS = [
+    ...,
+    "polls.apps.PollsAppConfig",
+    ...,
+]
+CONCEPT: Application author configuration
+Provide metadata such as a human-readable name.
+CODE:
+rock_n_roll/apps.py
+from django.apps import AppConfig
+
+class RockNRollConfig(AppConfig):
+    name = "rock_n_roll"
+    verbose_name = "Rock ’n’ roll"
+Set default = False to prevent automatic selection.
+Provide multiple AppConfig subclasses and mark one with default = True.
+CONCEPT: Application user configuration
+Override configuration from a reusable app.
+CODE:
+anthology/apps.py
+from rock_n_roll.apps import RockNRollConfig
+
+class JazzManoucheConfig(RockNRollConfig):
+    verbose_name = "Jazz Manouche"
+anthology/settings.py
+INSTALLED_APPS = [
+    "anthology.apps.JazzManoucheConfig",
+    # ...
+]
+
+SECTION: AppConfig attributes
+PURPOSE: Detail the configurable and read-only attributes of AppConfig.
+CONCEPT: Configurable attributes
+
+name: Full Python path to the application (required, must be unique).
+label: Short name (defaults to last part of name, must be unique and a valid Python identifier).
+verbose_name: Human-readable name (defaults to label.title()).
+path: Filesystem path to the application directory (usually auto-detected).
+default: Set to False to disable auto-selection or True to mark as default.
+default_auto_field: Implicit primary key type for models in this app (defaults to DEFAULT_AUTO_FIELD).
+
+CONCEPT: Read-only attributes
+
+module: Root module of the application.
+models_module: Module containing models (may be None).
+
+CONCEPT: AppConfig methods
+
+get_models(include_auto_created=False, include_swapped=False): Returns iterable of model classes.
+get_model(model_name, require_ready=True): Returns model class by case-insensitive name.
+ready(): Override to perform initialization (e.g., register signals) after registry population.
+
+In ready(), import models lazily or use self.get_model().
+Register signals using string labels to avoid import issues.
+Avoid database queries in ready() or at import time.
+Make ready() idempotent for test scenarios.
+
+SECTION: Namespace packages as applications
+PURPOSE: Explain requirements for using namespace packages (no init.py) as Django applications.
+Namespace packages must have either:
+
+A single location on sys.path, or
+An explicit path attribute on the AppConfig.
+
+Otherwise, Django raises ImproperlyConfigured.
+
+SECTION: Application registry API
+PURPOSE: List public methods available on the apps registry.
+
+apps.ready: True after full population and ready() calls.
+apps.get_app_configs(): Iterable of all AppConfig instances.
+apps.get_app_config(app_label): Returns AppConfig by label.
+apps.is_installed(app_name): Checks if full app name is installed.
+apps.get_model(app_label, model_name, require_ready=True): Returns model (accepts 'app_label.model_name' format).
+
+
+SECTION: Initialization process
+PURPOSE: Describe the three-stage loading of applications by django.setup().
+
+Import each item in INSTALLED_APPS, load root package, and create/detect AppConfig. Do not import models here.
+Import models submodule of each application. Define all models in models.py or models/__init__.py.
+Call ready() on each AppConfig.
+
+django.setup() is called automatically for servers and management commands.
+Call explicitly in standalone scripts.
+CONCEPT: Common initialization issues
+
+AppRegistryNotReady: Caused by premature model imports or database access.
+Use gettext_lazy() instead of gettext() at import time.
+Avoid ORM queries at import time.
+Minimize inter-module dependencies; use lazy evaluation.
+Disable admin autodiscovery with 'django.contrib.admin.apps.SimpleAdminConfig'.
+RuntimeWarning: For database access during initialization; use lazy querysets (e.g., ModelChoiceField).
+
+
+SUMMARY:
+
+Distinguish projects (full web apps) from reusable applications.
+Use AppConfig in apps.py for metadata and initialization.
+Avoid model imports and database queries during loading stages.
+Leverage the apps registry for safe introspection.

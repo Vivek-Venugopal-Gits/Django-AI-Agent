@@ -1,0 +1,78 @@
+PURPOSE: This section explains using if/elif/else logic in queries via CASE expressions for filters, annotations, aggregations, updates.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Queries needing conditional logic.
+
+CONCEPT: MODEL EXAMPLE
+Client: name, registered_on, account_type (REGULAR/GOLD/PLATINUM).
+SECTION: THE CONDITIONAL EXPRESSION CLASSES
+PURPOSE: This section details When and Case.
+CONCEPT: WHEN CLASS
+When(condition=None, then=None, **lookups): condition and result.
+condition: lookups, Q, BooleanField expressions.
+then: result expression.
+CODE EXAMPLE:
+When(account_type=Client.GOLD, then="name")
+When(account_type=Client.GOLD, then=F("name"))
+
+When(registered_on__gt=date(2014, 1, 1), registered_on__lt=date(2015, 1, 1), then="account_type")
+
+When(Q(name__startswith="John") | Q(name__startswith="Paul"), then="name")
+
+When(Exists(non_unique_account_type), then=Value("non unique"))
+
+When(GreaterThan(F("registered_on"), date(2014, 1, 1)) & LessThan(F("registered_on"), date(2015, 1, 1)), then="account_type")
+Handle then field conflict: then__exact or Q(then=...).
+CONCEPT: CASE CLASS
+Case(*cases, **extra): if/elif/else.
+cases: When objects.
+default: else.
+CODE EXAMPLE:
+Client.objects.annotate(
+    discount=Case(
+        When(account_type=Client.GOLD, then=Value("5%")),
+        When(account_type=Client.PLATINUM, then=Value("10%")),
+        default=Value("0%"),
+    ),
+)
+Order matters.
+In filter:
+Client.objects.filter(
+    registered_on__lte=Case(
+        When(account_type=Client.GOLD, then=a_month_ago),
+        When(account_type=Client.PLATINUM, then=a_year_ago),
+    ),
+)
+SECTION: ADVANCED QUERIES
+PURPOSE: This section shows uses in update, aggregation, filter.
+CONCEPT: CONDITIONAL UPDATE
+update() with Case.
+CODE EXAMPLE:
+Client.objects.update(
+    account_type=Case(
+        When(registered_on__lte=a_year_ago, then=Value(Client.PLATINUM)),
+        When(registered_on__lte=a_month_ago, then=Value(Client.GOLD)),
+        default=Value(Client.REGULAR),
+    ),
+)
+CONCEPT: CONDITIONAL AGGREGATION
+Count with filter=Q.
+CODE EXAMPLE:
+Client.objects.aggregate(
+    regular=Count("pk", filter=Q(account_type=Client.REGULAR)),
+    gold=Count("pk", filter=Q(account_type=Client.GOLD)),
+    platinum=Count("pk", filter=Q(account_type=Client.PLATINUM)),
+)
+SQL: FILTER WHERE (supported) or CASE.
+CONCEPT: CONDITIONAL FILTER
+Boolean expressions directly in filter.
+CODE EXAMPLE:
+Client.objects.filter(~Exists(non_unique_account_type))
+No SELECT addition.
+SUMMARY:
+
+When: condition/result.
+Case: series of When, default.
+In annotate, update, aggregate, filter.

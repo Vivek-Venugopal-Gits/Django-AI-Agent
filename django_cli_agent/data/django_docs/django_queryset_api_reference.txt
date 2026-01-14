@@ -1,0 +1,458 @@
+PURPOSE: This section describes the details of the QuerySet API, including evaluation, pickling, methods, operators, field lookups, and aggregation functions.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django ORM for querying and manipulating model data.
+
+SECTION: WHEN QUERYSETS ARE EVALUATED
+PURPOSE: This section explains how and when QuerySets interact with the database.
+CONCEPT: QUERYSET EVALUATION OVERVIEW
+QuerySets are lazy and do not hit the database until evaluated. Evaluation occurs through iteration, slicing (with step), pickling/caching, repr(), len(), list(), or bool().
+CONCEPT: ITERATION
+A QuerySet executes its query on first iteration.
+CODE EXAMPLE:
+for e in Entry.objects.all():
+    print(e.headline)
+DO NOT use for existence checks; use exists() instead.
+CONCEPT: ASYNCHRONOUS ITERATION
+Use async for to iterate asynchronously.
+CODE EXAMPLE:
+async for e in Entry.objects.all():
+results.append(e)
+Synchronous and asynchronous iterators share the same cache.
+CONCEPT: SLICING
+Slicing an unevaluated QuerySet returns another unevaluated QuerySet, but using step evaluates. Slicing evaluated QuerySets returns a list.
+Further modifications on sliced QuerySets are not allowed if they do not translate to SQL.
+CONCEPT: PICKLING/CACHING
+Pickling forces loading results into memory.
+CONCEPT: REPR()
+Calling repr() evaluates the QuerySet.
+CONCEPT: LEN()
+len() evaluates and returns the length; use count() for efficiency without loading objects.
+CONCEPT: LIST()
+list() forces evaluation.
+CODE EXAMPLE:
+Pythonentry_list = list(Entry.objects.all())
+CONCEPT: BOOL()
+bool(), or, and, if evaluate the QuerySet; True if at least one result.
+Use exists() for existence without loading.
+SUMMARY:
+
+QuerySets are lazy until evaluated via iteration, slicing (step), etc.
+Evaluation loads results; use count() or exists() for efficiency.
+Async iteration shares cache with sync.
+
+SECTION: PICKLING QUERYSETS
+PURPOSE: This section explains pickling QuerySets for caching.
+CONCEPT: PICKLING QUERYSETS OVERVIEW
+Pickling loads results into memory. Unpickled QuerySet contains results at pickle time, not current database state.
+To pickle only query info, pickle the query attribute.
+CODE EXAMPLE:
+import pickle
+query = pickle.loads(s)  # Assuming 's' is the pickled string.
+qs = MyModel.objects.all()
+qs.query = query  # Restore the original 'query'.
+query is opaque, not public API, but safe for pickling.
+USAGE GUIDELINES:
+USE WHEN:
+
+Caching QuerySets short-term.
+DO NOT USE WHEN:
+Long-term archival; pickles not version-compatible.
+
+Pickles between Django versions raise RuntimeWarning.
+CONCEPT: RESTRICTIONS ON QUERYSET.VALUES_LIST()
+Recreating values_list() from pickled query converts to values().
+CODE EXAMPLE:
+import pickle
+qs = Blog.objects.values_list("id", "name")
+reloaded_qs = Blog.objects.all()
+reloaded_qs.query = pickle.loads(pickle.dumps(qs.query))
+SECTION: QUERYSET API
+PURPOSE: This section details the QuerySet class and its methods.
+CONCEPT: QUERYSET CLASS DEFINITION
+QuerySet represents a database query, chainable for refinements.
+CODE EXAMPLE:
+class QuerySet(model=None, query=None, using=None, hints=None)
+Public attributes: ordered (True if ordered), db (database alias).
+query is opaque internal state.
+SECTION: METHODS THAT RETURN NEW QUERYSETS
+PURPOSE: This section lists methods returning new QuerySets, safe for async code.
+CONCEPT: FILTER()
+Returns new QuerySet matching lookups.
+CODE EXAMPLE:
+filter(*args, **kwargs)
+Use Q for complex conditions.
+CONCEPT: EXCLUDE()
+Returns new QuerySet excluding matches.
+CODE EXAMPLE:
+exclude(*args, **kwargs)
+CODE EXAMPLE:
+Entry.objects.exclude(pub_date__gt=datetime.date(2005, 1, 3), headline="Hello")
+CONCEPT: ANNOTATE()
+Annotates with expressions or Q.
+CODE EXAMPLE:
+annotate(*args, **kwargs)
+CODE EXAMPLE:
+from django.db.models import Count
+q = Blog.objects.annotate(Count("entry"))
+q[0].entry__count
+Keyword for alias, anonymous for auto-generated.
+CONCEPT: ALIAS()
+Aliases expressions for later use without annotating.
+CODE EXAMPLE:
+alias(*args, **kwargs)
+CODE EXAMPLE:
+from django.db.models import Count
+blogs = Blog.objects.alias(entries=Count("entry")).filter(entries__gt=5)
+Use with annotate(), exclude(), etc.
+CONCEPT: ORDER_BY()
+Orders results.
+CODE EXAMPLE:
+order_by(*fields)
+CODE EXAMPLE:
+Entry.objects.filter(pub_date__year=2005).order_by("-pub_date", "headline")
+Use ? for random, - for descending.
+Can use expressions.
+USAGE GUIDELINES:
+USE WHEN:
+
+Custom ordering needed.
+DO NOT USE WHEN:
+Performance cost unacceptable; each field adds DB cost.
+
+CONCEPT: REVERSE()
+Reverses order.
+CODE EXAMPLE:
+reverse()
+Only on ordered QuerySets.
+CONCEPT: DISTINCT()
+Uses SELECT DISTINCT.
+CODE EXAMPLE:
+distinct(*fields)
+On PostgreSQL, specify fields for DISTINCT ON.
+Order_by() must match.
+CONCEPT: VALUES()
+Returns dictionaries instead of instances.
+CODE EXAMPLE:
+values(*fields, **expressions)
+CODE EXAMPLE:
+Blog.objects.filter(name__startswith="Beatles").values()
+USAGE GUIDELINES:
+USE WHEN:
+
+Needing subset of fields efficiently.
+DO NOT USE WHEN:
+Needing model instances.
+
+CONCEPT: VALUES_LIST()
+Returns tuples.
+CODE EXAMPLE:
+values_list(*fields, flat=False, named=False)
+flat=True for single field.
+named=True for namedtuples.
+CONCEPT: DATES()
+Returns list of dates truncated to kind.
+CODE EXAMPLE:
+dates(field, kind, order='ASC')
+kind: year, month, week, day.
+CONCEPT: DATETIMES()
+Returns list of datetimes truncated to kind.
+CODE EXAMPLE:
+datetimes(field_name, kind, order='ASC', tzinfo=None)
+kind: year, month, week, day, hour, minute, second.
+tzinfo for conversion.
+CONCEPT: NONE()
+Returns empty QuerySet.
+CODE EXAMPLE:
+none()
+CONCEPT: ALL()
+Returns copy of QuerySet.
+CODE EXAMPLE:
+all()
+Useful for refreshed results.
+CONCEPT: UNION()
+Combines QuerySets with UNION.
+CODE EXAMPLE:
+union(*other_qs, all=False)
+all=True for duplicates.
+Same model, SELECT list.
+CONCEPT: INTERSECTION()
+INTERSECT for common elements.
+CODE EXAMPLE:
+intersection(*other_qs)
+CONCEPT: DIFFERENCE()
+EXCEPT for unique to first.
+CODE EXAMPLE:
+difference(*other_qs)
+CONCEPT: SELECT_RELATED()
+Joins related objects.
+CODE EXAMPLE:
+select_related(*fields)
+For foreign-key, one-to-one.
+CONCEPT: PREFETCH_RELATED()
+Separate lookups for many relations.
+CODE EXAMPLE:
+prefetch_related(*lookups)
+For many-to-many, many-to-one.
+Use Prefetch for control.
+CONCEPT: EXTRA()
+Adds SQL clauses.
+CODE EXAMPLE:
+extra(select=None, where=None, params=None, tables=None, order_by=None, select_params=None)
+Last resort; use RawSQL instead.
+CONCEPT: DEFER()
+Defers field loading.
+CODE EXAMPLE:
+defer(*fields)
+Lazy loads on access.
+Not async-safe for deferred fields.
+USAGE GUIDELINES:
+USE WHEN:
+
+Optimized for large data.
+DO NOT USE WHEN:
+In async; access raises exception.
+
+CONCEPT: ONLY()
+Loads only specified fields.
+CODE EXAMPLE:
+only(*fields)
+Opposite of defer().
+CONCEPT: USING()
+Specifies database.
+CODE EXAMPLE:
+using(alias)
+CONCEPT: SELECT_FOR_UPDATE()
+Locks rows.
+CODE EXAMPLE:
+select_for_update(nowait=False, skip_locked=False, of=(), no_key=False)
+Use in transaction.
+CONCEPT: RAW()
+Executes raw SQL.
+CODE EXAMPLE:
+raw(raw_query, params=(), translations=None, using=None)
+Returns RawQuerySet.
+SUMMARY:
+
+Chain methods for refinements.
+Safe for async except evaluating ones.
+Use for optimized queries.
+
+SECTION: OPERATORS THAT RETURN NEW QUERYSETS
+PURPOSE: This section describes combining QuerySets with operators.
+CONCEPT: AND (&)
+ANDs QuerySets.
+CODE EXAMPLE:
+Model.objects.filter(x=1) & Model.objects.filter(y=2)
+CONCEPT: OR (|)
+ORs QuerySets.
+CODE EXAMPLE:
+Model.objects.filter(x=1) | Model.objects.filter(y=2)
+CONCEPT: XOR (^)
+XORs QuerySets.
+CODE EXAMPLE:
+Model.objects.filter(x=1) ^ Model.objects.filter(y=2)
+Native on MariaDB/MySQL; emulated elsewhere.
+SECTION: METHODS THAT DO NOT RETURN QUERYSETS
+PURPOSE: This section lists evaluating methods returning non-QuerySets.
+Blocking; have a- prefixed async versions.
+CONCEPT: GET()
+Returns single object.
+CODE EXAMPLE:
+get(*args, **kwargs)
+Raises DoesNotExist or MultipleObjectsReturned.
+CONCEPT: CREATE()
+Creates and saves.
+CODE EXAMPLE:
+create(**kwargs)
+CONCEPT: GET_OR_CREATE()
+Gets or creates.
+CODE EXAMPLE:
+get_or_create(defaults=None, **kwargs)
+Returns (object, created).
+CONCEPT: UPDATE_OR_CREATE()
+Updates or creates.
+CODE EXAMPLE:
+update_or_create(defaults=None, create_defaults=None, **kwargs)
+CONCEPT: BULK_CREATE()
+Bulk inserts.
+CODE EXAMPLE:
+bulk_create(objs, batch_size=None, ignore_conflicts=False, update_conflicts=False, update_fields=None, unique_fields=None)
+Caveats: no save(), signals; etc.
+CONCEPT: BULK_UPDATE()
+Bulk updates.
+CODE EXAMPLE:
+bulk_update(objs, fields, batch_size=None)
+CONCEPT: COUNT()
+Returns count.
+CODE EXAMPLE:
+count()
+CONCEPT: IN_BULK()
+Returns dict by field values.
+CODE EXAMPLE:
+in_bulk(id_list=None, *, field_name='pk')
+CONCEPT: ITERATOR()
+Returns iterator.
+CODE EXAMPLE:
+iterator(chunk_size=None)
+No caching.
+CONCEPT: LATEST()
+Latest by fields.
+CODE EXAMPLE:
+latest(*fields)
+CONCEPT: EARLIEST()
+Earliest by fields.
+CODE EXAMPLE:
+earliest(*fields)
+CONCEPT: FIRST()
+First object or None.
+CODE EXAMPLE:
+first()
+CONCEPT: LAST()
+Last object or None.
+CODE EXAMPLE:
+last()
+CONCEPT: AGGREGATE()
+Aggregates.
+CODE EXAMPLE:
+aggregate(*args, **kwargs)
+CONCEPT: EXISTS()
+Checks existence.
+CODE EXAMPLE:
+nexists()
+CONCEPT: CONTAINS()
+Checks membership.
+CODE EXAMPLE:
+contains(obj)
+CONCEPT: UPDATE()
+Updates fields.
+CODE EXAMPLE:
+update(**kwargs)
+CONCEPT: DELETE()
+Deletes.
+CODE EXAMPLE:
+delete()
+CONCEPT: AS_MANAGER()
+Returns Manager with QuerySet methods.
+CODE EXAMPLE:
+as_manager()
+CONCEPT: EXPLAIN()
+Execution plan.
+CODE EXAMPLE:
+explain(format=None, **options)
+SUMMARY:
+
+Evaluating methods return scalars, lists, etc.
+Use async variants in async code.
+Bulk methods efficient but skip hooks.
+
+SECTION: FIELD LOOKUPS
+PURPOSE: This section lists built-in field lookups for WHERE clauses.
+CONCEPT: EXACT
+Exact match.
+CODE EXAMPLE:
+Entry.objects.get(id__exact=14)
+CONCEPT: IEXACT
+Case-insensitive exact.
+CONCEPT: CONTAINS
+Case-sensitive contains.
+CONCEPT: ICONTAINS
+Case-insensitive contains.
+CONCEPT: IN
+In iterable.
+CONCEPT: GT, GTE, LT, LTE
+Greater/less than (equal).
+CONCEPT: STARTSWITH, ISTARTSWITH
+Starts with (case-insensitive).
+CONCEPT: ENDSWITH, IENDSWITH
+Ends with (case-insensitive).
+CONCEPT: RANGE
+Inclusive range.
+CONCEPT: DATE
+Cast to date.
+CONCEPT: YEAR, ISO_YEAR
+Year match.
+CONCEPT: MONTH, DAY, WEEK, WEEK_DAY, ISO_WEEK_DAY, QUARTER
+Date parts.
+CONCEPT: TIME, HOUR, MINUTE, SECOND
+Time parts.
+CONCEPT: ISNULL
+Is NULL.
+CONCEPT: REGEX, IREGEX
+Regex match.
+SUMMARY:
+
+Use __lookup for conditions.
+Database-specific behaviors noted.
+
+SECTION: AGGREGATION FUNCTIONS
+PURPOSE: This section lists aggregation functions.
+CONCEPT: COMMON PARAMETERS
+expressions: fields/transforms.
+output_field: return type.
+filter: Q for filtering.
+default: for empty.
+**extra: SQL context.
+CONCEPT: ANYVALUE
+Arbitrary non-null value.
+CODE EXAMPLE:
+AnyValue(expression, output_field=None, filter=None, default=None, **extra)
+CONCEPT: AVG
+Mean.
+CODE EXAMPLE:
+Avg(expression, output_field=None, distinct=False, filter=None, default=None, **extra)
+CONCEPT: COUNT
+Count.
+CODE EXAMPLE:
+Count(expression, distinct=False, filter=None, **extra)
+CONCEPT: MAX, MIN
+Max/min.
+CODE EXAMPLE:
+Max(expression, output_field=None, filter=None, default=None, **extra)
+CONCEPT: STDDEV
+Standard deviation.
+CODE EXAMPLE:
+StdDev(expression, output_field=None, sample=False, filter=None, default=None, **extra)
+CONCEPT: SUM
+Sum.
+CODE EXAMPLE:
+Sum(expression, output_field=None, distinct=False, filter=None, default=None, **extra)
+CONCEPT: VARIANCE
+Variance.
+CODE EXAMPLE:
+Variance(expression, output_field=None, sample=False, filter=None, default=None, **extra)
+CONCEPT: STRINGAGG
+Concatenated string.
+CODE EXAMPLE:
+StringAgg(expression, delimiter, output_field=None, distinct=False, filter=None, order_by=None, default=None, **extra)
+SUMMARY:
+
+Use in aggregate() or annotate().
+Handle empty with default.
+
+SECTION: QUERY-RELATED TOOLS
+PURPOSE: This section covers additional query tools.
+CONCEPT: Q() OBJECTS
+Encapsulates conditions.
+CODE EXAMPLE:
+Q(**kwargs)
+Combine with &, |, ^, ~.
+CONCEPT: PREFETCH() OBJECTS
+Controls prefetch_related().
+CODE EXAMPLE:
+Prefetch(lookup, queryset=None, to_attr=None)
+CONCEPT: PREFETCH_RELATED_OBJECTS()
+Prefetches on instances.
+CODE EXAMPLE:
+prefetch_related_objects(model_instances, *related_lookups)
+CONCEPT: FILTEREDRELATION() OBJECTS
+Filters relations in ON clause.
+CODE EXAMPLE:
+FilteredRelation(relation_name, *, condition=Q())
+SUMMARY:
+
+Q for complex conditions.
+Prefetch for custom prefetching.
+FilteredRelation for filtered joins.

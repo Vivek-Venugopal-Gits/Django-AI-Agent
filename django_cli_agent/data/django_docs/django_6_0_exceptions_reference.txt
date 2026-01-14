@@ -1,0 +1,160 @@
+APPLICABILITY: All Django applications and error handling
+SECTION: DJANGO CORE EXCEPTIONS: Defined in django.core.exceptions for common Django operations.
+Django core exceptions handle app registry, model operations, security, configuration, and validation issues.
+
+CONCEPT: AppRegistryNotReady
+Raised when using models before app loading process completes and initializes ORM.
+
+CONCEPT: ObjectDoesNotExist
+Base class for Model.DoesNotExist exceptions. Catches DoesNotExist for all models. Raised by QuerySet.get().
+
+CONCEPT: ObjectNotUpdated
+New in Django 6.0. Base class for Model.NotUpdated exceptions. Catches NotUpdated for all models. Raised by Model.save().
+
+CONCEPT: EmptyResultSet
+Raised during query generation when query returns no results. Used for custom lookups and expressions.
+
+CONCEPT: FullResultSet
+Raised during query generation when query matches everything. Used for custom lookups and expressions.
+
+CONCEPT: FieldDoesNotExist
+Raised by model's _meta.get_field() when requested field does not exist on model or its parents.
+
+CONCEPT: MultipleObjectsReturned
+Base class for Model.MultipleObjectsReturned exceptions. Catches MultipleObjectsReturned for all models. Raised by QuerySet.get().
+
+CONCEPT: SuspiciousOperation
+Raised for security-suspicious operations like session cookie tampering. Logged at Error level and returns HttpResponseBadRequest at handler level.
+
+Subclasses:
+
+DisallowedHost
+
+DisallowedModelAdminLookup
+
+DisallowedModelAdminToField
+
+DisallowedRedirect
+
+InvalidSessionKey
+
+RequestDataTooBig
+
+SuspiciousFileOperation
+
+SuspiciousMultipartForm
+
+SuspiciousSession
+
+TooManyFieldsSent
+
+TooManyFilesSent
+
+CONCEPT: PermissionDenied
+Raised when user lacks permission for requested action.
+
+CONCEPT: ViewDoesNotExist
+Raised by django.urls when requested view does not exist.
+
+CONCEPT: MiddlewareNotUsed
+Raised when middleware not used in server configuration.
+
+CONCEPT: ImproperlyConfigured
+Raised when Django misconfigured, such as invalid settings.py values.
+
+CONCEPT: FieldError
+Raised for model field problems:
+
+Field clashes with abstract base class
+
+Infinite ordering loops
+
+Unparseable filter keywords
+
+Undeterminable fields from query parameters
+
+Invalid field joins
+
+Invalid field names
+
+Invalid order_by arguments
+
+CONCEPT: ValidationError
+Raised when data fails form or model field validation.
+
+NON_FIELD_ERRORS: Key for ValidationError instances not tied to specific fields in form/model dictionaries.
+
+CONCEPT: BadRequest
+Raised for unprocessable client request errors. Returns HttpResponseBadRequest at handler level.
+
+CONCEPT: RequestAborted
+Raised when HTTP body read interrupted by client disconnect or timeout. Internal to HTTP handlers.
+
+CONCEPT: SynchronousOnlyOperation
+Raised when synchronous-only code called from async context. Use asgiref.sync.sync_to_async() for async calls.
+
+SECTION: URL RESOLVER EXCEPTIONS: Defined in django.urls for URL matching.
+Handle URL resolution failures.
+
+CONCEPT: Resolver404
+Raised by resolve() when path doesn't map to view. Subclass of Http404.
+
+CONCEPT: NoReverseMatch
+Raised when URLconf cannot identify matching URL from supplied parameters.
+
+SECTION: DATABASE EXCEPTIONS: Imported from django.db, wrapping standard database exceptions.
+Guaranteed common implementation across backends. cause attribute holds original exception.
+
+Exceptions:
+
+Error
+
+InterfaceError
+
+DatabaseError
+
+DataError
+
+OperationalError
+
+IntegrityError
+
+InternalError
+
+ProgrammingError
+
+NotSupportedError
+
+models.ProtectedError: Subclass of IntegrityError. Raised for PROTECT constraint violations on deletion.
+
+models.RestrictedError: Subclass of IntegrityError. Raised for RESTRICT constraint violations on deletion.
+
+SECTION: HTTP EXCEPTIONS: Defined in django.http for request handling.
+CONCEPT: UnreadablePostError
+Raised when user cancels upload.
+
+SECTION: SESSIONS EXCEPTIONS: Defined in django.contrib.sessions.exceptions.
+CONCEPT: SessionInterrupted
+Raised when session destroyed in concurrent request. Subclass of BadRequest.
+
+SECTION: TRANSACTION EXCEPTIONS: Defined in django.db.transaction.
+CONCEPT: TransactionManagementError
+Raised for database transaction problems.
+
+SECTION: TESTING FRAMEWORK EXCEPTIONS: From django.test package.
+CONCEPT: RedirectCycleError
+Raised by test client detecting redirect loops or overly long redirect chains.
+
+CONCEPT: PYTHON BUILT-IN EXCEPTIONS
+Django raises standard Python exceptions when appropriate.
+
+SUMMARY:
+Core exceptions in django.core.exceptions handle most Django operations
+
+ObjectDoesNotExist/MultipleObjectsReturned catch model-specific variants
+
+SuspiciousOperation subclasses cover security issues
+
+Database exceptions wrap backend-specific errors with cause
+
+Use sync_to_async() for async/synchronous operation conflicts

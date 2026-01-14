@@ -1,0 +1,80 @@
+APPLICABILITY: Integrating Django with existing/legacy databases
+​
+Django enables integration with legacy databases through automated model generation and configuration. The process automates introspection while requiring manual cleanup for production use.
+​
+
+Database Configuration
+Configure the DATABASES setting with connection parameters for the 'default' alias.
+
+CODE:
+DATABASES = {
+    'default': {
+        'NAME': 'your_db_name',
+        'ENGINE': 'django.db.backends.postgresql',  # or mysql, sqlite3, oracle
+        'USER': 'your_db_user',
+        'PASSWORD': 'your_db_password',
+        'HOST': 'localhost',  # or IP/domain
+        'PORT': '5432',       # default PostgreSQL port
+    }
+}
+Required keys: NAME, ENGINE, USER, PASSWORD, HOST, PORT.
+​
+
+Model Generation
+Use inspectdb management command to auto-generate models from existing schema.
+
+CODE:
+python manage.py inspectdb > models.py
+Generated models default to managed=False in Meta class, preventing Django from creating/modifying tables. Example output:
+
+CODE:
+class Person(models.Model):
+    id = models.IntegerField(primary_key=True)
+    first_name = models.CharField(max_length=70)
+    
+    class Meta:
+        managed = False
+        db_table = "CENSUS_PERSONS"
+Save as models.py in your app directory and add app to INSTALLED_APPS.
+​
+
+Core Tables Installation
+Run migrations to install Django's required tables (admin permissions, content types).
+
+CODE:
+python manage.py migrate
+This preserves legacy data while adding Django infrastructure.
+​
+
+Testing and Refinement
+Access data via Django ORM and admin interface. Edit generated models for:
+
+Custom field types/validations
+
+Relationships (ForeignKey, ManyToMany)
+
+Set managed=True if allowing schema changes
+
+Add methods/properties
+
+Test queries: Person.objects.all() or admin interface.
+​
+
+Usage Guidelines
+USE WHEN:
+
+Reverse-engineering existing databases
+
+Gradually migrating to Django models
+
+DO NOT USE WHEN:
+
+Needing perfect model generation (requires manual cleanup)
+
+Complex schemas with custom types/stored procedures
+
+CODE:
+# Enable table management (optional)
+class Meta:
+    managed = True  # Default value, allows CREATE/ALTER/DROP
+inspectdb provides shortcut, not definitive models.

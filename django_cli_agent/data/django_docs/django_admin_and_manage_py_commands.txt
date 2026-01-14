@@ -1,0 +1,326 @@
+PURPOSE: Explain the purpose and usage of django-admin and manage.py as command-line utilities for Django administrative tasks.
+DJANGO VERSION: 6.0
+django-admin is Django's command-line utility for administrative tasks.
+manage.py is automatically created in each Django project. It performs the same actions as django-admin but also sets the DJANGO_SETTINGS_MODULE environment variable to point to the project's settings.py file.
+The django-admin script is available on the system path when Django is installed via pip (with virtual environment activated if needed).
+Use manage.py when working on a single Django project. Use django-admin when switching between multiple settings files, combined with DJANGO_SETTINGS_MODULE or the --settings option.
+Run commands equivalently with django-admin, manage.py, or python -m django.
+COMMAND: Basic usage
+CODE:
+django-admin <command> [options]
+manage.py <command> [options]
+python -m django <command> [options]
+CONCEPT: Getting help
+Run django-admin help for usage information and available commands.
+Run django-admin help --commands for a list of all commands.
+Run django-admin help <command> for description and options of a specific command.
+CONCEPT: App names
+Many commands accept app names, which are the basename of the package containing models (e.g., 'mysite.blog' has app name blog).
+COMMAND: Determining version
+CODE:
+django-admin version
+Displays the current Django version in PEP 440 format.
+CONCEPT: Verbosity control
+Use --verbosity (where supported) to control output detail.
+
+SECTION: Core commands
+COMMAND: check
+CODE:
+django-admin check [app_label [app_label ...]]
+Runs system checks on the project.
+Options:
+
+--tag TAGS, -t TAGS: Run checks with specific tags (e.g., models, compatibility).
+--database DATABASE: Check database-related issues for specified connection.
+--list-tags: List all available tags.
+--deploy: Enable deployment-specific checks.
+--fail-level {CRITICAL,ERROR,WARNING,INFO,DEBUG}: Exit non-zero at specified level (default ERROR).
+
+COMMAND: compilemessages
+CODE:
+django-admin compilemessages
+Compiles .po files to .mo files for gettext.
+Options:
+
+--locale LOCALE, -l LOCALE: Process specific locale(s).
+--exclude EXCLUDE, -x EXCLUDE: Exclude locale(s).
+--use-fuzzy, -f: Include fuzzy translations.
+--ignore PATTERN, -i PATTERN: Ignore directories matching glob pattern.
+
+COMMAND: createcachetable
+CODE:
+django-admin createcachetable
+Creates database cache tables.
+Options:
+
+--database DATABASE: Target database (default default).
+--dry-run: Print SQL without execution.
+
+COMMAND: dbshell
+CODE:
+django-admin dbshell
+Opens database client (psql, mysql, sqlite3, sqlplus).
+Options:
+
+--database DATABASE: Target database.
+-- ARGUMENTS: Pass arguments to client after --.
+
+COMMAND: diffsettings
+CODE:
+django-admin diffsettings
+Shows differences from default Django settings.
+Options:
+
+--all: Show all settings (defaults prefixed with ###).
+--default MODULE: Compare against specified module.
+--output {hash,unified}: Output format (default hash).
+
+COMMAND: dumpdata
+CODE:
+django-admin dumpdata [app_label[.ModelName] ...]
+Outputs database data as fixtures.
+Options:
+
+--all, -a: Use base manager (ignore custom manager filters).
+--format FORMAT: Serialization format (default JSON).
+--indent INDENT: Indentation spaces.
+--exclude EXCLUDE, -e EXCLUDE: Exclude app/model.
+--database DATABASE: Source database.
+--natural-foreign / --natural-primary: Use natural keys.
+--pks PRIMARY_KEYS: Specific primary keys (comma-separated).
+--output OUTPUT, -o OUTPUT: Write to file (supports compression: .gz, .bz2, .lzma, .xz).
+
+COMMAND: flush
+CODE:
+django-admin flush
+Removes all data but preserves migration history.
+Options:
+
+--noinput, --no-input: Suppress prompts.
+--database DATABASE: Target database.
+
+COMMAND: inspectdb
+CODE:
+django-admin inspectdb [table ...]
+Introspects database and outputs model code.
+Options:
+
+--database DATABASE: Target database.
+--include-partitions: Include PostgreSQL partitions.
+--include-views: Include views/materialized views.
+
+Generated models are unmanaged (managed = False) by default.
+COMMAND: loaddata
+CODE:
+django-admin loaddata fixture [fixture ...]
+Loads fixture data into database.
+Options:
+
+--database DATABASE: Target database.
+--ignorenonexistent, -i: Ignore missing fields/models.
+--app APP_LABEL: Limit to specific app.
+--format FORMAT: Specify format when reading from stdin.
+--exclude EXCLUDE, -e EXCLUDE: Exclude app/model.
+
+Use - as fixture name to read from stdin.
+COMMAND: makemessages
+CODE:
+django-admin makemessages
+Extracts translatable strings into .po files.
+Options:
+
+--all, -a: Process all locales.
+--extension EXTENSIONS, -e EXTENSIONS: File extensions to scan.
+--locale LOCALE, -l LOCALE: Specific locale(s).
+--exclude EXCLUDE, -x EXCLUDE: Exclude locale(s).
+--domain DOMAIN, -d DOMAIN: django or djangojs.
+--symlinks, -s: Follow symlinks.
+--ignore PATTERN, -i PATTERN: Ignore patterns.
+--no-default-ignore: Disable default ignores.
+--no-wrap: Keep long lines.
+--no-location / --add-location: Control comment lines.
+--no-obsolete: Remove obsolete strings.
+--keep-pot: Retain temporary .pot file.
+
+COMMAND: makemigrations
+CODE:
+django-admin makemigrations [app_label ...]
+Creates new migrations from model changes.
+Options:
+
+--noinput, --no-input: Suppress prompts.
+--empty: Create empty migration.
+--dry-run: Show migrations without writing.
+--merge: Resolve conflicts.
+--name NAME, -n NAME: Custom migration name.
+--no-header: Omit header.
+--check: Exit non-zero if changes detected.
+--scriptable: Machine-readable output.
+--update: Merge changes into latest migration.
+
+COMMAND: migrate
+CODE:
+django-admin migrate [app_label] [migration_name]
+Applies/unapplies migrations.
+Behavior:
+
+No arguments: Apply all migrations.
+<app_label>: Apply latest for app.
+<app_label> <migrationname>: Apply up to named migration (use zero to revert all).
+
+Options:
+
+--database DATABASE: Target database.
+--fake: Mark as applied without running SQL.
+--fake-initial: Skip initial if tables exist.
+--plan: Show migration plan.
+--run-syncdb: Create tables for apps without migrations.
+--noinput, --no-input: Suppress prompts.
+--check: Exit non-zero if unapplied migrations.
+--prune: Delete nonexistent migrations from table.
+
+COMMAND: optimizemigration
+CODE:
+django-admin optimizemigration app_label migration_name
+Optimizes operations in a migration.
+Options:
+
+--check: Exit non-zero if optimizable.
+
+COMMAND: runserver
+CODE:
+django-admin runserver [addrport]
+Starts development server (default 127.0.0.1:8000).
+DO NOT USE IN PRODUCTION.
+Options:
+
+--noreload: Disable auto-reload.
+--nothreading: Disable threading.
+--ipv6, -6: Use IPv6.
+
+Supports pywatchman for faster reloading.
+COMMAND: sendtestemail
+CODE:
+django-admin sendtestemail [email ...]
+Sends test email.
+Options:
+
+--managers: Send to MANAGERS.
+--admins: Send to ADMINS.
+
+COMMAND: shell
+CODE:
+django-admin shell
+Starts interactive Python shell with auto-imported models and utilities.
+Options:
+
+--interface {ipython,bpython,python}, -i: Choose interface.
+--no-startup: Skip startup script.
+--no-imports: Disable model auto-import.
+--command COMMAND, -c COMMAND: Execute command string.
+
+COMMAND: showmigrations
+CODE:
+django-admin showmigrations [app_label ...]
+Shows migration status.
+Options:
+
+--list, -l: List format (default).
+--plan, -p: Show application plan.
+--database DATABASE: Target database.
+
+COMMAND: sqlflush
+CODE:
+django-admin sqlflush
+Prints SQL for flush command.
+COMMAND: sqlmigrate
+CODE:
+django-admin sqlmigrate app_label migration_name
+Prints SQL for a migration.
+Options:
+
+--backwards: Reverse direction.
+--database DATABASE: Target database.
+
+COMMAND: sqlsequencereset
+CODE:
+django-admin sqlsequencereset app_label ...
+Prints SQL to reset sequences.
+COMMAND: squashmigrations
+CODE:
+django-admin squashmigrations app_label [start_migration] migration_name
+Squashes migrations into fewer files.
+Options:
+
+--no-optimize: Disable optimization.
+--noinput, --no-input: Suppress prompts.
+--squashed-name NAME: Custom name.
+--no-header: Omit header.
+
+COMMAND: startapp
+CODE:
+django-admin startapp name [directory]
+Creates new app directory structure.
+Options:
+
+--template TEMPLATE: Custom template path/URL.
+--extension EXTENSIONS, -e: Template extensions.
+--name FILES, -n: Additional template files.
+--exclude DIRECTORIES, -x: Exclude directories.
+
+COMMAND: startproject
+CODE:
+django-admin startproject name [directory]
+Creates new project directory structure.
+Same options as startapp.
+COMMAND: test
+CODE:
+django-admin test [test_label ...]
+Runs tests.
+Options include --failfast, --testrunner, --noinput, --keepdb, --shuffle, --reverse, --parallel, --tag, --exclude-tag, etc.
+COMMAND: testserver
+CODE:
+django-admin testserver [fixture ...]
+Runs development server with fixture-loaded test database.
+Options:
+
+--addrport ADDRPORT: Address/port.
+--noinput, --no-input: Suppress prompts.
+
+
+SECTION: Application-provided commands
+PURPOSE: List commands added by contrib apps when enabled.
+
+changepassword, createsuperuser: From django.contrib.auth
+remove_stale_contenttypes: From django.contrib.contenttypes
+ogrinspect: From django.contrib.gis
+clearsessions: From django.contrib.sessions
+collectstatic, findstatic: From django.contrib.staticfiles
+
+
+SECTION: Default command options
+All commands support:
+
+--pythonpath PYTHONPATH
+--settings SETTINGS
+--traceback
+--verbosity {0,1,2,3}, -v
+--no-color
+--force-color
+--skip-checks
+
+
+SECTION: Programmatic execution
+PURPOSE: Call management commands from code.
+CODE:
+from django.core.management import call_command
+
+call_command('command_name', *args, **options)
+Supports stdout/stderr redirection.
+
+SUMMARY:
+
+Use manage.py for single-project work; django-admin for multi-project or custom settings.
+Core commands cover database, migrations, internationalization, testing, development server, and fixtures.
+Many commands support --database, --verbosity, and --noinput.
+Run commands programmatically with call_command().

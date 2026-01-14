@@ -1,0 +1,60 @@
+PURPOSE: This section covers features of the Model class, including its attributes for handling exceptions and managers.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django ORM for model definitions and interactions.
+
+SECTION: ATTRIBUTES
+PURPOSE: This section details the attributes available on the Model class.
+CONCEPT: DOESNOTEXIST ATTRIBUTE
+This exception is raised by the ORM when an expected object is not found. For example, QuerySet.get() raises it when no object is found for the given lookups.
+Django provides a DoesNotExist exception as an attribute of each model class to identify the class of object that could not be found, allowing catching exceptions for a particular model class. The exception is a subclass of django.core.exceptions.ObjectDoesNotExist.
+USAGE GUIDELINES:
+USE WHEN:
+
+Handling cases where a query might not return an object.
+DO NOT USE WHEN:
+Expecting multiple objects; use MultipleObjectsReturned instead.
+
+CONCEPT: MULTIPLEOBJECTSRETURNED ATTRIBUTE
+This exception is raised by QuerySet.get() when multiple objects are found for the given lookups.
+Django provides a MultipleObjectsReturned exception as an attribute of each model class to identify the class of object for which multiple objects were found, allowing catching exceptions for a particular model class. The exception is a subclass of django.core.exceptions.MultipleObjectsReturned.
+USAGE GUIDELINES:
+USE WHEN:
+
+Handling queries that might return more than one object.
+DO NOT USE WHEN:
+Queries are designed to return multiple results; use QuerySet.filter() instead.
+
+CONCEPT: NOTUPDATED ATTRIBUTE
+This exception is raised when a forced update of a Model instance does not affect any rows.
+Django provides a NotUpdated exception as an attribute of each model class to identify the class of object that could not be updated, allowing catching exceptions for a particular model class. The exception is a subclass of django.core.exceptions.ObjectNotUpdated and inherits from django.db.DatabaseError for backward compatibility reasons.
+USAGE GUIDELINES:
+USE WHEN:
+
+Handling forced updates that might not modify rows.
+DO NOT USE WHEN:
+Standard saves or updates are sufficient.
+
+CONCEPT: OBJECTS ATTRIBUTE
+Each non-abstract Model class must have a Manager instance added to it. Django ensures that in the model class there is at least a default Manager specified. If no custom Manager is added, Django adds an attribute objects containing the default Manager instance. If a custom Manager instance attribute is added, the default one does not appear.
+CODE EXAMPLE:
+from django.db import models
+
+class Person(models.Model):
+    # Add manager with another name
+    people = models.Manager()
+USAGE GUIDELINES:
+USE WHEN:
+
+Accessing the default manager for querying models.
+DO NOT USE WHEN:
+Custom managers are defined; access them by their attribute names.
+
+SUMMARY:
+
+Use DoesNotExist for missing object exceptions.
+Use MultipleObjectsReturned for excess object exceptions.
+Use NotUpdated for failed forced updates.
+Access objects for the default model manager.

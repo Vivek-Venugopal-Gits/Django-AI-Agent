@@ -1,0 +1,145 @@
+PURPOSE: Detail utilities provided by Django for writing and executing tests, including the test client, specialized test case classes, and assertion helpers.
+DJANGO VERSION: 6.0
+
+SECTION: The test client
+PURPOSE: Simulate web browser interactions with Django views programmatically without running a server.
+django.test.Client acts as a dummy browser for testing views.
+Capabilities:
+
+Simulate GET/POST requests and inspect responses (headers, status, content).
+Follow redirects.
+Verify template usage and context.
+
+Use for template and context validation; complement with RequestFactory for view logic and Selenium for JavaScript/behavior.
+CONCEPT: Quick example
+CODE:
+>>> from django.test import Client
+>>> c = Client()
+>>> response = c.post("/login/", {"username": "john", "password": "smith"})
+>>> response.status_code
+200
+No web server required; direct framework interaction.
+Specify path only (not full domain).
+Uses project's ROOT_URLCONF.
+Template checks only during test execution.
+CSRF checks disabled by default; enable with enforce_csrf_checks=True.
+CONCEPT: Client initialization
+CODE:
+Client(enforce_csrf_checks=False, raise_request_exception=True, headers=None, query_params=None, **defaults)
+
+headers: Default request headers.
+query_params: Default query string parameters.
+**defaults: WSGI environ variables.
+
+COMMAND: Request methods
+All return Response object.
+
+get(path, data=None, follow=False, secure=False, headers=None, query_params=None, **extra)
+post(path, data=None, content_type=MULTIPART_CONTENT, follow=False, secure=False, headers=None, query_params=None, **extra)
+head(), options(), put(), patch(), delete(), trace()
+
+follow=True: Follow redirects (sets redirect_chain).
+secure=True: Emulate HTTPS.
+JSON POST: content_type='application/json' serializes dict/list/tuple data.
+File upload: Provide file handle as value.
+Multiple values: List/tuple for key.
+CONCEPT: Authentication methods
+
+login(**credentials): Simulate login (returns True on success).
+force_login(user, backend=None): Bypass authentication.
+logout(): Clear session/cookies.
+
+Async versions: alogin(), aforce_login(), alogout().
+SECTION: Response object
+PURPOSE: Inspect results from test client requests.
+Attributes:
+
+client: Originating test client.
+content: Response body (bytes).
+context: Template context(s).
+templates: List of rendered Template instances.
+status_code: HTTP status.
+resolver_match: ResolverMatch instance.
+json(**kwargs): Parsed JSON content.
+headers: Dictionary-like header access.
+request: Request data.
+wsgi_request: Full WSGIRequest.
+exc_info: Exception info if unhandled.
+
+CONCEPT: Persistent state
+Client maintains cookies and session across requests.
+Access via client.cookies and client.session.
+Async: client.asession().
+CONCEPT: Language setting
+With LocaleMiddleware: Set LANGUAGE_COOKIE_NAME cookie or Accept-Language header.
+Without: Use translation.override().
+Reset in tearDown().
+SECTION: Provided test case classes
+Hierarchy: SimpleTestCase → TransactionTestCase → TestCase → LiveServerTestCase
+CONCEPT: SimpleTestCase
+Base for non-database tests.
+Provides assertions, settings overrides, client access.
+Disallows database queries by default (databases = '__all__' to allow).
+Call super() in setUpClass/tearDownClass.
+CONCEPT: TransactionTestCase
+For tests needing commit/rollback observation or non-transactional backends.
+Resets database by truncation after each test.
+Loads fixtures per test.
+CONCEPT: TestCase
+Most common; uses transactions for fast rollback.
+Class-level atomic block.
+setUpTestData(): Create data once per class.
+captureOnCommitCallbacks(): Capture on_commit callbacks.
+Checks deferrable constraints.
+CONCEPT: LiveServerTestCase
+Launches live server on localhost (free port).
+Access via self.live_server_url.
+Use with Selenium for browser automation.
+StaticLiveServerTestCase: Serves static files.
+Shared SQLite connection requires careful synchronization.
+SECTION: Test case features
+CONCEPT: Default client
+self.client available (recreated per test).
+CONCEPT: Custom client
+Set client_class.
+CONCEPT: Fixture loading
+fixtures class attribute loads data into test database.
+CONCEPT: Multi-database support
+databases attribute controls wrapped databases and fixture loading.
+CONCEPT: Settings overrides
+self.settings(), self.modify_settings(), @override_settings, @modify_settings.
+CONCEPT: App isolation
+@isolate_apps(app_labels, attr_name=None, kwarg_name=None): Register models in isolated registry.
+CONCEPT: Email outbox
+django.core.mail.outbox captures sent emails.
+Cleared per TestCase.
+CONCEPT: Assertions
+Many custom assertions:
+
+assertRaisesMessage, assertWarnsMessage
+assertFieldOutput, assertFormError, assertFormSetError
+assertContains, assertNotContains (html option)
+assertTemplateUsed, assertTemplateNotUsed
+assertURLEqual, assertRedirects
+assertHTMLEqual, assertHTMLNotEqual, assertInHTML, assertNotInHTML
+assertXMLEqual, assertXMLNotEqual
+assertJSONEqual, assertJSONNotEqual
+assertQuerySetEqual, assertNumQueries
+
+CONCEPT: Test tagging
+@tag('tagname') on methods/classes.
+Run with --tag, exclude with --exclude-tag.
+SECTION: Asynchronous testing
+Async tests: async def methods.
+Use AsyncClient or self.async_client (await requests).
+Runs through async request path.
+SECTION: Management commands testing
+call_command() with stdout/stderr redirection.
+SECTION: Skipping tests
+@skipIfDBFeature, @skipUnlessDBFeature based on backend capabilities.
+SUMMARY:
+
+Use test client for view/response testing.
+Choose appropriate TestCase subclass.
+Leverage assertions, fixtures, overrides, and isolation.
+Combine with Selenium via LiveServerTestCase for full coverage.

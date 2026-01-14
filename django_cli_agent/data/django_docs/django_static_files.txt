@@ -1,0 +1,54 @@
+SECTION: Tutorial Overview - Writing Your First Django App, Part 6
+PURPOSE:
+This section continues the poll application tutorial by adding static files like stylesheets and images for customization.
+SECTION: Static Files Concept
+CONCEPT:
+Static files include images, JavaScript, and CSS needed for web page rendering. Django's django.contrib.staticfiles collects these from apps into a single location for serving.
+For small projects, serve directly; for larger ones, manage multiple app static files.
+SECTION: Setting Up Static Files Directory
+CONCEPT:
+Create a static directory in the app (e.g., polls/static). Django finds static files via STATICFILES_FINDERS, including AppDirectoriesFinder which looks for static subdirectories in INSTALLED_APPS.
+Namespace files by creating an app-named subdirectory (e.g., polls/static/polls).
+USAGE GUIDELINES:
+USE WHEN:
+
+Serving non-dynamic assets like CSS or images.
+DO NOT USE WHEN:
+Files are generated dynamically; handle those separately.
+
+SECTION: Adding a Stylesheet
+CONCEPT:
+Create style.css in polls/static/polls.
+Code for polls/static/polls/style.css:
+textli a {
+    color: green;
+}
+Load in template using {% static %} tag.
+Code for polls/templates/polls/index.html:
+text{% load static %}
+
+<link rel="stylesheet" href="{% static 'polls/style.css' %}">
+{% static %} generates absolute URLs for static files.
+COMMAND:
+Bashpython manage.py runserver
+Reload /polls/ to see changes.
+SECTION: Adding a Background Image
+CONCEPT:
+Create images subdirectory in polls/static/polls and add background.png.
+Update stylesheet:
+Code for polls/static/polls/style.css:
+textbody {
+    background: white url("images/background.png") no-repeat;
+}
+Reload page to view.
+USAGE GUIDELINES:
+DO NOT USE WHEN:
+
+Linking static files in non-Django-generated static files; use relative paths instead.
+
+SUMMARY:
+
+Static files enhance rendering.
+Namespace for app specificity.
+Use {% static %} in templates.
+Relative paths in static files.

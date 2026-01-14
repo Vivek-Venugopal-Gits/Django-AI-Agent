@@ -1,0 +1,144 @@
+PURPOSE: This section explains Manager, the interface for database query operations on Django models, including customization and behavior.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Every model has at least one Manager.
+
+CONCEPT: MANAGER CLASS
+Manager provides QuerySet for models.
+CODE EXAMPLE:
+class Manager
+SECTION: MANAGER NAMES
+PURPOSE: This section describes default and custom manager names.
+CONCEPT: MANAGER NAMES OVERVIEW
+Default: objects = models.Manager()
+Custom: define attribute like people = models.Manager()
+CODE EXAMPLE:
+from django.db import models
+
+class Person(models.Model):
+    # ...
+    people = models.Manager()
+Person.people.all() works; Person.objects errors.
+SECTION: CUSTOM MANAGERS
+PURPOSE: This section explains extending Manager for extra methods or modified QuerySet.
+CONCEPT: ADDING EXTRA MANAGER METHODS
+Preferred for table-level functionality.
+CODE EXAMPLE:
+from django.db import models
+from django.db.models.functions import Coalesce
+
+class PollManager(models.Manager):
+    def with_counts(self):
+        return self.annotate(num_responses=Coalesce(models.Count("response"), 0))
+
+class OpinionPoll(models.Model):
+    question = models.CharField(max_length=200)
+    objects = PollManager()
+
+class Response(models.Model):
+    poll = models.ForeignKey(OpinionPoll, on_delete=models.CASCADE)
+    # ...
+OpinionPoll.objects.with_counts()
+Access self.model for model class.
+CONCEPT: MODIFYING A MANAGER’S INITIAL QUERYSET
+Override get_queryset().
+CODE EXAMPLE:
+class DahlBookManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(author="Roald Dahl")
+
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+    author = models.CharField(max_length=50)
+
+    objects = models.Manager()  # The default manager.
+    dahl_objects = DahlBookManager()  # The Dahl-specific manager.
+Book.dahl_objects.all() filters by author.
+Chain QuerySet methods.
+Multiple managers possible.
+CONCEPT: DEFAULT MANAGERS
+_default_manager: first defined or Meta.default_manager_name.
+Used by dumpdata etc.
+Careful with overriding get_queryset() to avoid inaccessible objects.
+CONCEPT: BASE MANAGERS
+_base_manager: used for related object access.
+CONCEPT: USING MANAGERS FOR RELATED OBJECT ACCESS
+Uses _base_manager for all related objects, even filtered.
+For backwards-related: no filtering.
+CONCEPT: DON’T FILTER AWAY ANY RESULTS IN THIS TYPE OF MANAGER SUBCLASS
+Must see all objects for relations.
+Do not filter in base manager get_queryset().
+Set Meta.base_manager_name if needed.
+CONCEPT: CALLING CUSTOM QUERYSET METHODS FROM THE MANAGER
+Implement on Manager if extra QuerySet methods.
+CODE EXAMPLE:
+class PersonQuerySet(models.QuerySet):
+    def authors(self):
+        return self.filter(role="A")
+
+    def editors(self):
+        return self.filter(role="E")
+
+class PersonManager(models.Manager):
+    def get_queryset(self):
+        return PersonQuerySet(self.model, using=self._db)
+
+    def authors(self):
+        return self.get_queryset().authors()
+
+    def editors(self):
+        return self.get_queryset().editors()
+
+class Person(models.Model):
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=50)
+    role = models.CharField(max_length=1, choices={"A": _("Author"), "E": _("Editor")})
+    people = PersonManager()
+CONCEPT: CREATING A MANAGER WITH QUERYSET METHODS
+Use QuerySet.as_manager() to copy QuerySet methods to Manager.
+CODE EXAMPLE:
+class Person(models.Model):
+    ...
+    people = PersonQuerySet.as_manager()
+Rules: public copied, private not; queryset_only controls.
+CONCEPT: FROM_QUERYSET()
+Returns subclass of Manager with QuerySet methods.
+CODE EXAMPLE:
+class CustomManager(models.Manager):
+    def manager_only_method(self):
+        return
+
+class CustomQuerySet(models.QuerySet):
+    def manager_and_queryset_method(self):
+        return
+
+class MyModel(models.Model):
+    objects = CustomManager.from_queryset(CustomQuerySet)()
+Or store: MyManager = CustomManager.from_queryset(CustomQuerySet)
+SECTION: CUSTOM MANAGERS AND MODEL INHERITANCE
+PURPOSE: This section explains manager inheritance.
+CONCEPT: INHERITANCE RULES
+Inherited by Python name resolution.
+No managers: auto objects.
+Default: Meta.default_manager_name or first declared/parent default.
+CODE EXAMPLE:
+class AbstractBase(models.Model):
+    # ...
+    objects = CustomManager()
+
+    class Meta:
+        abstract = True
+ChildA: objects default.
+ChildB: default_manager = OtherManager(); objects inherited.
+Extra managers: use another abstract base after defaults.
+CONCEPT: IMPLEMENTATION CONCERNS
+Manager must be shallow copyable.
+If overriding getattr etc., ensure copyable.
+SUMMARY:
+
+Default objects; custom names possible.
+Extend for methods or filtered QuerySet.
+Default/base managers special.
+Inheritance: careful ordering for defaults.

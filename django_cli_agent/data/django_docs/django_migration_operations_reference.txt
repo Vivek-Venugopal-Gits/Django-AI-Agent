@@ -1,0 +1,184 @@
+PURPOSE: This section describes Operation objects in migration files that declaratively record database changes, used for schema/data migrations and autodetection.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django migrations for schema/data changes.
+
+CONCEPT: MIGRATION FILES OVERVIEW
+Migration files contain Operations; Django builds in-memory schema representation for SQL generation and model comparison.
+Use makemigrations --empty for custom Operations, but manual schema ops can confuse autodetector.
+SECTION: SCHEMA OPERATIONS
+PURPOSE: This section lists operations for model/table changes.
+CONCEPT: CREATEMODEL CLASS
+Creates model and table.
+CODE EXAMPLE:
+class CreateModel(name, fields, options=None, bases=None, managers=None)
+name: model name.
+fields: list of (field_name, field_instance).
+options: Meta dict.
+bases: inheritance list.
+managers: list of (manager_name, manager_instance).
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding new models.
+DO NOT USE WHEN:
+Complex interdependencies.
+
+CONCEPT: DELETEMODEL CLASS
+Deletes model and table.
+CODE EXAMPLE:
+class DeleteModel(name)
+CONCEPT: RENAMEMODEL CLASS
+Renames model.
+CODE EXAMPLE:
+class RenameModel(old_name, new_name)
+May need manual if many changes.
+CONCEPT: ALTERMODELTABLE CLASS
+Changes table name (db_table Meta).
+CODE EXAMPLE:
+class AlterModelTable(name, table)
+CONCEPT: ALTERMODELTABLECOMMENT CLASS
+Changes table comment (db_table_comment Meta).
+CODE EXAMPLE:
+class AlterModelTableComment(name, table_comment)
+CONCEPT: ALTERUNIQUETOGETHER CLASS
+Changes unique_together Meta set.
+CODE EXAMPLE:
+class AlterUniqueTogether(name, unique_together)
+CONCEPT: ALTERINDEXTOGETHER CLASS
+Changes index_together Meta set (pre-4.2; use AddIndex/RemoveIndex).
+CODE EXAMPLE:
+class AlterIndexTogether(name, index_together)
+CONCEPT: ALTERORDERWITHRESPECTTO CLASS
+Adds/removes _order for order_with_respect_to Meta.
+CODE EXAMPLE:
+class AlterOrderWithRespectTo(name, order_with_respect_to)
+CONCEPT: ALTERMODELOPTIONS CLASS
+Changes Meta options like permissions.
+CODE EXAMPLE:
+class AlterModelOptions(name, options)
+No DB effect; for RunPython.
+CONCEPT: ALTERMODELMANAGERS CLASS
+Alters managers in migrations.
+CODE EXAMPLE:
+class AlterModelManagers(name, managers)
+CONCEPT: ADDFIELD CLASS
+Adds field.
+CODE EXAMPLE:
+class AddField(model_name, name, field, preserve_default=True)
+preserve_default: bake default or temporary.
+For nullable/default, add without default first, then alter.
+CONCEPT: REMOVEFIELD CLASS
+Removes field.
+CODE EXAMPLE:
+class RemoveField(model_name, name)
+Reversible if nullable/default; data loss irreversible.
+PostgreSQL: dependent objects may need manual removal (new in 6.0).
+CONCEPT: ALTERFIELD CLASS
+Alters field.
+CODE EXAMPLE:
+class AlterField(model_name, name, field, preserve_default=True)
+Not all changes possible on all DBs.
+CONCEPT: RENAMEFIELD CLASS
+Renames field/column.
+CODE EXAMPLE:
+class RenameField(model_name, old_name, new_name)
+CONCEPT: ADDINDEX CLASS
+Adds index.
+CODE EXAMPLE:
+class AddIndex(model_name, index)
+index: Index instance.
+CONCEPT: REMOVEINDEX CLASS
+Removes index.
+CODE EXAMPLE:
+class RemoveIndex(model_name, name)
+CONCEPT: RENAMEINDEX CLASS
+Renames index.
+CODE EXAMPLE:
+class RenameIndex(model_name, new_name, old_name=None, old_fields=None)
+On SQLite: drops/recreates.
+CONCEPT: ADDCONSTRAINT CLASS
+Adds constraint.
+CODE EXAMPLE:
+class AddConstraint(model_name, constraint)
+CONCEPT: REMOVECONSTRAINT CLASS
+Removes constraint.
+CODE EXAMPLE:
+class RemoveConstraint(model_name, name)
+CONCEPT: ALTERCONSTRAINT CLASS
+Alters constraint without DB effect (new in 5.2).
+CODE EXAMPLE:
+class AlterConstraint(model_name, name, constraint)
+SECTION: SPECIAL OPERATIONS
+PURPOSE: This section lists operations for custom SQL/Python.
+CONCEPT: RUNSQL CLASS
+Runs arbitrary SQL.
+CODE EXAMPLE:
+class RunSQL(sql, reverse_sql=None, state_operations=None, hints=None, elidable=False)
+sql/reverse_sql: strings/lists/2-tuples.
+On PostgreSQL/SQLite: avoid BEGIN/COMMIT in non-atomic.
+state_operations: equivalent state ops.
+hints: for routers.
+elidable: remove on squashing.
+RunSQL.noop: no-op.
+CONCEPT: RUNPYTHON CLASS
+Runs Python code.
+CODE EXAMPLE:
+class RunPython(code, reverse_code=None, atomic=None, hints=None, elidable=False)
+code/reverse_code: callables(apps, schema_editor).
+apps: historical models.
+schema_editor: for schema changes.
+atomic: transaction control.
+hints: for routers.
+elidable: remove on squashing.
+RunPython.noop: no-op.
+CONCEPT: SEPARATEDATABASEANDSTATE CLASS
+Mixes DB/state ops.
+CODE EXAMPLE:
+class SeparateDatabaseAndState(database_operations=None, state_operations=None)
+database_operations: for DB.
+state_operations: for state.
+SECTION: OPERATION CATEGORY
+PURPOSE: This section categorizes operations for makemigrations symbols.
+CONCEPT: OPERATIONCATEGORY ENUM
+ADDITION (+), REMOVAL (-), ALTERATION (~), PYTHON (p), SQL (s), MIXED (?).
+SECTION: WRITING YOUR OWN
+PURPOSE: This section explains creating custom Operations.
+CODE EXAMPLE:
+from django.db.migrations.operations.base import Operation
+
+class MyCustomOperation(Operation):
+    reduces_to_sql = False
+    reversible = False
+    category = OperationCategory.ADDITION
+
+    def __init__(self, arg1, arg2):
+        pass
+
+    def state_forwards(self, app_label, state):
+        pass
+
+    def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        pass
+
+    def database_backwards(self, app_label, schema_editor, from_state, to_state):
+        pass
+
+    def describe(self):
+        return "Custom Operation"
+
+    @property
+    def migration_name_fragment(self):
+        return "custom_operation_%s_%s" % (self.arg1, self.arg2)
+Look at built-in for patterns.
+Use ProjectState.apps for historical models.
+from_state/to_state for differences.
+references_model: for autodetection (optional).
+SUMMARY:
+
+Use operations for schema/data changes.
+Schema: model/field/index/constraint ops.
+Special: custom SQL/Python, separate DB/state.
+Custom: extend Operation class.

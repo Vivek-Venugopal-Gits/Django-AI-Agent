@@ -1,0 +1,103 @@
+PURPOSE: Collects static files (CSS, JS, images) from apps and specified locations into a single directory for easy production serving.
+See howto/static-files for introduction and deployment guidelines.
+SECTION: SETTINGS
+PURPOSE: Configures static files handling.
+STORAGES: Dict with 'staticfiles' backend (default FileSystemStorage).
+STATIC_ROOT: Collection directory for collectstatic.
+STATIC_URL: URL prefix for serving (e.g., "/static/").
+STATICFILES_DIRS: Additional directories to find files.
+STATICFILES_FINDERS: List of finder classes (defaults: FileSystemFinder, AppDirectoriesFinder).
+SECTION: MANAGEMENT COMMANDS
+PURPOSE: Tools for managing static files.
+CONCEPT: COLLECTSTATIC COMMAND
+Collects files into STATIC_ROOT.
+Resolves duplicates by first-found; uses modified timestamps for efficiency.
+Permissions from FILE_UPLOAD_PERMISSIONS/DIRECTORY_PERMISSIONS; customize by subclassing storage with file_permissions_mode/directory_permissions_mode.
+COMMAND:
+CODE:
+python manage.py collectstatic
+Options: --noinput (no prompts), --ignore PATTERN (glob ignore), --dry-run, --clear (clear first), --link (symlink), --no-post-process, --no-default-ignore.
+Custom ignore: Subclass StaticFilesConfig, set ignore_patterns; replace in INSTALLED_APPS.
+COMMAND:
+CODE:
+from django.contrib.staticfiles.apps import StaticFilesConfig
+
+class MyStaticFilesConfig(StaticFilesConfig):
+    ignore_patterns = [...]  # custom list
+CONCEPT: FINDSTATIC COMMAND
+Searches for static files using finders.
+COMMAND:
+CODE:
+python manage.py findstatic css/base.css admin/js/core.js
+--first: Only first match.
+--verbosity 0: Paths only; 2: All searched locations.
+CONCEPT: RUNSERVER COMMAND
+Overrides core runserver for static serving if installed and DEBUG=True.
+COMMAND:
+CODE:
+python manage.py runserver --nostatic  # Disable
+python manage.py runserver --insecure  # Force with DEBUG=False (inefficient/insecure)
+--insecure with ManifestStaticFilesStorage invalid.
+SECTION: STORAGES
+PURPOSE: Backends for static file storage.
+CONCEPT: STATICFILESSTORAGE
+Subclass of FileSystemStorage; uses STATIC_ROOT/STATIC_URL.
+post_process(paths, **options): Yields (original, processed, bool/exception); used by collectstatic.
+CONCEPT: MANIFESTSTATICFILESSTORAGE
+Subclass of StaticFilesStorage; appends MD5 hash to filenames (e.g., styles.55e7cbb9ba48.css).
+Keeps old files; applies far-future Expires.
+Replaces paths in files (CSS @import/url, source maps, experimental JS modules).
+Requirements: staticfiles backend = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage', DEBUG=False, run collectstatic.
+Stores mapping in staticfiles.json.
+manifest_hash: Single hash for all manifest changes.
+max_post_process_passes: Max replacement passes (default 5).
+manifest_strict: Raise ValueError if file missing in manifest (default True).
+file_hash(name, content=None): MD5 by default; override for custom.
+CONCEPT: MANIFESTFILESMIXIN
+Mixin to add hashing to custom storages.
+SECTION: FINDERS MODULE
+PURPOSE: Locates static files.
+searched_locations: List of searched paths.
+COMMAND:
+CODE:
+from django.contrib.staticfiles import finders
+
+result = finders.find("css/base.css")
+searched_locations = finders.searched_locations
+SECTION: OTHER HELPERS
+PURPOSE: Additional tools for static files.
+django.template.context_processors.static: Adds STATIC_URL to context.
+{% static %}: Urljoins path with STATIC_URL; uses storage.url if installed.
+{% get_static_prefix %}: STATIC_URL as variable.
+{% get_media_prefix %}: MEDIA_URL as variable.
+storages['staticfiles']: Ready instance of staticfiles storage.
+CONCEPT: STATIC FILE DEVELOPMENT VIEW
+Serve static files in dev (inefficient/insecure).
+views.serve(request, path)
+Enabled by runserver if DEBUG=True.
+Guesses mimetypes; may need OS updates.
+Add to URLconf if not runserver:
+COMMAND:
+CODE:
+from django.conf import settings
+from django.contrib.staticfiles import views
+from django.urls import re_path
+
+if settings.DEBUG:
+    urlpatterns += [
+        re_path(r"^static/(?P<path>.*)$", views.serve),
+    ]
+Helper: staticfiles_urlpatterns() returns pattern list.
+COMMAND:
+CODE:
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+
+urlpatterns += staticfiles_urlpatterns()
+Inspects STATIC_URL; only if DEBUG=True and STATIC_URL not empty/full URL.
+CONCEPT: SPECIALIZED TEST CASE FOR LIVE TESTING
+StaticLiveServerTestCase: Extends LiveServerTestCase; serves static assets via finders for HTTP testing (Selenium).
+No collectstatic needed.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - Static asset management.

@@ -1,0 +1,172 @@
+SECTION: FILE OBJECT OVERVIEW
+PURPOSE: Describe Django’s core file-handling classes (File, ContentFile, ImageFile) and extra methods on model-attached files.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: Django applications that read, write, or store files via django.core.files and model FileField/ImageField.
+​
+SECTION: FILE CLASS
+PURPOSE: Explain the django.core.files.File wrapper around Python file objects and its primary API.
+​
+CONCEPT: FILE WRAPPER
+django.core.files.File(file_object, name=None) wraps a Python file object and adds Django-specific behavior used wherever Django needs to represent a file.
+​
+Most code uses File instances that Django creates (uploaded files, model fields), but you can construct File manually from a Python file object as needed.
+​
+CONCEPT: CORE ATTRIBUTES
+name: File name including the relative path from MEDIA_ROOT when used with Django storage.
+​
+size: File size in bytes.
+​
+file: Underlying file object being wrapped.
+​
+Subclasses like ContentFile and FieldFile may replace file with another File subclass instead of a bare Python file object.
+​
+Prefer using the subclass’s own attributes/methods rather than reaching into .file directly.
+​
+mode: File’s read/write mode.
+​
+CONCEPT: CORE METHODS
+open(mode=None, *args, **kwargs): Opens or reopens the file and seeks to position 0, passing arguments to Python’s built-in open().
+​
+mode=None reuses the original mode; otherwise, it overrides the file’s mode.
+​
+Usable as a context manager: with file.open() as f:.
+​
+__iter__(): Iterates over the file line by line.
+​
+chunks(chunk_size=None): Iterates over the file in chunks (default 64 KB), useful for streaming large files without loading them fully into memory.
+​
+multiple_chunks(chunk_size=None): Returns True if file is large enough to require multiple chunks for the given chunk size.
+​
+close(): Closes the file.
+​
+In addition, File exposes the underlying file object’s encoding, fileno, flush, isatty, newlines, read, readinto, readline, readlines, seek, tell, truncate, write, writelines, readable(), writable(), and seekable().
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You need a Django-aware file wrapper around a Python file object or uploaded file.
+​
+You want chunked reading or integration with Django’s file storage system.
+​
+DO NOT USE WHEN:
+
+You need URL/path attributes for stored files on models; use FieldFile via model FileField instead.
+​
+SUMMARY:
+File wraps file objects with size, name, and streaming helpers like chunks().
+​
+Subclasses may override the underlying .file; use the wrapper API instead of reaching into .file.
+​
+SECTION: CONTENTFILE CLASS
+PURPOSE: Describe ContentFile for in-memory, string/bytes-based file content.
+​
+CONCEPT: IN-MEMORY FILE CONTENT
+ContentFile(content, name=None) inherits from File but works directly with in-memory content (string or bytes) instead of an on-disk file.
+​
+It is useful when generating files dynamically or converting data in memory before saving to a FileField or storage.
+​
+COMMAND: CONTENTFILE EXAMPLE
+python
+from django.core.files.base import ContentFile
+
+f1 = ContentFile("esta frase está en español")
+f2 = ContentFile(b"these are bytes")
+You can also use ContentFile with storage:
+
+python
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+
+path = default_storage.save("path/to/file", ContentFile(b"new content"))
+USAGE GUIDELINES:
+USE WHEN:
+
+Creating a file-like object from raw bytes or strings to assign to a FileField/ImageField without writing an intermediate disk file.
+​
+DO NOT USE WHEN:
+
+Direct streaming from disk is required; in that case, wrap a real file with File.
+​
+SUMMARY:
+ContentFile wraps in-memory bytes or strings as a File-compatible object.
+​
+It integrates seamlessly with Django’s storage and model FileFields.
+​
+SECTION: IMAGEFILE CLASS
+PURPOSE: Describe ImageFile for image-specific file handling.
+​
+CONCEPT: IMAGEFILE WRAPPER
+ImageFile(file_object, name=None) is a subclass of File specialized for images.
+​
+It inherits all File attributes and methods and adds image metadata properties.
+​
+CONCEPT: IMAGE METADATA
+width: Image width in pixels.
+​
+height: Image height in pixels.
+​
+These properties rely on image processing libraries and are typically used via ImageField on models rather than constructing ImageFile manually.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Handling image uploads or generated images where you need width and height metadata.
+​
+DO NOT USE WHEN:
+
+Working with non-image binary data; use File instead.
+​
+SUMMARY:
+ImageFile extends File with pixel dimensions for image content.
+​
+It is typically accessed through model ImageField instances.
+​
+SECTION: METHODS ON FILES ATTACHED TO MODEL FIELDS
+PURPOSE: Explain extra File methods available when a file is attached to a model field (e.g. Car.photo).
+​
+CONCEPT: MODEL-ATTACHED FILES
+When a File (or subclass) is associated with a model field such as FileField or ImageField, the field descriptor returns a FieldFile-like object that behaves like File and adds model integration methods.
+​
+These model-attached file objects provide:
+
+File.save(name, content, save=True)
+Saves a new file with the given name and content using the field’s storage backend.
+​
+Does not overwrite the current file on disk; instead, it creates a new file and updates the model instance to point to it.
+​
+If save=True, calls the model’s save() after the file is stored.
+​
+Equivalence example:
+
+python
+>>> car.photo.save("myphoto.jpg", content, save=False)
+>>> car.save()
+is equivalent to:
+
+python
+>>> car.photo.save("myphoto.jpg", content, save=True)
+content must be a File instance or subclass such as ContentFile.
+​
+File.delete(save=True)
+Removes the file reference from the model instance and deletes the underlying stored file.
+​
+If save=True, calls the model’s save() after deletion.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Saving or replacing a file on a model FileField/ImageField and persisting that change via the model’s save().
+​
+Deleting a stored file and clearing the corresponding model field.
+​
+DO NOT USE WHEN:
+
+You only need to manipulate files outside of model context; use File or storage APIs directly.
+​
+SUMMARY:
+Model-attached file objects expose save() and delete() to integrate file operations with model persistence.
+​
+File content for save() must be a File or subclass instance.

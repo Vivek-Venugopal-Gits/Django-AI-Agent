@@ -1,0 +1,221 @@
+SECTION: TEMPLATERESPONSE OVERVIEW
+PURPOSE: Explain why TemplateResponse and SimpleTemplateResponse exist and how they differ from standard HttpResponse.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: Django views that render templates and need late modification by middleware or decorators.
+​
+CONCEPT: LAZY TEMPLATE RENDERING
+Standard HttpResponse instances are created with pre-rendered content and do not retain template or context details in an easily modifiable form.
+​
+TemplateResponse and SimpleTemplateResponse keep the template and context until rendering time, allowing middleware or decorators to modify them before the final output is generated.
+​
+SECTION: SIMPLETEMPLATERESPONSE OBJECTS
+PURPOSE: Describe the SimpleTemplateResponse class, its attributes, and its methods.
+​
+CONCEPT: SIMPLETEMPLATERESPONSE CLASS
+SimpleTemplateResponse is an HttpResponse subclass that stores template and context data without referencing the current request.
+​
+Rendering is deferred until explicitly requested, letting code adjust template or context before generating the response body.
+​
+ATTRIBUTES: SIMPLETEMPLATERESPONSE
+SimpleTemplateResponse.template_name
+
+Name of the template to render or a backend-dependent template object, or a list of template names.
+​
+Example: ['foo.html', 'path/to/bar.html'].
+​
+SimpleTemplateResponse.context_data
+
+A dict holding context values for template rendering (for example {'foo': 123}).
+​
+SimpleTemplateResponse.rendered_content
+
+The current rendered content based on the current template and context.
+​
+Evaluating this property renders the template but does not assign the result to response.content automatically.
+​
+SimpleTemplateResponse.is_rendered
+
+Boolean indicating whether the response content has been rendered and assigned to response.content.
+​
+METHODS: SIMPLETEMPLATERESPONSE.INIT
+SimpleTemplateResponse.init(template, context=None, content_type=None, status=None, charset=None, using=None, headers=None)
+​
+template: Template object, template name, or list of names.
+​
+context: dict of values to add to the template context (defaults to empty dict).
+​
+content_type: Value for the Content-Type header; defaults to 'text/html' if not given.
+​
+status: HTTP status code of the response.
+​
+charset: Charset used to encode the response; inferred from content_type or falls back to DEFAULT_CHARSET.
+​
+using: Template engine NAME used to load the template.
+​
+headers: dict of HTTP headers to add to the response.
+​
+METHODS: CONTEXT AND TEMPLATE RESOLUTION
+SimpleTemplateResponse.resolve_context(context)
+
+Preprocesses a context dict before rendering and returns a context object; default implementation returns the same dict.
+​
+Override this to customize context processing.
+​
+SimpleTemplateResponse.resolve_template(template)
+
+Accepts a template object, name, or list of names and returns the backend template instance to render.
+​
+The default behavior handles lists via selection, strings via get_template(), and passes through template objects unchanged.
+​
+METHODS: POST-RENDER CALLBACKS
+SimpleTemplateResponse.add_post_render_callback(callback)
+
+Registers a callback to run after rendering has occurred.
+​
+If the response is already rendered, the callback is invoked immediately.
+​
+Each callback receives the rendered SimpleTemplateResponse instance as its only argument.
+​
+If a callback returns a non-None value, that value is used as the response for subsequent callbacks.
+​
+METHODS: RENDERING
+SimpleTemplateResponse.render()
+
+Sets response.content to rendered_content, runs all post-render callbacks, and returns the final response object.
+​
+Only affects the response the first time it is called; subsequent calls return the same result without re-rendering.
+​
+SUMMARY:
+SimpleTemplateResponse stores template and context and defers rendering.
+​
+Use resolve_template, resolve_context, and add_post_render_callback to customize rendering and post-processing.
+​
+SECTION: TEMPLATERESPONSE OBJECTS
+PURPOSE: Describe the TemplateResponse class and how it extends SimpleTemplateResponse with request awareness.
+​
+CONCEPT: TEMPLATERESPONSE CLASS
+TemplateResponse is a subclass of SimpleTemplateResponse that additionally stores the current HttpRequest.
+​
+It behaves like SimpleTemplateResponse but allows template rendering to use the request where needed.
+​
+METHODS: TEMPLATERESPONSE.INIT
+TemplateResponse.init(request, template, context=None, content_type=None, status=None, charset=None, using=None, headers=None)
+​
+Parameters:
+
+request: HttpRequest instance associated with the response.
+​
+template: Template object, template name, or list of template names.
+​
+context: Context dict (defaults to empty dict).
+​
+content_type: Response Content-Type, default 'text/html'.
+​
+status: HTTP status code.
+​
+charset: Response charset (from content_type or DEFAULT_CHARSET).
+​
+using: Template engine NAME to use.
+​
+headers: Additional response headers as a dict.
+​
+SUMMARY:
+TemplateResponse is a request-aware SimpleTemplateResponse.
+​
+Use it when template rendering or post-render logic depends on the request.
+​
+SECTION: RENDERING PROCESS
+PURPOSE: Explain when and how TemplateResponse instances are rendered and how rendering can be controlled.
+​
+CONCEPT: WHEN RENDERING OCCURS
+A TemplateResponse is rendered in exactly three situations:
+​
+When SimpleTemplateResponse.render() is called explicitly.
+​
+When response.content is assigned, using the current rendered_content.
+​
+After it passes through template response middleware and before it passes through general response middleware.
+​
+A TemplateResponse can only be rendered once via render(); the first call sets the content, and subsequent render() calls do not change it.
+​
+Assigning response.content directly always updates the content, even after rendering.
+​
+COMMAND: RENDERING BEHAVIOR EXAMPLE
+python
+# Set up a rendered TemplateResponse
+>>> from django.template.response import TemplateResponse
+>>> t = TemplateResponse(request, "original.html", {})
+>>> t.render()
+>>> print(t.content)
+Original content
+
+# Re-rendering doesn't change content
+>>> t.template_name = "new.html"
+>>> t.render()
+>>> print(t.content)
+Original content
+
+# Assigning content does change, no render() call required
+>>> t.content = t.rendered_content
+>>> print(t.content)
+New content
+SUMMARY:
+render() finalizes content once; later calls are no-ops.
+​
+Directly setting response.content overrides the existing body even after rendering.
+​
+SECTION: POST-RENDER CALLBACKS
+PURPOSE: Explain how post-render callbacks can defer processing that depends on rendered content.
+​
+CONCEPT: CALLBACK USE CASES
+Some operations, such as caching, cannot safely run on unrendered responses and must wait until content is fully rendered.
+​
+Middleware can naturally operate after rendering, but decorators typically run earlier, so callbacks provide a way to defer processing in decorators.
+​
+COMMAND: POST-RENDER CALLBACK EXAMPLE
+python
+from django.template.response import TemplateResponse
+
+def my_render_callback(response):
+    # Do content-sensitive processing
+    do_post_processing()
+
+def my_view(request):
+    # Create a response
+    response = TemplateResponse(request, "mytemplate.html", {})
+    # Register the callback
+    response.add_post_render_callback(my_render_callback)
+    # Return the response
+    return response
+my_render_callback() is guaranteed to run after mytemplate.html has been rendered and receives the fully rendered TemplateResponse as its argument.
+​
+If the template is already rendered when the callback is registered, the callback runs immediately.
+​
+SUMMARY:
+Use add_post_render_callback to defer content-dependent logic such as caching.
+​
+Callbacks run after rendering and can replace the response by returning a non-None value.
+​
+SECTION: USING TEMPLATERESPONSE AND SIMPLETEMPLATERESPONSE
+PURPOSE: Show how to use these classes in place of HttpResponse or render().
+​
+CONCEPT: DROP-IN REPLACEMENT FOR HTTPRESPONSE
+TemplateResponse can be returned anywhere a normal HttpResponse is expected.
+​
+It can be used as an alternative to django.shortcuts.render() when deferred rendering or post-render callbacks are needed.
+​
+COMMAND: TEMPLATERESPONSE VIEW EXAMPLE
+python
+from django.template.response import TemplateResponse
+
+def blog_index(request):
+    return TemplateResponse(
+        request, "entry_list.html", {"entries": Entry.objects.all()}
+    )
+SUMMARY:
+Use TemplateResponse when you want middleware or decorators to modify template or context before rendering.
+​
+Use SimpleTemplateResponse when request access is not required but deferred rendering and callbacks are needed.

@@ -1,0 +1,145 @@
+SECTION: Tutorial Overview - Writing Your First Django App, Part 1
+PURPOSE:
+This section introduces the tutorial by describing the basic poll application that will be built, consisting of a public site for viewing and voting on polls and an admin site for managing polls.
+The application has two parts:
+
+A public site that lets people view polls and vote in them.
+An admin site that lets you add, change, and delete polls.
+
+SECTION: Django Installation Verification
+CONCEPT:
+Verify that Django is installed and identify the installed version.
+COMMAND:
+python -m django --version
+If Django is installed, the command displays the version. If not installed, an error "No module named django" appears.
+VERSION AND SCOPE ANCHORS:
+DJANGO VERSION: 6.0
+PYTHON VERSION: 3.12 and later
+APPLICABILITY:
+
+This tutorial targets Django 6.0
+Compatible with Python 3.12 and newer versions
+
+SECTION: Creating a Django Project
+CONCEPT:
+A Django project is a collection of settings for an instance of Django, including database configuration, Django-specific options, and application-specific settings. Use the django-admin tool to generate the initial project structure.
+COMMAND:
+django-admin startproject mysite djangotutorial
+This command creates a directory named djangotutorial containing the mysite project. The outer directory name is arbitrary and can be renamed.
+USAGE GUIDELINES:
+DO NOT USE WHEN:
+
+Naming the project after built-in Python or Django components (e.g., django or test), as this causes conflicts.
+
+SECTION: Django Project Structure
+CONCEPT:
+The startproject command generates a standard directory and file layout for a Django project.
+Directory structure:
+textdjangotutorial/
+    manage.py
+    mysite/
+        __init__.py
+        settings.py
+        urls.py
+        asgi.py
+        wsgi.py
+FILE: manage.py
+ROLE: Command-line utility for interacting with the Django project in various ways.
+FILE: mysite/
+ROLE: Python package containing the project code; used as the import base (e.g., mysite.urls).
+FILE: mysite/init.py
+ROLE: Empty file that marks the directory as a Python package.
+FILE: mysite/settings.py
+ROLE: Contains configuration and settings for the Django project.
+FILE: mysite/urls.py
+ROLE: Defines URL declarations for the project; acts as the table of contents for site URLs.
+FILE: mysite/asgi.py
+ROLE: Entry point for ASGI-compatible web servers to serve the project.
+FILE: mysite/wsgi.py
+ROLE: Entry point for WSGI-compatible web servers to serve the project.
+SECTION: Running the Development Server
+CONCEPT:
+The Django development server is a lightweight, Python-based web server for local development and testing.
+COMMAND:
+python manage.py runserver
+This starts the server at http://127.0.0.1:8000/. Visiting this address in a browser displays a congratulations page confirming successful setup.
+Ignore warnings about unapplied migrations at this stage.
+USAGE GUIDELINES:
+DO NOT USE WHEN:
+
+Deploying to production; use a production-grade WSGI or ASGI server instead.
+
+CONCEPT:
+The development server automatically reloads code on changes for most modifications. Adding new files may require manual restart.
+SUMMARY:
+
+Development server enables rapid local testing
+Not suitable for production environments
+Auto-reloading supports efficient development workflow
+
+SECTION: Project vs App Distinction
+CONCEPT:
+A Django app is a self-contained web application that performs a specific function (e.g., a poll system). A project is a collection of configuration and multiple apps for a complete website. Apps are reusable across projects.
+SECTION: Creating a Django App
+CONCEPT:
+Use the startapp management command to generate the standard directory structure for a new app.
+COMMAND:
+python manage.py startapp polls
+Run this command from the directory containing manage.py.
+Directory structure created:
+textpolls/
+    __init__.py
+    admin.py
+    apps.py
+    migrations/
+        __init__.py
+    models.py
+    tests.py
+    views.py
+This structure houses the poll application code.
+SECTION: Writing a Basic View
+CONCEPT:
+A view is a Python function that handles a web request and returns a response.
+Code for the first view (polls/views.py):
+Pythonfrom django.http import HttpResponse
+
+def index(request):
+    return HttpResponse("Hello, world. You're at the polls index.")
+SECTION: Defining App URL Configuration
+CONCEPT:
+Each app can have its own URLconf in a file named urls.py to map URLs to views.
+Code for polls/urls.py:
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("", views.index, name="index"),
+]
+Updated polls directory structure includes urls.py.
+SECTION: Including App URLs in Project URLconf
+CONCEPT:
+Connect the app's URLconf to the project's root URLconf using include().
+Code for mysite/urls.py:
+from django.contrib import admin
+from django.urls import include, path
+
+urlpatterns = [
+    path("polls/", include("polls.urls")),
+    path("admin/", admin.site.urls),
+]
+The include() function enables modular, reusable URL patterns by delegating matching URL segments to the included URLconf.
+USAGE GUIDELINES:
+USE WHEN:
+
+Including other URL patterns from apps or modules.
+
+DO NOT USE WHEN:
+
+Directly including admin.site.urls (this is the standard exception).
+
+SECTION: Testing the View
+COMMAND:
+python manage.py runserver
+Visit http://localhost:8000/polls/ in a browser to see the response "Hello, world. You're at the polls index."
+Ensure the URL includes /polls/ to match the configured path.

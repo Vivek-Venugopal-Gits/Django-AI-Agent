@@ -1,0 +1,172 @@
+SECTION: MANAGING FILES OVERVIEW
+Django provides APIs for handling uploaded and generated files through FileField/ImageField on models and the default_storage system.
+​
+Files are stored using MEDIA_ROOT/MEDIA_URL by default via FileSystemStorage, but custom storage backends can be configured.
+​
+This covers model file access, manual File construction, and storage system usage.
+​
+SECTION: FILES IN MODELS
+PURPOSE: Explain how FileField and ImageField provide file access on model instances.
+​
+CONCEPT: MODEL FILE ATTRIBUTES
+Model fields like ImageField(upload_to="cars") return a FieldFile object (a File subclass) when accessed on saved instances.
+​
+This object exposes name (stored path), path (absolute filesystem path), url (servable URL), size, and image-specific width/height.
+​
+COMMAND: MODEL FILE ACCESS EXAMPLE
+python
+>>> car = Car.objects.get(name="57 Chevy")
+>>> car.photo
+<ImageFieldFile: cars/chevy.jpg>
+>>> car.photo.name
+'cars/chevy.jpg'
+>>> car.photo.path
+'/media/cars/chevy.jpg'
+>>> car.photo.url
+'https://media.example.com/cars/chevy.jpg'
+File names are finalized only after model save; path and url are unavailable before saving.
+​
+COMMAND: RENAMING MODEL FILES
+To change a file's stored name, update name (relative to storage root), move the file manually, then save the model:
+
+python
+>>> import os
+>>> from django.conf import settings
+>>> initial_path = car.photo.path
+>>> car.photo.name = "cars/chevy_ii.jpg"
+>>> new_path = os.path.join(settings.MEDIA_ROOT, car.photo.name)
+>>> os.rename(initial_path, new_path)
+>>> car.save()
+>>> car.photo.path == new_path
+True
+COMMAND: ASSIGNING EXISTING FILES TO MODELS
+python
+>>> from pathlib import Path
+>>> from django.core.files import File
+>>> path = Path("/some/external/specs.pdf")
+>>> car = Car.objects.get(name="57 Chevy")
+>>> with path.open(mode="rb") as f:
+...     car.specs = File(f, name=path.name)
+...     car.save()
+CONCEPT: IMAGEFIELD REOPENING
+ImageField metadata (width, height) is available immediately, but image processing requires reopening the file:
+
+python
+>>> from PIL import Image
+>>> car.photo.width  # Works
+191
+>>> image = Image.open(car.photo)  # Fails: seek of closed file
+>>> car.photo.open()
+<ImageFieldFile: cars/chevy.jpg>
+>>> image = Image.open(car.photo)  # Now works
+SUMMARY:
+Model file fields provide name, path, url, and image dimensions post-save.
+​
+Assign existing files via File(file_object, name) and model save.
+​
+SECTION: MANUAL FILE CONSTRUCTION
+PURPOSE: Show how to create django.core.files.File instances from Python file objects.
+​
+CONCEPT: WRAPPING FILE OBJECTS
+Django uses File internally for all file representations; construct manually by wrapping Python file objects.
+​
+COMMAND: BASIC FILE WRAPPING
+python
+>>> from django.core.files import File
+>>> f = open("/path/to/hello.world", "w")
+>>> myfile = File(f)
+Files created this way are not auto-closed; use context managers or explicit close() calls.
+​
+COMMAND: AUTO-CLOSING WITH CONTEXT MANAGER
+python
+>>> from django.core.files import File
+>>> with open("/path/to/hello.world", "w") as f:
+...     myfile = File(f)
+...     myfile.write("Hello World")
+>>> myfile.closed
+True
+CONCEPT: FILE DESCRIPTOR LIMITS
+Failing to close files in loops over large querysets can exhaust file descriptors, causing OSError: [Errno 24] Too many open files.
+​
+Always use context managers or explicit close() when accessing model files in bulk.
+​
+SUMMARY:
+Wrap Python file objects with File() for Django compatibility.
+​
+Use context managers to ensure files close automatically.
+​
+SECTION: FILE STORAGE SYSTEMS
+PURPOSE: Describe Django's pluggable storage backends and direct storage usage.
+​
+CONCEPT: STORAGE ABSTRACTION
+Django delegates file operations to storage backends configured via STORAGES (default: FileSystemStorage).
+​
+FileField.storage accepts a Storage instance or callable returning one.
+​
+COMMAND: DIRECT STORAGE USAGE
+python
+>>> from django.core.files.base import ContentFile
+>>> from django.core.files.storage import default_storage
+>>> path = default_storage.save("path/to/file", ContentFile(b"new content"))
+>>> path
+'path/to/file'
+>>> default_storage.size(path)
+11
+>>> default_storage.open(path).read()
+b'new content'
+>>> default_storage.delete(path)
+>>> default_storage.exists(path)
+False
+COMMAND: CUSTOM FILESYSTEMSTORAGE
+python
+from django.core.files.storage import FileSystemStorage
+from django.db import models
+
+fs = FileSystemStorage(location="/media/photos")
+
+class Car(models.Model):
+    photo = models.ImageField(storage=fs)
+Overrides MEDIA_ROOT for that specific field.
+​
+SECTION: DYNAMIC STORAGE CALLABLES
+PURPOSE: Show how to select storage at runtime via callables.
+​
+CONCEPT: RUNTIME STORAGE SELECTION
+FileField.storage accepts a callable evaluated at model load time, returning a Storage instance.
+​
+Useful for environment-specific storage (local vs. cloud).
+​
+COMMAND: CALLABLE STORAGE
+python
+from django.conf import settings
+from .storages import MyLocalStorage, MyRemoteStorage
+
+def select_storage():
+    return MyLocalStorage() if settings.DEBUG else MyRemoteStorage()
+
+class MyModel(models.Model):
+    my_file = models.FileField(storage=select_storage)
+COMMAND: STORAGES CALLABLE
+python
+from django.core.files.storage import storages
+
+def select_storage():
+    return storages["mystorage"]
+COMMAND: LAZYOBJECT FOR TESTING
+python
+from django.core.files.storage import storages
+from django.utils.functional import LazyObject
+
+class OtherStorage(LazyObject):
+    def _setup(self):
+        self._wrapped = storages["mystorage"]
+
+my_storage = OtherStorage()
+class MyModel(models.Model):
+    upload = models.FileField(storage=my_storage)
+LazyObject defers evaluation until first use, allowing override_settings() to work in tests.
+​
+SUMMARY:
+Use default_storage for generic file operations outside models.
+​
+Pass Storage instances or callables to FileField.storage for custom behavior.

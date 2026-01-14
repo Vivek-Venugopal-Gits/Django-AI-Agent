@@ -1,0 +1,33 @@
+PURPOSE: Introduce the importance and approach to automated testing in Django applications, covering validation of new code and protection during refactoring.
+DJANGO VERSION: 6.0
+Automated testing identifies bugs effectively.
+A test suite solves:
+
+Validation that new code behaves as expected.
+Assurance that refactors or modifications do not introduce regressions.
+
+Web application testing is complex due to multiple layers: request handling, queries/models, form processing, validation, and template rendering.
+Django provides a test-execution framework and utilities to:
+
+Simulate requests.
+Insert test data.
+Inspect application output.
+Verify expected behavior.
+
+Preferred test framework: Python's built-in unittest module.
+Detailed coverage in separate sections.
+Alternative Python test frameworks are supported via Django's integration API.
+
+SECTION: Django testing structure
+PURPOSE: Outline the main testing documentation sections.
+
+Writing and running tests: Core guide using unittest.
+Testing tools: Django-specific utilities and helpers.
+Advanced testing topics: Integration with other frameworks and advanced techniques.
+
+
+SUMMARY:
+
+Use tests to validate new features and safeguard refactors.
+Django simplifies testing multi-layer web applications.
+Start with unittest-based tests; extend with tools and advanced features as needed.

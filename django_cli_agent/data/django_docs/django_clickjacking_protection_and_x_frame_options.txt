@@ -1,0 +1,178 @@
+=========================
+CLICKJACKING PROTECTION
+=========================
+SECTION: Clickjacking Overview
+
+PURPOSE:
+Explain what clickjacking is and how Django mitigates it.
+
+CONCEPT:
+
+Clickjacking is an attack in which a malicious site loads another site inside a hidden frame or iframe and tricks users into clicking concealed elements. This can cause users to unknowingly perform actions such as purchases or form submissions.
+
+Django provides middleware and decorators to protect against clickjacking by controlling whether responses may be rendered inside frames.
+
+SECTION: Clickjacking Attack Example
+
+PURPOSE:
+Illustrate how a clickjacking attack works in practice.
+
+CONCEPT:
+
+An attacker overlays a transparent iframe containing a sensitive action (e.g., “Buy Now”) over a visible button on their own site. When a logged-in user clicks the visible button, the hidden action is triggered on the target site without the user’s awareness.
+
+SECTION: Browser-Based Clickjacking Defense
+
+PURPOSE:
+Describe the HTTP-level mechanism used to prevent clickjacking.
+
+CONCEPT:
+
+Modern browsers support the X-Frame-Options HTTP header to control whether a resource may be displayed in a frame or iframe.
+
+Supported values:
+
+DENY: Prevents the resource from being loaded in a frame from any site.
+
+SAMEORIGIN: Allows framing only from the same origin.
+
+Browsers enforce these rules automatically when the header is present.
+
+=========================
+DJANGO IMPLEMENTATION
+=========================
+SECTION: Clickjacking Protection Mechanisms
+
+PURPOSE:
+List Django’s built-in methods for setting X-Frame-Options.
+
+CONCEPT:
+
+Django provides two mechanisms:
+
+Middleware that sets the header on all responses
+
+View decorators that override or selectively apply the header
+
+The header is only applied if it is not already present in the response.
+
+SECTION: Global Clickjacking Protection Using Middleware
+
+PURPOSE:
+Explain how to apply clickjacking protection site-wide.
+
+COMMAND:
+MIDDLEWARE = [
+    ...,
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    ...,
+]
+
+CONCEPT:
+
+When enabled, the middleware sets X-Frame-Options on every outgoing response.
+
+Default behavior:
+
+Sets X-Frame-Options to DENY
+
+To change the default value:
+
+COMMAND:
+X_FRAME_OPTIONS = "SAMEORIGIN"
+
+SECTION: Exempting Views from Middleware Protection
+
+PURPOSE:
+Explain how to allow framing for specific views.
+
+CONCEPT:
+
+Some views may need to be embedded in frames. Django provides a decorator to exempt those views from middleware enforcement.
+
+COMMAND:
+from django.http import HttpResponse
+from django.views.decorators.clickjacking import xframe_options_exempt
+
+@xframe_options_exempt
+def ok_to_load_in_a_frame(request):
+    return HttpResponse("This page is safe to load in a frame on any site.")
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+A view must be embedded by external sites
+
+Framing is explicitly required for functionality
+
+DO NOT USE WHEN:
+
+The view performs sensitive user actions
+
+The view exposes authenticated operations
+
+SECTION: Per-View Clickjacking Control
+
+PURPOSE:
+Explain how to configure X-Frame-Options on individual views.
+
+CONCEPT:
+
+Django provides decorators to explicitly set framing behavior per view. These decorators override middleware behavior.
+
+COMMAND:
+from django.http import HttpResponse
+from django.views.decorators.clickjacking import xframe_options_deny
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+
+@xframe_options_deny
+def view_one(request):
+    return HttpResponse("I won't display in any frame!")
+
+@xframe_options_sameorigin
+def view_two(request):
+    return HttpResponse("Display in a frame if it's from the same origin as me.")
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Only specific views require framing control
+
+Middleware defaults are too restrictive or too permissive
+
+DO NOT USE WHEN:
+
+Site-wide policy is sufficient
+
+SECTION: Interaction with Cookies and Sessions
+
+PURPOSE:
+Clarify framing implications for forms and sessions.
+
+CONCEPT:
+
+When submitting forms or accessing session cookies inside a frame or iframe, cookie SameSite settings may need adjustment. Framing can be blocked by strict cookie policies even when X-Frame-Options allows framing.
+
+=========================
+LIMITATIONS
+=========================
+SECTION: Browser Support Limitations
+
+PURPOSE:
+Explain the constraints of clickjacking protection.
+
+CONCEPT:
+
+X-Frame-Options is only enforced by modern browsers. Older or non-compliant browsers may not honor the header, reducing effectiveness.
+
+SUMMARY:
+
+Clickjacking is mitigated using the X-Frame-Options HTTP header
+
+Django provides middleware and decorators for flexible enforcement
+
+Middleware applies global protection; decorators allow fine-grained control
+
+Protection depends on browser support

@@ -1,0 +1,389 @@
+PURPOSE:
+Provide a comprehensive, production-focused checklist to secure, configure, and optimize a Django application before deployment.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Production Django deployments
+
+WSGI or ASGI-based server environments
+
+SECTION: Deployment Threat Model and Configuration Strategy
+
+PURPOSE:
+Explain why deployment settings require careful review.
+
+CONCEPT:
+
+The public internet is a hostile environment. Django applications MUST be reviewed for security, performance, and operational correctness before deployment.
+
+Django provides many built-in security features. Some are always enabled, while others are optional due to development inconvenience or environment-specific trade-offs. Examples include HTTPS enforcement, caching, and error reporting.
+
+Deployment settings:
+
+MUST be secured for production
+
+OFTEN differ between development, staging, and production
+
+MAY contain sensitive credentials and secrets
+
+A common best practice is to publish development settings and keep production settings private.
+
+SECTION: Automated Deployment Checks
+
+PURPOSE:
+Describe Django’s built-in deployment validation command.
+
+COMMAND:
+CODE:
+manage.py check --deploy
+
+CONCEPT:
+
+The check --deploy command runs automated checks for common security and deployment misconfigurations.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Validating production settings before deployment
+
+Running CI/CD validation steps
+
+DO NOT USE WHEN:
+
+Testing development-only configurations
+
+SECTION: Production Server Requirement
+
+PURPOSE:
+Clarify the requirement for a production-grade server.
+
+CONCEPT:
+
+The Django development server MUST NOT be used in production.
+
+FILE: manage.py runserver
+ROLE: Development-only server for local testing
+
+Production deployments MUST use a WSGI or ASGI-compliant application server.
+
+SECTION: Critical Security Settings
+
+PURPOSE:
+Define mandatory security-related configuration.
+
+SECTION: SECRET_KEY Configuration
+
+PURPOSE:
+Explain secure handling of Django’s cryptographic secret.
+
+FILE: SECRET_KEY
+ROLE: Core cryptographic key used for signing cookies, tokens, and other security features
+
+CONCEPT:
+
+The secret key MUST be a large, random value.
+
+The production secret key MUST NOT be reused elsewhere.
+
+The secret key MUST NOT be committed to source control.
+
+COMMAND:
+CODE:
+import os
+
+SECRET_KEY = os.environ["SECRET_KEY"]
+
+
+Alternative file-based loading:
+
+with open("/etc/secret_key.txt") as f:
+    SECRET_KEY = f.read().strip()
+
+CONCEPT: Key Rotation
+
+Django supports secret key rotation using fallback keys.
+
+FILE: SECRET_KEY_FALLBACKS
+ROLE: List of previously valid secret keys
+
+import os
+
+SECRET_KEY = os.environ["CURRENT_SECRET_KEY"]
+SECRET_KEY_FALLBACKS = [
+    os.environ["OLD_SECRET_KEY"],
+]
+
+
+Old keys MUST be removed from fallbacks promptly.
+
+SECTION: DEBUG Configuration
+
+PURPOSE:
+Prevent sensitive data exposure in production.
+
+FILE: DEBUG
+ROLE: Controls debug output and error visibility
+
+CONCEPT:
+
+DEBUG MUST NEVER BE ENABLED IN PRODUCTION.
+
+When enabled, Django exposes:
+
+Source code snippets
+
+Local variables
+
+Installed packages
+
+Internal settings
+
+This represents a critical security risk.
+
+SECTION: Environment-Specific Settings
+
+PURPOSE:
+Describe settings that vary by deployment environment.
+
+SECTION: ALLOWED_HOSTS
+
+PURPOSE:
+Prevent host header attacks.
+
+FILE: ALLOWED_HOSTS
+ROLE: Whitelist of valid hostnames
+
+CONCEPT:
+
+When DEBUG = False, Django will not serve requests without ALLOWED_HOSTS defined.
+
+Using a wildcard host requires custom validation of the Host header.
+
+The front-end web server SHOULD reject invalid hosts before forwarding requests to Django.
+
+SECTION: Cache Configuration
+
+PURPOSE:
+Ensure safe and effective caching.
+
+FILE: CACHES
+ROLE: Cache backend configuration
+
+CONCEPT:
+
+Development and production cache backends often differ.
+
+Django defaults to per-process local memory caching.
+
+Cache servers often lack strong authentication.
+
+Cache servers MUST only accept connections from application servers.
+
+SECTION: Database Configuration
+
+PURPOSE:
+Secure database connectivity.
+
+FILE: DATABASES
+ROLE: Database connection settings
+
+CONCEPT:
+
+Production and development databases differ.
+
+Database passwords are highly sensitive.
+
+Database servers MUST restrict network access.
+
+Database backups MUST be configured before deployment.
+
+SECTION: Email Backend Configuration
+
+PURPOSE:
+Ensure reliable outbound email delivery.
+
+FILE: EMAIL_BACKEND
+ROLE: Defines how Django sends emails
+
+CONCEPT:
+
+Default sender addresses may be rejected by email providers.
+
+FILE: DEFAULT_FROM_EMAIL
+ROLE: Default sender address for application emails
+
+FILE: SERVER_EMAIL
+ROLE: Sender address for error emails
+
+These values MUST be explicitly set for production.
+
+SECTION: Static Files Configuration
+
+PURPOSE:
+Enable proper static asset handling.
+
+FILE: STATIC_ROOT
+ROLE: Directory where collected static files are stored
+
+FILE: STATIC_URL
+ROLE: Public URL prefix for static files
+
+CONCEPT:
+
+Static files are auto-served only in development.
+
+Production requires running collectstatic.
+
+SECTION: Media Files Configuration
+
+PURPOSE:
+Secure user-uploaded content.
+
+FILE: MEDIA_ROOT
+ROLE: Storage location for uploaded files
+
+FILE: MEDIA_URL
+ROLE: Public URL prefix for media files
+
+CONCEPT:
+
+User-uploaded files are untrusted. The web server MUST NOT execute uploaded content.
+
+Media files SHOULD be included in backup strategies.
+
+SECTION: HTTPS Enforcement
+
+PURPOSE:
+Protect authentication and session data.
+
+CONCEPT:
+
+Any site that supports authentication MUST enforce site-wide HTTPS.
+
+Session cookies are shared across HTTP and HTTPS. Partial HTTPS coverage is insufficient.
+
+The web server MUST:
+
+Redirect all HTTP traffic to HTTPS
+
+Forward only HTTPS requests to Django
+
+SECTION: Secure Cookie Settings
+
+PURPOSE:
+Prevent accidental cookie leakage.
+
+FILE: CSRF_COOKIE_SECURE
+ROLE: Ensures CSRF cookie is sent only over HTTPS
+
+FILE: SESSION_COOKIE_SECURE
+ROLE: Ensures session cookie is sent only over HTTPS
+
+CONCEPT:
+
+Both settings MUST be set to True when HTTPS is enabled.
+
+SECTION: Performance Optimizations
+
+PURPOSE:
+Improve runtime efficiency in production.
+
+SECTION: Session Performance
+
+PURPOSE:
+Reduce session overhead.
+
+CONCEPT:
+
+Cached session backends can improve performance.
+
+Database-backed sessions require regular cleanup.
+
+SECTION: Persistent Database Connections
+
+PURPOSE:
+Reduce connection overhead.
+
+FILE: CONN_MAX_AGE
+ROLE: Enables persistent database connections
+
+CONCEPT:
+
+Persistent connections significantly improve performance when database connection time is non-trivial.
+
+SECTION: Template Caching
+
+PURPOSE:
+Reduce template rendering overhead.
+
+FILE: TEMPLATES
+ROLE: Template engine configuration
+
+CONCEPT:
+
+When DEBUG = False, Django automatically enables the cached template loader, preventing repetitive template compilation.
+
+SECTION: Error Reporting Configuration
+
+PURPOSE:
+Ensure visibility into production failures.
+
+SECTION: Logging Configuration
+
+PURPOSE:
+Capture runtime diagnostics.
+
+FILE: LOGGING
+ROLE: Controls logging output and handlers
+
+CONCEPT:
+
+Logging MUST be reviewed and validated after production traffic begins.
+
+SECTION: Admin and Manager Notifications
+
+PURPOSE:
+Enable email-based error alerts.
+
+FILE: ADMINS
+ROLE: Receives email notifications for HTTP 500 errors
+
+FILE: MANAGERS
+ROLE: Receives email notifications for HTTP 404 errors
+
+FILE: IGNORABLE_404_URLS
+ROLE: Filters irrelevant 404 error reports
+
+CONCEPT:
+
+Email-based error reporting does not scale well and may overwhelm inboxes in high-traffic systems.
+
+SECTION: Custom Error Pages
+
+PURPOSE:
+Improve user-facing error responses.
+
+CONCEPT:
+
+Django supports custom error templates:
+
+FILE: 404.html
+FILE: 500.html
+FILE: 403.html
+FILE: 400.html
+
+Default error views are sufficient for most applications but can be customized if needed.
+
+SUMMARY:
+
+Production settings must prioritize security, stability, and performance.
+
+DEBUG must always be disabled in production.
+
+Secrets and credentials must be protected and externalized.
+
+HTTPS enforcement is mandatory for authenticated sites.
+
+Logging and error reporting must be configured before launch.

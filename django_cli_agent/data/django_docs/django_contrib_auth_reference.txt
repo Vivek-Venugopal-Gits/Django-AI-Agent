@@ -1,0 +1,202 @@
+PURPOSE: Provides API reference for Django's authentication system components, including models, signals, backends, and utilities.
+This module handles user authentication, permissions, and related features.
+SECTION: USER MODEL
+PURPOSE: Describes the default User model class and its components.
+CONCEPT: USER MODEL CLASS
+The User model represents authenticated users.
+COMMAND:
+CODE:
+class User(models.Model):
+    ...
+SECTION: USER MODEL FIELDS
+PURPOSE: Lists the database fields on the User model.
+FIELD: username
+ROLE: Required string field, 150 characters or fewer, containing alphanumeric, _, @, +, ., - characters. Use a custom user model for longer usernames.
+FIELD: first_name
+ROLE: Optional string field, 150 characters or fewer.
+FIELD: last_name
+ROLE: Optional string field, 150 characters or fewer.
+FIELD: email
+ROLE: Optional email address field.
+FIELD: password
+ROLE: Required field storing hashed password and metadata; raw passwords are not stored.
+FIELD: groups
+ROLE: Many-to-many relation to Group model.
+FIELD: user_permissions
+ROLE: Many-to-many relation to Permission model.
+FIELD: is_staff
+ROLE: Boolean indicating admin site access.
+FIELD: is_active
+ROLE: Boolean marking the account as active; set to False instead of deleting accounts.
+FIELD: is_superuser
+ROLE: Boolean granting all permissions without explicit assignment.
+FIELD: last_login
+ROLE: Datetime of the user's last login.
+FIELD: date_joined
+ROLE: Datetime when the account was created.
+SECTION: USER MODEL ATTRIBUTES
+PURPOSE: Details read-only attributes on User instances.
+ATTRIBUTE: is_authenticated
+ROLE: Always True for User instances.
+ATTRIBUTE: is_anonymous
+ROLE: Always False for User instances; use is_authenticated instead.
+SECTION: USER MODEL METHODS
+PURPOSE: Describes instance methods on User.
+METHOD: get_username()
+ROLE: Returns the username; use this instead of direct attribute access.
+METHOD: get_full_name()
+ROLE: Returns first_name plus last_name with a space.
+METHOD: get_short_name()
+ROLE: Returns first_name.
+METHOD: set_password(raw_password)
+ROLE: Sets hashed password; sets unusable if raw_password is None. Does not save.
+METHOD: check_password(raw_password)
+ROLE: Returns True if raw_password matches hashed password.
+METHOD: acheck_password(raw_password)
+ROLE: Asynchronous version of check_password.
+METHOD: set_unusable_password()
+ROLE: Marks password as unusable; check_password always returns False. Does not save.
+METHOD: has_usable_password()
+ROLE: Returns False if set_unusable_password was called.
+METHOD: get_user_permissions(obj=None)
+ROLE: Returns set of direct user permission strings; empty if anonymous or inactive.
+METHOD: aget_user_permissions(obj=None)
+ROLE: Asynchronous version.
+METHOD: get_group_permissions(obj=None)
+ROLE: Returns set of group permission strings; empty if anonymous or inactive.
+METHOD: aget_group_permissions(obj=None)
+ROLE: Asynchronous version.
+METHOD: get_all_permissions(obj=None)
+ROLE: Returns combined user and group permission strings; empty if anonymous or inactive.
+METHOD: aget_all_permissions(obj=None)
+ROLE: Asynchronous version.
+METHOD: has_perm(perm, obj=None)
+ROLE: Returns True if user has permission; always True for active superusers.
+METHOD: ahas_perm(perm, obj=None)
+ROLE: Asynchronous version.
+METHOD: has_perms(perm_list, obj=None)
+ROLE: Returns True if user has all permissions in list; always True for active superusers.
+METHOD: ahas_perms(perm_list, obj=None)
+ROLE: Asynchronous version.
+METHOD: has_module_perms(package_name)
+ROLE: Returns True if user has any permissions in the app; always True for active superusers.
+METHOD: ahas_module_perms(package_name)
+ROLE: Asynchronous version.
+METHOD: email_user(subject, message, from_email=None, **kwargs)
+ROLE: Sends email to user; uses DEFAULT_FROM_EMAIL if from_email is None.
+SECTION: USER MANAGER METHODS
+PURPOSE: Details methods on the custom manager for User.
+The User model uses UserManager.
+METHOD: create_user(username, email=None, password=None, **extra_fields)
+ROLE: Creates and saves User with given username and password; sets is_active to True.
+METHOD: acreate_user(username, email=None, password=None, **extra_fields)
+ROLE: Asynchronous version.
+METHOD: create_superuser(username, email=None, password=None, **extra_fields)
+ROLE: Creates User with is_staff and is_superuser True.
+METHOD: acreate_superuser(username, email=None, password=None, **extra_fields)
+ROLE: Asynchronous version.
+METHOD: with_perm(perm, is_active=True, include_superusers=True, backend=None, obj=None)
+ROLE: Returns queryset of users with given permission; filters by active state.
+SUMMARY:
+
+User has fields for identity, permissions, status.
+Methods handle password management, permission checks.
+Manager creates users and superusers.
+Async methods added in Django 5.2.
+
+SECTION: ANONYMOUSUSER OBJECT
+PURPOSE: Describes the class for unauthenticated users.
+AnonymousUser implements User interface with differences: id None, username empty, is_anonymous True, is_authenticated False, is_staff/is_superuser/is_active False, groups/permissions empty.
+Methods like set_password raise NotImplementedError.
+SECTION: PERMISSION MODEL
+PURPOSE: Details the Permission model for authorization.
+COMMAND:
+CODE:
+class Permission(models.Model):
+    ...
+FIELD: name
+ROLE: Required string, 255 characters or fewer, e.g., 'Can vote'.
+FIELD: content_type
+ROLE: Required foreign key to ContentType.
+FIELD: codename
+ROLE: Required string, 100 characters or fewer, e.g., 'can_vote'.
+Permission uses standard model methods.
+SECTION: GROUP MODEL
+PURPOSE: Describes the Group model for grouping users.
+COMMAND:
+CODE:
+class Group(models.Model):
+    ...
+FIELD: name
+ROLE: Required string, 150 characters or fewer.
+FIELD: permissions
+ROLE: Many-to-many to Permission; use set/add/remove/clear methods.
+SECTION: VALIDATORS
+PURPOSE: Lists validators for username fields.
+COMMAND:
+CODE:
+class ASCIIUsernameValidator:
+    ...
+ROLE: Allows only ASCII letters, numbers, @, ., +, -, _.
+COMMAND:
+CODE:
+class UnicodeUsernameValidator:
+    ...
+ROLE: Allows Unicode characters plus @, ., +, -, _; default for User.username.
+SECTION: LOGIN AND LOGOUT SIGNALS
+PURPOSE: Details signals for user login/logout events.
+SIGNAL: user_logged_in
+ROLE: Sent on successful login; args: sender, request, user.
+SIGNAL: user_logged_out
+ROLE: Sent on logout; args: sender, request, user (or None).
+SIGNAL: user_login_failed
+ROLE: Sent on failed login; args: sender, credentials (sanitized), request.
+USAGE GUIDELINES:
+USE WHEN:
+
+Notifying or logging auth events.
+DO NOT USE WHEN:
+No need for custom actions on login/logout.
+
+SECTION: AUTHENTICATION BACKENDS
+PURPOSE: Explains available backends for authentication.
+CONCEPT: BASEBACKEND
+Base class for backends; rejects all users by default.
+METHODS: get_user_permissions/aget_user_permissions, get_group_permissions/aget_group_permissions, get_all_permissions/aget_all_permissions, has_perm/ahas_perm return empty/False.
+CONCEPT: MODELBACKEND
+Default backend; uses username/password, handles permissions.
+METHOD: authenticate/aauthenticate: Authenticates with username/password.
+METHOD: user_can_authenticate: False for inactive users.
+Does not implement object permissions beyond empty sets.
+CONCEPT: ALLOWALLUSERSMODELBACKEND
+Like ModelBackend but allows inactive users.
+CONCEPT: REMOTEUSERBACKEND
+Authenticates via request.META['REMOTE_USER'].
+ATTRIBUTE: create_unknown_user: True to create missing users.
+METHOD: authenticate/aauthenticate: Uses remote_user.
+METHOD: clean_username: Cleans username.
+METHOD: configure_user/aconfigure_user: Configures user on auth.
+METHOD: user_can_authenticate: False for inactive.
+CONCEPT: ALLOWALLUSERSREMOTEUSERBACKEND
+Like RemoteUserBackend but allows inactive users.
+USAGE GUIDELINES:
+USE WHEN:
+
+Integrating external auth like REMOTE_USER.
+DO NOT USE WHEN:
+Default ModelBackend suffices.
+
+SUMMARY:
+
+Backends handle auth and permissions.
+ModelBackend is default; Remote for external.
+Async methods in 5.2.
+
+SECTION: UTILITY FUNCTIONS
+PURPOSE: Describes helper functions in the module.
+FUNCTION: get_user(request)/aget_user(request)
+ROLE: Returns user from session; verifies auth hash, falls back to SECRET_KEY_FALLBACKS.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - Core auth components; async added in 5.2.

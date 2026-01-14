@@ -1,0 +1,198 @@
+PURPOSE: Provides a mechanism for translating Django models into other formats, typically text-based for data transfer.
+Django's serialization framework converts models to formats like JSON, XML. Use dumpdata command for simple data export.
+SECTION: SERIALIZING DATA
+PURPOSE: Explains high-level serialization of QuerySets or iterators.
+Use serialize function with format and QuerySet.
+COMMAND:
+CODE:
+from django.core import serializers
+
+data = serializers.serialize("json", SomeModel.objects.all())
+Direct use:
+COMMAND:
+CODE:
+JSONSerializer = serializers.get_serializer("json")
+json_serializer = JSONSerializer()
+json_serializer.serialize(queryset)
+data = json_serializer.getvalue()
+To file-like object:
+COMMAND:
+CODE:
+with open("file.json", "w") as out:
+    json_serializer.serialize(SomeModel.objects.all(), stream=out)
+Raises SerializerDoesNotExist for unknown format.
+CONCEPT: SUBSET OF FIELDS
+Specify fields argument.
+COMMAND:
+CODE:
+from django.core import serializers
+
+data = serializers.serialize("json", SomeModel.objects.all(), fields=["name", "size"])
+pk always included; fields part excludes pk.
+Deserializing partial fields may fail if required fields missing.
+CONCEPT: INHERITED MODELS
+Abstract base classes serialize automatically. Multi-table inheritance requires serializing all bases.
+COMMAND:
+CODE:
+all_objects = [*Restaurant.objects.all(), *Place.objects.all()]
+data = serializers.serialize("json", all_objects)
+SECTION: DESERIALIZING DATA
+PURPOSE: Details converting serialized data back to objects.
+Use deserialize; returns iterator of DeserializedObject.
+COMMAND:
+CODE:
+for obj in serializers.deserialize("json", data):
+    do_something_with(obj)
+DeserializedObject wraps unsaved object; call .save() to save.
+If pk missing or null, creates new instance.
+Examine before saving if data untrusted.
+Raises DeserializationError on issues.
+ignorenonexistent=True ignores missing fields.
+COMMAND:
+CODE:
+serializers.deserialize("json", data, ignorenonexistent=True)
+SECTION: SERIALIZATION FORMATS
+PURPOSE: Lists supported formats and requirements.
+xml: Simple XML dialect.
+json: JSON.
+jsonl: JSON Lines (one object per line).
+yaml: YAML; requires PyYAML.
+Custom: Define Serializer/Deserializer classes.
+Example custom CSV:
+COMMAND:
+CODE:
+import csv
+
+from django.apps import apps
+from django.core import serializers
+from django.core.serializers.base import DeserializationError
+
+class Serializer(serializers.python.Serializer):
+    def get_dump_object(self, obj):
+        dumped_object = super().get_dump_object(obj)
+        row = [dumped_object["model"], str(dumped_object["pk"])]
+        row += [str(value) for value in dumped_object["fields"].values()]
+        return ",".join(row), dumped_object["model"]
+
+    def end_object(self, obj):
+        dumped_object_str, model = self.get_dump_object(obj)
+        if self.first:
+            fields = [field.name for field in apps.get_model(model)._meta.fields]
+            header = ",".join(fields)
+            self.stream.write(f"model,{header}\n")
+        self.stream.write(f"{dumped_object_str}\n")
+
+    def getvalue(self):
+        return super(serializers.python.Serializer, self).getvalue()
+
+class Deserializer(serializers.python.Deserializer):
+    def __init__(self, stream_or_string, **options):
+        if isinstance(stream_or_string, bytes):
+            stream_or_string = stream_or_string.decode()
+        if isinstance(stream_or_string, str):
+            stream_or_string = stream_or_string.splitlines()
+        try:
+            objects = csv.DictReader(stream_or_string)
+        except Exception as exc:
+            raise DeserializationError() from exc
+        super().__init__(objects, **options)
+
+    def _handle_object(self, obj):
+        try:
+            model_fields = apps.get_model(obj["model"])._meta.fields
+            obj["fields"] = {
+                field.name: obj[field.name]
+                for field in model_fields
+                if field.name in obj
+            }
+            yield from super()._handle_object(obj)
+        except (GeneratorExit, DeserializationError):
+            raise
+        except Exception as exc:
+            raise DeserializationError(f"Error deserializing object: {exc}") from exc
+Add to SERIALIZATION_MODULES:
+COMMAND:
+CODE:
+SERIALIZATION_MODULES = {
+    "csv": "path.to.custom_csv_serializer",
+    "json": "django.core.serializers.json",
+}
+CONCEPT: XML FORMAT
+Collection in <django-objects>; objects with pk, model; fields as <field> with type, name.
+Relational: <field to=... rel=...>pk</field> or list of <object pk=...>
+Control characters raise ValueError.
+CONCEPT: JSON FORMAT
+Array of objects with pk, model, fields dict.
+Relational: pk or list of pks.
+Custom encoders for non-JSON types.
+GeoDjango has custom GeoJSON.
+CONCEPT: DJANGOJSONENCODER
+Subclass of JSONEncoder; handles datetime/date/time/timedelta/Decimal/Promise/UUID as strings.
+CONCEPT: JSONL FORMAT
+One JSON object per line.
+Useful for large data; process line-by-line.
+CONCEPT: YAML FORMAT
+Sequence of mappings with model, pk, fields.
+Relational similar to JSON.
+CONCEPT: CUSTOM SERIALIZATION FORMATS
+Override Serializer/Deserializer.
+SECTION: NATURAL KEYS
+PURPOSE: Explains alternative to pk for serialization, especially auto-generated models like ContentType.
+Natural key: Tuple uniquely identifying instance without pk.
+Useful for fixtures; avoids pk conflicts.
+CONCEPT: DESERIALIZATION OF NATURAL KEYS
+Define get_by_natural_key on manager.
+COMMAND:
+CODE:
+class PersonManager(models.Manager):
+    def get_by_natural_key(self, first_name, last_name):
+        return self.get(first_name=first_name, last_name=last_name)
+
+class Person(models.Model):
+    ...
+    objects = PersonManager()
+Serializes as list: ["Douglas", "Adams"]
+Deserializes using get_by_natural_key.
+CONCEPT: SERIALIZATION OF NATURAL KEYS
+Define natural_key on model.
+COMMAND:
+CODE:
+def natural_key(self):
+    return (self.first_name, self.last_name)
+Use use_natural_foreign_keys=True / use_natural_primary_keys=True in serialize.
+COMMAND:
+CODE:
+serializers.serialize("json", [book1, book2], indent=2, use_natural_foreign_keys=True, use_natural_primary_keys=True)
+Or dumpdata --natural-foreign / --natural-primary.
+No need for both methods unless specific needs.
+CONCEPT: NATURAL KEYS AND FORWARD REFERENCES
+Handle references to not-yet-deserialized objects.
+Use handle_forward_references=True in deserialize; sets deferred_fields.
+Track and call save_deferred_fields later.
+COMMAND:
+CODE:
+objs_with_deferred_fields = []
+
+for obj in serializers.deserialize("json", data, handle_forward_references=True):
+    obj.save()
+    if obj.deferred_fields is not None:
+        objs_with_deferred_fields.append(obj)
+
+for obj in objs_with_deferred_fields:
+    obj.save_deferred_fields()
+ForeignKey needs null=True.
+CONCEPT: DEPENDENCIES DURING SERIALIZATION
+Order objects to avoid forward references.
+dumpdata --natural-foreign serializes natural_key models first.
+Define dependencies on natural_key.
+COMMAND:
+CODE:
+def natural_key(self):
+    return (self.name,) + self.author.natural_key()
+
+natural_key.dependencies = ["example_app.person"]
+Ensures dependencies serialized before.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - Deserializer added in 5.2.

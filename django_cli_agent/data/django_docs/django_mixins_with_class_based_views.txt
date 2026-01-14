@@ -1,0 +1,276 @@
+SECTION: Using Mixins with Class-Based Views
+PURPOSE: This section explains combining mixins to provide discrete functionality in class-based views, assuming knowledge of Django's class-based views.
+CONCEPT: Use mixins to separate concerns like template rendering; avoid direct use if simpler alternatives exist.
+SECTION: Context and Template Responses
+PURPOSE: This section describes mixins for consistent template interfaces.
+CONCEPT: TemplateResponseMixin provides render_to_response method for built-in views returning TemplateResponse; override if non-template response needed.
+CONCEPT: render_to_response calls get_template_names, overridden by SingleObjectTemplateResponseMixin and MultipleObjectTemplateResponseMixin for object-specific defaults.
+CONCEPT: ContextMixin supplies get_context_data for context data; returns keyword arguments by default, override to add more.
+CONCEPT: Use extra_context attribute to add context data.
+SECTION: Building Up Django’s Generic Class-Based Views
+PURPOSE: This section shows how generic views are composed from mixins.
+SECTION: DetailView: Working with a Single Django Object
+PURPOSE: This subsection explains DetailView composition for object detail.
+CONCEPT: DetailView looks up object using SingleObjectMixin's get_object, based on URL pk or slug, from model or queryset.
+CONCEPT: SingleObjectMixin overrides get_context_data for context supply.
+CONCEPT: DetailView uses SingleObjectTemplateResponseMixin to extend TemplateResponseMixin, overriding get_template_names for options like <app_label>/<model_name>_detail.html.
+CONCEPT: Change _detail via template_name_suffix.
+SECTION: ListView: Working with Many Django Objects
+PURPOSE: This subsection explains ListView composition for object lists.
+CONCEPT: ListView provides paginated lists using MultipleObjectMixin's get_queryset and paginate_queryset.
+CONCEPT: Default get_queryset uses queryset or model attribute; override for dynamic filtering.
+CONCEPT: MultipleObjectMixin overrides get_context_data for pagination variables, relying on object_list.
+CONCEPT: ListView uses MultipleObjectTemplateResponseMixin to override get_template_names for <app_label>/<model_name>_list.html.
+CONCEPT: Date-based views use suffixes like _archive.
+SECTION: Using Django’s Class-Based View Mixins
+PURPOSE: This section provides examples of combining mixins with views.
+CONCEPT: Combine with built-in or generic views; consider attribute/method conflicts and method resolution order.
+CONCEPT: Base on View or TemplateView with SingleObjectMixin/MultipleObjectMixin for simpler interactions.
+SECTION: Using SingleObjectMixin with View
+PURPOSE: This subsection demonstrates POST-only view with object from URL.
+CODE:
+from django.http import HttpResponseForbidden, HttpResponseRedirect
+from django.urls import reverse
+from django.views import View
+from django.views.generic.detail import SingleObjectMixin
+from books.models import Author
+
+class RecordInterestView(SingleObjectMixin, View):
+    """Records the current user's interest in an author."""
+
+    model = Author
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+
+        # Look up the author we're interested in.
+        self.object = self.get_object()
+        # Actually record interest somehow here!
+
+        return HttpResponseRedirect(
+            reverse("author-detail", kwargs={"pk": self.object.pk})
+        )
+CODE:
+from django.urls import path
+from books.views import RecordInterestView
+
+urlpatterns = [
+    # ...
+    path(
+        "author/<int:pk>/interest/",
+        RecordInterestView.as_view(),
+        name="author-interest",
+    ),
+]
+CONCEPT: Use self.get_object to lookup author; pk named group required.
+SECTION: Using SingleObjectMixin with ListView
+PURPOSE: This subsection shows paginating related objects.
+CONCEPT: Use two querysets: books for ListView, publishers for get_object.
+CONCEPT: Override get_queryset to use publisher's reverse foreign key.
+CONCEPT: Explicitly pass queryset to get_object for publishers.
+CONCEPT: Set self.object in get for use in get_context_data and get_queryset.
+CODE:
+from django.views.generic import ListView
+from django.views.generic.detail import SingleObjectMixin
+from books.models import Publisher
+
+class PublisherDetailView(SingleObjectMixin, ListView):
+    paginate_by = 2
+    template_name = "books/publisher_detail.html"
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object(queryset=Publisher.objects.all())
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["publisher"] = self.object
+        return context
+
+    def get_queryset(self):
+        return self.object.book_set.all()
+CODE:
+text{% extends "base.html" %}
+
+{% block content %}
+    <h2>Publisher {{ publisher.name }}</h2>
+
+    <ol>
+      {% for book in page_obj %}
+        <li>{{ book.title }}</li>
+      {% endfor %}
+    </ol>
+
+    <div class="pagination">
+        <span class="step-links">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+            {% endif %}
+
+            <span class="current">
+                Page {{ page_obj.number }} of {{ paginator.num_pages }}.
+            </span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}">next</a>
+            {% endif %}
+        </span>
+    </div>
+{% endblock %}
+CONCEPT: paginate_by small for demo; template defaults to book_list.html without template_name.
+SECTION: Avoid Anything More Complex
+PURPOSE: This section warns against combining incompatible mixins.
+CONCEPT: Limit to one group: detail, list, editing, date; mixing can cause issues.
+CONCEPT: Base on View or TemplateView for complex cases.
+SECTION: Using FormMixin with DetailView
+PURPOSE: This subsection shows a naive POST form in DetailView.
+CODE:
+# CAUTION: you almost certainly do not want to do this.
+# It is provided as part of a discussion of problems you can
+# run into when combining different generic class-based view
+# functionality that is not designed to be used together.
+
+from django import forms
+from django.http import HttpResponseForbidden
+from django.urls import reverse
+from django.views.generic import DetailView
+from django.views.generic.edit import FormMixin
+from books.models import Author
+
+class AuthorInterestForm(forms.Form):
+    message = forms.CharField()
+
+class AuthorDetailView(FormMixin, DetailView):
+    model = Author
+    form_class = AuthorInterestForm
+
+    def get_success_url(self):
+        return reverse("author-detail", kwargs={"pk": self.object.pk})
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        self.object = self.get_object()
+        form = self.get_form()
+        if form.is_valid():
+            return self.form_valid(form)
+        else:
+            return self.form_invalid(form)
+
+    def form_valid(self, form):
+        # Here, we would record the user's interest using the message
+        # passed in form.cleaned_data['message']
+        return super().form_valid(form)
+CONCEPT: Use FormMixin and implement post; avoid mixing DetailView with FormView due to get conflicts.
+SECTION: A Better Solution
+PURPOSE: This subsection suggests separating GET and POST views.
+CONCEPT: Use DetailView for GET with form in context; FormView with SingleObjectMixin for POST.
+CODE:
+from django import forms
+from django.views.generic import DetailView
+from books.models import Author
+
+class AuthorInterestForm(forms.Form):
+    message = forms.CharField()
+
+class AuthorDetailView(DetailView):
+    model = Author
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = AuthorInterestForm()
+        return context
+CODE:
+from django.http import HttpResponseForbidden
+from django.urls import reverse
+from django.views.generic import FormView
+from django.views.generic.detail import SingleObjectMixin
+
+class AuthorInterestFormView(SingleObjectMixin, FormView):
+    template_name = "books/author_detail.html"
+    form_class = AuthorInterestForm
+    model = Author
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        self.object = self.get_object()
+        return super().post(request, *args, **kwargs)
+
+    def get_success_url(self):
+        return reverse("author-detail", kwargs={"pk": self.object.pk})
+CODE:
+from django.views import View
+
+class AuthorView(View):
+    def get(self, request, *args, **kwargs):
+        view = AuthorDetailView.as_view()
+        return view(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        view = AuthorInterestFormView.as_view()
+        return view(request, *args, **kwargs)
+CONCEPT: Use as_view to treat classes as function views; pass kwargs for different templates.
+SECTION: An Alternative Better Solution
+PURPOSE: This subsection proposes separate URLs or custom form handling.
+CONCEPT: Use separate view for form or implement form handling in DetailView without FormMixin.
+SECTION: More Than Just HTML
+PURPOSE: This section demonstrates a JSON response mixin for APIs.
+CODE:
+from django.http import JsonResponse
+
+class JSONResponseMixin:
+    """
+    A mixin that can be used to render a JSON response.
+    """
+
+    def render_to_json_response(self, context, **response_kwargs):
+        """
+        Returns a JSON response, transforming 'context' to make the payload.
+        """
+        return JsonResponse(self.get_data(context), **response_kwargs)
+
+    def get_data(self, context):
+        """
+        Returns an object that will be serialized as JSON by json.dumps().
+        """
+        # Note: This is *EXTREMELY* naive; in reality, you'll need
+        # to do much more complex handling to ensure that arbitrary
+        # objects -- such as Django model instances or querysets
+        # -- can be serialized as JSON.
+        return context
+CODE:
+from django.views.generic import TemplateView
+
+class JSONView(JSONResponseMixin, TemplateView):
+    def render_to_response(self, context, **response_kwargs):
+        return self.render_to_json_response(context, **response_kwargs)
+CODE:
+from django.views.generic.detail import BaseDetailView
+
+class JSONDetailView(JSONResponseMixin, BaseDetailView):
+    def render_to_response(self, context, **response_kwargs):
+        return self.render_to_json_response(context, **response_kwargs)
+CODE:
+from django.views.generic.detail import SingleObjectTemplateResponseMixin
+
+class HybridDetailView(
+    JSONResponseMixin, SingleObjectTemplateResponseMixin, BaseDetailView
+):
+    def render_to_response(self, context):
+        # Look for a 'format=json' GET argument
+        if self.request.GET.get("format") == "json":
+            return self.render_to_json_response(context)
+        else:
+            return super().render_to_response(context)
+CONCEPT: Override render_to_response to choose JSON or HTML based on request.
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Advanced customization of class-based views in Django.
+SUMMARY:
+
+Use mixins for discrete features like templates and context.
+Combine carefully to avoid conflicts.
+Prefer separate views for complex interactions.
+Create custom mixins for non-HTML responses.

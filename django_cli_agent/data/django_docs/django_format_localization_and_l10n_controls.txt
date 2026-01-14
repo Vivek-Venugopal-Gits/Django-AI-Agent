@@ -1,0 +1,253 @@
+SECTION: Format Localization Overview
+
+PURPOSE:
+Explain how Django formats dates, times, and numbers based on the active locale.
+
+CONCEPT:
+
+Django’s format localization system displays dates, times, and numbers using locale-specific formats. The formatting applied depends on the user’s active locale, meaning multiple users may see the same data rendered differently.
+
+The system also supports parsing localized input in forms, allowing users to enter values using formats familiar to their locale.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Applications are accessed by users in multiple locales
+
+Locale-specific formatting improves usability
+
+DO NOT USE WHEN:
+
+Output must remain machine-readable (e.g., JavaScript, XML)
+
+SECTION: Number Formatting and Thousand Separators
+
+PURPOSE:
+Control how numeric values are displayed with separators.
+
+CONCEPT:
+
+To enable thousand separators in number formatting, Django requires explicit configuration.
+
+COMMAND:
+USE_THOUSAND_SEPARATOR = True
+
+
+Alternatively, number formatting can be applied at the template level.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Displaying large numbers to end users
+DO NOT USE WHEN:
+
+Formatting numeric values for machine consumption
+
+SECTION: Relationship Between Localization and Translation
+
+PURPOSE:
+Clarify the distinction between formatting localization and translation.
+
+CONCEPT:
+
+Format localization controls how values are displayed, while translation controls language text rendering. Translation is governed separately by the USE_I18N setting.
+
+Localization formatting does not require translation to be enabled.
+
+SECTION: Locale-Aware Input in Forms
+
+PURPOSE:
+Enable Django forms to parse user input using locale-specific formats.
+
+CONCEPT:
+
+When localization is enabled, Django attempts to parse dates, times, and numbers using formats appropriate to the user’s locale. Display formats and input parsing formats are not identical.
+
+Certain date format specifiers are unsupported for parsing:
+
+%a (abbreviated weekday)
+
+%A (full weekday)
+
+%b (abbreviated month)
+
+%B (full month)
+
+%p (AM/PM)
+
+COMMAND:
+class CashRegisterForm(forms.Form):
+    product = forms.CharField()
+    revenue = forms.DecimalField(max_digits=4, decimal_places=2, localize=True)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Accepting numeric or date input from users
+DO NOT USE WHEN:
+
+Input formats must be strictly controlled or locale-independent
+
+SECTION: Localization Control in Templates
+
+PURPOSE:
+Provide fine-grained control over localized output in templates.
+
+CONCEPT:
+
+Django automatically applies locale-specific formatting when rendering values in templates. This behavior can be overridden globally, per block, or per variable.
+
+The l10n template library enables explicit control of localization behavior.
+
+SECTION: Template Tag — localize
+
+PURPOSE:
+Enable or disable localization within a template block.
+
+COMMAND:
+{% load l10n %}
+
+{% localize on %}
+    {{ value }}
+{% endlocalize %}
+
+{% localize off %}
+    {{ value }}
+{% endlocalize %}
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Large sections of a template require consistent localization behavior
+DO NOT USE WHEN:
+
+Only a single variable needs control (use filters instead)
+
+SECTION: Template Filter — localize
+
+PURPOSE:
+Force localization of an individual value.
+
+COMMAND:
+{% load l10n %}
+{{ value|localize }}
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+A single variable must be localized explicitly
+DO NOT USE WHEN:
+
+Localization should apply to an entire block
+
+SECTION: Template Filter — unlocalize
+
+PURPOSE:
+Disable localization for an individual value.
+
+COMMAND:
+{% load l10n %}
+{{ value|unlocalize }}
+
+CONCEPT:
+
+This filter forces numbers (int, float, Decimal) to render without locale-specific formatting.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Outputting values for machine-readable formats
+DO NOT USE WHEN:
+
+Values are intended for end-user display
+
+SECTION: Creating Custom Format Files
+
+PURPOSE:
+Override or define locale-specific formatting rules.
+
+CONCEPT:
+
+Django allows custom locale formats when defaults are insufficient or unavailable. Custom formats are defined in formats.py files organized by locale.
+
+COMMAND:
+FORMAT_MODULE_PATH = [
+    "mysite.formats",
+    "some_app.formats",
+]
+
+FILE STRUCTURE:
+
+FILE: formats.py
+ROLE: Defines locale-specific formatting rules
+
+Example directory layout:
+
+mysite/
+    formats/
+        __init__.py
+        en/
+            __init__.py
+            formats.py
+
+COMMAND:
+THOUSAND_SEPARATOR = "\xa0"
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Default locale formats are incorrect or incomplete
+DO NOT USE WHEN:
+
+Sensitive data could be exposed through format retrieval
+
+SECTION: Limitations of Locale Formats
+
+PURPOSE:
+Describe known constraints of Django’s localization system.
+
+CONCEPT:
+
+Some locales require context-sensitive number formatting that Django cannot handle automatically.
+
+SECTION: Locale Limitation — Switzerland (German, French)
+
+PURPOSE:
+Explain a specific locale formatting limitation.
+
+CONCEPT:
+
+Swiss formatting rules vary by context. For example:
+
+Monetary values may use a dot as a decimal separator
+
+Measurements may use a comma
+
+Django applies a single generic format:
+
+Comma for decimal separator
+
+Space for thousand separator
+
+This limitation cannot be resolved automatically by Django’s localization system.
+
+SUMMARY:
+
+Django formats dates, times, and numbers using locale-specific rules
+
+Localization applies independently from translation
+
+Forms can parse localized user input
+
+Templates allow block-level and variable-level localization control
+
+Custom format files override default locale behavior
+
+Context-sensitive numeric formats are not fully supported

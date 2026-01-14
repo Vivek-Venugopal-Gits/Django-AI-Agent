@@ -1,0 +1,287 @@
+PURPOSE:
+Explain how Django reports errors in production, including email notifications, 404 reporting, and mechanisms for filtering sensitive data.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Public-facing Django applications
+
+Production environments with DEBUG = False
+
+SECTION: Production Error Visibility and DEBUG
+
+PURPOSE:
+Clarify the role of the DEBUG setting in error handling.
+
+CONCEPT:
+
+In production, Django applications MUST run with DEBUG set to False. This improves performance and prevents sensitive application details from being exposed to users via error pages.
+
+When DEBUG = False, Django does not display detailed error pages to users. Instead, it renders public error pages. To ensure errors are still visible to developers and administrators, Django provides configurable error reporting mechanisms.
+
+SECTION: Email-Based Error Reports
+
+PURPOSE:
+Describe how Django sends error notifications via email.
+
+SECTION: Server Error Email Reports (HTTP 500+)
+
+PURPOSE:
+Explain automatic email reporting for unhandled server errors.
+
+CONCEPT:
+
+When DEBUG = False, Django emails administrators whenever an unhandled exception occurs that results in an HTTP response with status code 500 or greater.
+
+Recipients are defined by the ADMINS setting.
+
+Each email includes:
+
+A description of the error
+
+A complete Python traceback
+
+Metadata about the HTTP request that triggered the error
+
+FILE: ADMINS
+ROLE: List of administrator email addresses that receive server error notifications.
+
+SECTION: Email Configuration Requirements
+
+PURPOSE:
+Define the minimum configuration needed to send error emails.
+
+CONCEPT:
+
+To send emails, Django must be configured with valid email backend settings.
+
+Minimum required settings typically include:
+
+EMAIL_HOST
+
+EMAIL_HOST_USER (optional)
+
+EMAIL_HOST_PASSWORD (optional)
+
+By default, Django sends email from root@localhost. Some email providers reject this address.
+
+FILE: SERVER_EMAIL
+ROLE: Specifies the sender address for Django-generated error emails.
+
+SECTION: 404 Error Email Reports
+
+PURPOSE:
+Explain how Django reports broken links via email.
+
+CONCEPT:
+
+Django can send email reports for HTTP 404 errors when all of the following conditions are met:
+
+DEBUG = False
+
+django.middleware.common.BrokenLinkEmailsMiddleware is included in MIDDLEWARE
+
+Recipients are defined by the MANAGERS setting.
+
+FILE: MANAGERS
+ROLE: List of email addresses that receive broken-link (404) error reports.
+
+Django only emails about 404 errors when:
+
+The request includes a valid HTTP referer
+
+The referer is not the same as the requested URL
+
+This avoids noise from bots and manually typed URLs.
+
+SECTION: Middleware Ordering for 404 Reporting
+
+PURPOSE:
+Define correct middleware placement for broken link reporting.
+
+CONCEPT:
+
+BrokenLinkEmailsMiddleware MUST appear before any middleware that intercepts 404 responses.
+
+DO NOT place it after middleware such as:
+
+LocaleMiddleware
+
+FlatpageFallbackMiddleware
+
+Place it near the top of the MIDDLEWARE configuration.
+
+SECTION: Ignoring Specific 404 Errors
+
+PURPOSE:
+Explain how to suppress reports for known or irrelevant URLs.
+
+CONCEPT:
+
+Django allows filtering out specific 404 URLs using compiled regular expressions.
+
+FILE: IGNORABLE_404_URLS
+ROLE: List of compiled regular expressions defining URLs that should not trigger 404 email reports.
+
+COMMAND:
+CODE:
+import re
+
+IGNORABLE_404_URLS = [
+    re.compile(r"\.(php|cgi)$"),
+    re.compile(r"^/phpmyadmin/"),
+]
+
+
+Example for commonly requested crawler files:
+
+import re
+
+IGNORABLE_404_URLS = [
+    re.compile(r"^/apple-touch-icon.*\.png$"),
+    re.compile(r"^/favicon\.ico$"),
+    re.compile(r"^/robots\.txt$"),
+]
+
+SECTION: Filtering Sensitive Data in Error Reports
+
+PURPOSE:
+Explain how Django prevents sensitive information from appearing in error reports.
+
+WARNING:
+
+Filtering sensitive data is inherently difficult. Error reports should only be accessible to trusted personnel and should not be transmitted unencrypted.
+
+SECTION: Sensitive Variables Filtering
+
+PURPOSE:
+Describe how to hide sensitive local variables in tracebacks.
+
+CONCEPT:
+
+The sensitive_variables decorator prevents specified local variables from appearing in error reports. Filtered values are replaced with placeholder characters.
+
+COMMAND:
+CODE:
+from django.views.decorators.debug import sensitive_variables
+
+@sensitive_variables("user", "pw", "cc")
+def process_info(user):
+    pw = user.pass_word
+    cc = user.credit_card_number
+    name = user.name
+
+
+To hide all local variables:
+
+@sensitive_variables()
+def my_function(): ...
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Local variables may contain credentials or personal data
+
+DO NOT USE WHEN:
+
+Variables contain only non-sensitive information
+
+When multiple decorators are used, @sensitive_variables MUST be placed at the top of the decorator stack.
+
+SECTION: Sensitive POST Parameters Filtering
+
+PURPOSE:
+Describe how to hide sensitive POST data in error reports.
+
+CONCEPT:
+
+The sensitive_post_parameters decorator prevents specified POST parameters from appearing in error reports.
+
+COMMAND:
+CODE:
+from django.views.decorators.debug import sensitive_post_parameters
+
+@sensitive_post_parameters("pass_word", "credit_card_number")
+def record_user_profile(request):
+    ...
+
+
+To hide all POST parameters:
+
+@sensitive_post_parameters()
+def my_view(request): ...
+
+
+Certain authentication-related views automatically filter all POST parameters to prevent credential leakage.
+
+SECTION: Default Exception Reporter Filter
+
+PURPOSE:
+Explain how Django performs error report filtering internally.
+
+CONCEPT:
+
+Django uses SafeExceptionReporterFilter to filter sensitive values from error reports. The decorators above annotate data that this filter later removes or masks.
+
+FILE: DEFAULT_EXCEPTION_REPORTER_FILTER
+ROLE: Specifies a custom filter class for all error reports.
+
+COMMAND:
+CODE:
+DEFAULT_EXCEPTION_REPORTER_FILTER = "path.to.your.CustomExceptionReporterFilter"
+
+
+Custom filters must inherit from django.views.debug.SafeExceptionReporterFilter.
+
+SECTION: Customizing Exception Reporter Behavior
+
+PURPOSE:
+Explain how to customize the structure and content of error reports.
+
+CONCEPT:
+
+To fully customize exception report generation, Django allows overriding the exception reporter itself.
+
+FILE: DEFAULT_EXCEPTION_REPORTER
+ROLE: Specifies a custom exception reporter class.
+
+COMMAND:
+CODE:
+DEFAULT_EXCEPTION_REPORTER = "path.to.your.CustomExceptionReporter"
+
+
+Custom reporters must inherit from django.views.debug.ExceptionReporter.
+
+Example:
+CODE:
+from django.views.debug import ExceptionReporter
+
+class CustomExceptionReporter(ExceptionReporter):
+    def get_traceback_data(self):
+        data = super().get_traceback_data()
+        return data
+
+
+Per-request customization is possible by setting attributes on the HttpRequest object.
+
+SECTION: Alternative Error Reporting Mechanisms
+
+PURPOSE:
+Acknowledge other supported error handling approaches.
+
+CONCEPT:
+
+Custom exception middleware can be used to implement alternative error reporting strategies. Any custom error handling SHOULD respect Django’s standard behavior and only report errors when DEBUG = False.
+
+SUMMARY:
+
+Production deployments must run with DEBUG = False.
+
+Django supports email reporting for server errors and selected 404 errors.
+
+Error emails are controlled by ADMINS and MANAGERS.
+
+Sensitive data can be filtered using decorators and custom filters.
+
+Exception reporting is fully extensible via custom filters and reporters.

@@ -1,0 +1,153 @@
+SECTION: Internationalization and Localization in Django
+
+PURPOSE:
+Explain how Django enables applications to support multiple languages, locales, and cultural formats.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Applies to Django 6.0 and compatible versions that support internationalization features.
+
+SECTION: Overview of Internationalization and Localization
+
+PURPOSE:
+Describe the goals and core responsibilities of internationalization (i18n) and localization (l10n) in Django.
+
+CONCEPT:
+
+Internationalization and localization allow a single web application to present content in languages and formats appropriate for different audiences.
+
+Django provides built-in support for:
+
+Translation of text.
+
+Formatting of dates, times, and numbers.
+
+Time zone handling.
+
+Django’s workflow is based on two responsibilities:
+
+Developers and template authors explicitly mark content that must be translated or localized.
+
+Django applies localization rules based on user preferences.
+
+Language preferences are typically derived from the browser’s Accept-Language HTTP header. Time zone information is not automatically provided by browsers and must be handled separately.
+
+SUMMARY:
+
+Django supports text translation, formatting, and time zones.
+
+Developers define what is translatable.
+
+Localization is applied dynamically per user.
+
+Language detection relies on HTTP headers.
+
+SECTION: Core Terminology and Definitions
+
+PURPOSE:
+Define essential terms used throughout Django’s internationalization system.
+
+CONCEPT:
+
+Internationalization
+Preparing software so it can be adapted to different languages and regions. This is primarily a developer responsibility.
+
+Localization
+Providing translated text and locale-specific formatting. This is primarily handled by translators.
+
+SECTION: Locale and Language Identifiers
+
+PURPOSE:
+Clarify how Django identifies languages and regional formats.
+
+CONCEPT:
+
+Locale Name
+A locale identifier specifies language alone or language combined with region.
+
+Format:
+
+ll (language only)
+
+ll_CC (language and country)
+
+Rules:
+
+Language codes are lowercase.
+
+Country codes are uppercase if two characters, title case if longer.
+
+Uses underscore (_) as a separator.
+
+Examples:
+
+it
+
+de_AT
+
+pt_BR
+
+sr_Latn
+
+Language Code
+Represents a language identifier used by browsers.
+
+Format:
+
+Lowercase language code
+
+Uses dash (-) as a separator
+
+Examples:
+
+it
+
+de-at
+
+pt-br
+
+The HTTP Accept-Language header is case-insensitive.
+
+SECTION: Translation and Formatting Files
+
+PURPOSE:
+Explain the file types used for translations and locale-specific formatting.
+
+CONCEPT:
+
+FILE: .po message file
+ROLE: Plain-text file containing translation strings for a single language.
+
+FILE: format file (Python module)
+ROLE: Defines date, time, and number formats for a specific locale.
+
+Translation String
+A literal value marked for translation within the application.
+
+SUMMARY:
+
+.po files store translated text.
+
+Format files define locale-specific formatting.
+
+Translation strings are explicit literals.
+
+Each file targets a specific language or locale.
+
+SECTION: Internationalization Control Setting
+
+PURPOSE:
+Explain how Django enables or disables translation functionality.
+
+CONCEPT:
+
+Translation behavior is controlled by the USE_I18N setting.
+
+DO NOT confuse the name of the setting with its scope:
+
+The setting controls translation.
+
+The system includes both internationalization and localization.
+
+This naming is a legacy artifact and does not reflect the full scope of Django’s i18n and l10n features.

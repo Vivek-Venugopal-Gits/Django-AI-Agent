@@ -1,0 +1,418 @@
+SECTION: ASYNCHRONOUS SUPPORT
+PURPOSE: Describe Django’s asynchronous support for views, ORM operations, safety mechanisms, and adapter utilities.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: Django projects using async views and ASGI or WSGI deployment.
+​
+CONCEPT: ASYNC SUPPORT OVERVIEW
+Django supports writing asynchronous (async) views and can run with a fully async-enabled request stack under ASGI.
+​
+Async views also work under WSGI but incur a performance penalty and cannot provide efficient long-running request handling.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to handle many concurrent connections, slow streaming, or long-polling without relying on threads.
+​
+You deploy Django with ASGI to benefit from a fully asynchronous stack.
+​
+DO NOT USE WHEN:
+
+Your deployment is strictly WSGI and you do not need async concurrency benefits.
+
+You cannot ensure correct handling of async-unsafe parts of Django.
+
+SECTION: ASYNC VIEWS
+PURPOSE: Explain how to declare and run asynchronous views in Django.
+​
+CONCEPT: DECLARING ASYNC VIEWS
+Any view is async if its callable returns a coroutine, typically declared with async def.
+​
+For function-based views, declare the whole view with async def; for class-based views, declare the HTTP method handlers such as get() and post() as async def, not __init__() or as_view().
+​
+CONCEPT: DETECTING ASYNC VIEWS
+Django uses asgiref.sync.iscoroutinefunction to detect if a view is asynchronous.
+​
+If you implement a custom coroutine-returning callable, use asgiref.sync.markcoroutinefunction so this detection works correctly.
+​
+CONCEPT: ASYNC VIEWS UNDER WSGI AND ASGI
+Under a WSGI server, async views run in a one-off event loop, allowing async features but without the advantages of an async request stack.
+​
+Under ASGI, Django can handle hundreds of concurrent connections without Python threads, enabling slow streaming and long-polling efficiently.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You need concurrent operations in views, especially when calling external APIs or data stores.
+​
+You deploy with ASGI and want to exploit asynchronous I/O and connection scaling.
+​
+DO NOT USE WHEN:
+
+Your environment or libraries cannot safely operate in async contexts.
+
+The additional complexity of async is not justified by performance needs.
+
+SUMMARY:
+Declare async views with async def at the function or HTTP-method level.
+​
+Use ASGI for full async benefits; WSGI supports async views but with penalties.
+​
+Use markcoroutinefunction for custom coroutine-based views.
+​
+SECTION: ASYNC-COMPATIBLE DECORATORS
+PURPOSE: List Django decorators that can wrap both sync and async view functions.
+​
+CONCEPT: DECORATORS FOR SYNC AND ASYNC VIEWS
+The following decorators can be used with both synchronous and asynchronous views:
+​
+cache_control()
+​
+never_cache()
+​
+no_append_slash()
+​
+csp_override()
+​
+csp_report_only_override()
+​
+csrf_exempt()
+​
+csrf_protect()
+​
+ensure_csrf_cookie()
+​
+requires_csrf_token()
+​
+sensitive_variables()
+​
+sensitive_post_parameters()
+​
+gzip_page()
+​
+condition()
+​
+conditional_page()
+​
+etag()
+​
+last_modified()
+​
+require_http_methods()
+​
+require_GET()
+​
+require_POST()
+​
+require_safe()
+​
+vary_on_cookie()
+​
+vary_on_headers()
+​
+xframe_options_deny()
+​
+xframe_options_sameorigin()
+​
+xframe_options_exempt()
+​
+COMMAND: DECORATOR USAGE EXAMPLE
+python
+from django.views.decorators.cache import never_cache
+
+@never_cache
+def my_sync_view(request):
+    ...
+
+@never_cache
+async def my_async_view(request):
+    ...
+USAGE GUIDELINES:
+USE WHEN:
+
+Applying standard Django decorators to both sync and async views to control caching, security, CSRF, and headers.
+​
+DO NOT USE WHEN:
+
+A decorator is not listed as async-compatible and may not support async views safely.
+
+SUMMARY:
+Many core Django decorators support both sync and async view callables.
+​
+Apply these decorators identically to sync and async views.
+​
+SECTION: ASYNC QUERIES AND THE ORM
+PURPOSE: Describe asynchronous ORM query capabilities and limitations in Django.
+​
+CONCEPT: ASYNC ORM OPERATIONS
+Django supports some asynchronous ORM operations with a-prefixed variants of query methods that perform database access.
+​
+All QuerySet methods that trigger SQL have asynchronous counterparts such as acreate, and async for is supported on all QuerySets, including those from values() and values_list().
+​
+COMMAND: ASYNC ORM EXAMPLES
+python
+async for author in Author.objects.filter(name__startswith="A"):
+    book = await author.books.afirst()
+python
+async def make_book(*args, **kwargs):
+    book = Book(...)
+    await book.asave(using="secondary")
+
+async def make_book_with_tags(tags, *args, **kwargs):
+    book = await Book.objects.acreate(...)
+    await book.tags.aset(tags)
+CONCEPT: TRANSACTIONS AND CONNECTIONS IN ASYNC MODE
+Database transactions do not work in async mode; transactional code should be written as a single synchronous function and called via sync_to_async().
+​
+Persistent database connections controlled by CONN_MAX_AGE should be disabled in async mode, and external connection pooling solutions should be used if needed.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Performing asynchronous iteration over QuerySets or using a-prefixed ORM methods in async contexts.
+​
+DO NOT USE WHEN:
+
+You require transactional behavior; instead, run that part synchronously and wrap it with sync_to_async().
+​
+SUMMARY:
+Use a-prefixed ORM methods and async for for async database access.
+​
+Transactions are not supported in async mode and must be handled synchronously.
+​
+Disable CONN_MAX_AGE for async mode and use external pooling if necessary.
+​
+SECTION: PERFORMANCE CHARACTERISTICS
+PURPOSE: Explain performance implications of using async views, middleware, ASGI, and WSGI.
+​
+CONCEPT: CONTEXT SWITCHING COSTS
+When running in a mode that does not match the view (async view under WSGI or sync view under ASGI), Django must emulate the other call style, incurring about a millisecond of overhead per context switch.
+​
+Django minimizes sync/async switches by performing a single switch when all middleware and views are synchronous under ASGI.
+​
+CONCEPT: SYNC MIDDLEWARE IN ASYNC STACKS
+If synchronous middleware lies between an ASGI server and an async view, Django must switch into sync mode for middleware and back into async mode for the view.
+​
+Holding a thread per request for synchronous middleware and exception propagation can remove much of the async performance advantage.
+​
+CONCEPT: WHEN TO USE ASGI
+You should benchmark your application to evaluate ASGI versus WSGI performance for your codebase.
+​
+Even purely synchronous projects may see performance changes under ASGI because request handling runs asynchronously, but ASGI is generally most beneficial when you have async code.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You can make middleware and views fully async, minimizing sync/async transitions.
+​
+DO NOT USE WHEN:
+
+Most of your stack is synchronous and added context-switch overhead outweighs async benefits.
+
+SUMMARY:
+Sync/async mismatches cause measurable context-switch overhead.
+​
+Synchronous middleware in an async stack can negate performance gains.
+​
+Use ASGI primarily when you have async workloads.
+​
+SECTION: HANDLING DISCONNECTS
+PURPOSE: Describe how to handle client disconnects in long-lived async views.
+​
+CONCEPT: CLIENT DISCONNECT AND CANCELLED COROUTINES
+For long-lived requests, if the client disconnects before the view returns a response, asyncio.CancelledError is raised inside the view.
+​
+Views can catch this error to perform cleanup or logging before re-raising or exiting.
+​
+COMMAND: DISCONNECT HANDLING EXAMPLE
+python
+async def my_view(request):
+    try:
+        # Do some work
+        ...
+    except asyncio.CancelledError:
+        # Handle disconnect
+        raise
+USAGE GUIDELINES:
+USE WHEN:
+
+Implementing long-running async views that must clean up on client disconnect.
+​
+DO NOT USE WHEN:
+
+Requests are short-lived and disconnect handling is not necessary.
+
+SUMMARY:
+Client disconnects raise asyncio.CancelledError in async views.
+​
+Catch this error to perform necessary cleanup before exiting.
+​
+SECTION: ASYNC SAFETY
+PURPOSE: Explain which parts of Django are async-unsafe and how DJANGO_ALLOW_ASYNC_UNSAFE affects behavior.
+​
+CONCEPT: ASYNC-UNSAFE COMPONENTS
+Certain parts of Django, such as the ORM, are not safe in async environments because they rely on global state that is not coroutine-aware.
+​
+These components are protected so they cannot be executed in threads with a running event loop, and doing so raises django.core.exceptions.SynchronousOnlyOperation.
+​
+CONCEPT: ERROR CONDITIONS
+SynchronousOnlyOperation can occur even if your current function is synchronous, when it is called from an async function without sync_to_async().
+​
+The error indicates that code relying on async-unsafe components is executing in a thread with an active event loop.
+​
+COMMAND: SHELL AUTOAWAIT CONTROL
+In IPython shells, you can disable the automatic event loop with:
+
+python
+%autoawait off
+Re-enable it with:
+
+python
+%autoawait on
+CONCEPT: DJANGO_ALLOW_ASYNC_UNSAFE
+The async context can be imposed by environments that transparently provide an event loop, such as Jupyter and IPython.
+​
+Setting the DJANGO_ALLOW_ASYNC_UNSAFE environment variable to any value disables Django’s async-safety protection and allows async-unsafe code in async contexts.
+​
+COMMAND: ENVIRONMENT VARIABLE EXAMPLE
+python
+import os
+
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+USAGE GUIDELINES:
+USE WHEN:
+
+You are in an environment like a notebook, are certain there is no concurrent access, and must run sync code from an async context.
+​
+DO NOT USE WHEN:
+
+Running production web traffic or any environment where concurrent access can occur, because this may cause data loss or corruption.
+​
+SUMMARY:
+Async-unsafe parts of Django raise SynchronousOnlyOperation in async contexts.
+​
+Fix errors by isolating sync code and calling it via sync_to_async() instead of disabling safety.
+​
+DJANGO_ALLOW_ASYNC_UNSAFE should not be used in production due to data corruption risk.
+​
+SECTION: ASYNC ADAPTER FUNCTIONS
+PURPOSE: Describe async_to_sync() and sync_to_async() for bridging sync and async code.
+​
+CONCEPT: ADAPTING CALLING STYLES
+Django uses adapter functions from asgiref.sync to call async code from sync contexts and sync code from async contexts safely.
+​
+These adapters preserve threadlocals and contextvars across boundaries.
+​
+SECTION: async_to_sync()
+PURPOSE: Convert an async function into a callable usable from synchronous code.
+​
+CONCEPT: FUNCTION BEHAVIOR
+async_to_sync(async_function, force_new_loop=False) takes an async function and returns a synchronous wrapper.
+​
+If the current thread already has an event loop, the async function runs in that loop; otherwise, a new event loop is created in a new thread and shutdown after the call completes.
+​
+COMMAND: async_to_sync EXAMPLE
+python
+from asgiref.sync import async_to_sync
+
+async def get_data():
+    ...
+
+sync_get_data = async_to_sync(get_data)
+
+@async_to_sync
+async def get_other_data():
+    ...
+CONCEPT: RELATIONSHIP TO asyncio.run
+async_to_sync() is a more capable alternative to asyncio.run() that additionally ensures threadlocal values work and integrates with sync_to_async() thread-sensitive mode.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Calling async functions from synchronous code paths, such as traditional Django views or management commands.
+​
+DO NOT USE WHEN:
+
+You already have a fully async call chain and can await the coroutine directly.
+
+SUMMARY:
+async_to_sync() wraps async functions for sync callers and manages event loops and threads.
+​
+It preserves context and integrates with sync_to_async() thread-sensitive behavior.
+​
+SECTION: sync_to_async()
+PURPOSE: Convert a synchronous function into an async callable for use in async code.
+
+CONCEPT: FUNCTION BEHAVIOR
+sync_to_async(sync_function, thread_sensitive=True) returns an async function that executes the synchronous function in a worker thread.
+​
+It preserves threadlocals and contextvars while running the sync function in an appropriate thread based on the thread_sensitive flag.
+​
+COMMAND: sync_to_async EXAMPLES
+python
+from asgiref.sync import sync_to_async
+
+results = await sync_to_async(sync_function, thread_sensitive=True)(pk=123)
+python
+from asgiref.sync import sync_to_async
+
+async_function = sync_to_async(sync_function, thread_sensitive=False)
+async_function = sync_to_async(sensitive_sync_function, thread_sensitive=True)
+
+@sync_to_async
+def sync_function():
+    ...
+CONCEPT: THREAD SENSITIVITY MODES
+With thread_sensitive=True (default), the sync function runs in the same thread as other thread-sensitive functions, usually the main thread when async_to_sync() is used above it.
+​
+With thread_sensitive=False, the sync function runs in a dedicated new thread that is closed after the call completes.
+​
+CONCEPT: REASON FOR THREAD SENSITIVE MODE
+Many libraries, such as database adapters, require being accessed from the same thread where they were created, and much Django code assumes single-threaded execution.
+​
+Thread-sensitive mode keeps all such sync code in one thread while still allowing async callers to offload work safely.
+​
+CONCEPT: RESTRICTIONS WITH DATABASE CONNECTIONS
+Sync Django code always runs in a different thread from async code calling it, so raw database connection objects must not be passed across this boundary.
+​
+Instead, encapsulate database access inside helper functions and call those functions via sync_to_async() without exporting connection objects.
+​
+COMMAND: DATABASE ACCESS EXAMPLE
+Incorrect pattern (will trigger safety checks):
+
+python
+from django.db import connection
+
+await sync_to_async(connection.cursor)()
+Correct pattern (encapsulate database logic):
+
+python
+from asgiref.sync import sync_to_async
+from myapp.models import Blog
+
+def _get_blog(pk):
+    return Blog.objects.get(pk=pk)
+
+blog = await sync_to_async(_get_blog, thread_sensitive=True)(10)
+USAGE GUIDELINES:
+USE WHEN:
+
+Calling synchronous Django code, including ORM operations, from async views or tasks.
+​
+Protecting thread-sensitive components like database adapters by using thread_sensitive=True.
+​
+DO NOT USE WHEN:
+
+You can instead use native async ORM features directly in an async context.
+​
+You are passing low-level, thread-bound resources such as connection objects into sync_to_async() callbacks.
+
+SUMMARY:
+sync_to_async() wraps sync functions for use in async code with optional thread sensitivity.
+​
+Use thread_sensitive=True for database-related or thread-bound logic.
+​
+Encapsulate ORM access in helper functions instead of passing connection objects.
+​

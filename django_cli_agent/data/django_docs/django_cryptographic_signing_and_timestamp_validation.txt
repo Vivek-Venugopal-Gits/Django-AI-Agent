@@ -1,0 +1,282 @@
+=========================
+CRYPTOGRAPHIC SIGNING
+=========================
+SECTION: Cryptographic Signing Overview
+
+PURPOSE:
+Explain what cryptographic signing is and why it is used in Django.
+
+CONCEPT:
+
+Web applications must never trust data from untrusted sources. However, it is sometimes necessary to pass data through untrusted channels.
+
+Cryptographic signing allows data to be transmitted through untrusted mediums while ensuring that any tampering can be detected.
+
+Django provides:
+
+A low-level API for signing and verifying values
+
+A high-level API for signed cookies
+
+Common use cases include:
+
+Account recovery URLs
+
+Tamper-proof hidden form fields
+
+One-time or time-limited access URLs
+
+=========================
+SECRET KEY PROTECTION
+=========================
+SECTION: Protecting SECRET_KEY and SECRET_KEY_FALLBACKS
+
+PURPOSE:
+Explain the role of secret keys in signing security.
+
+CONCEPT:
+
+SECRET_KEY is automatically generated when creating a Django project. It is the foundation of all cryptographic signing.
+
+DO NOT expose SECRET_KEY.
+If compromised, attackers can generate valid signed values.
+
+SECRET_KEY_FALLBACKS:
+
+Are used only for validating existing signed data
+
+Are not used to generate new signatures
+
+Must be protected with the same level of security as SECRET_KEY
+
+=========================
+LOW-LEVEL SIGNING API
+=========================
+SECTION: Using the Signer Class
+
+PURPOSE:
+Explain how to sign and verify values using Django’s low-level API.
+
+CONCEPT:
+
+Django’s signing utilities are provided by the django.core.signing module.
+
+A Signer instance:
+
+Appends a cryptographic signature to a value
+
+Allows verification and recovery of the original value
+
+COMMAND:
+from django.core.signing import Signer
+signer = Signer()
+value = signer.sign("My string")
+value
+
+COMMAND:
+original = signer.unsign(value)
+original
+
+SECTION: Signing Non-String Values
+
+PURPOSE:
+Explain how non-string values are handled.
+
+CONCEPT:
+
+Non-string values passed to sign() are converted to strings before signing.
+
+COMMAND:
+signed = signer.sign(2.5)
+original = signer.unsign(signed)
+original
+
+SECTION: Signing Complex Objects
+
+PURPOSE:
+Explain how to sign structured data.
+
+CONCEPT:
+
+Lists, tuples, and dictionaries can be signed using object-specific methods.
+
+COMMAND:
+signed_obj = signer.sign_object({"message": "Hello!"})
+obj = signer.unsign_object(signed_obj)
+obj
+
+SECTION: Detecting Tampering
+
+PURPOSE:
+Explain how signature validation failures are handled.
+
+CONCEPT:
+
+Any modification to the signed value or signature raises a BadSignature exception.
+
+COMMAND:
+from django.core import signing
+value += "m"
+try:
+    original = signer.unsign(value)
+except signing.BadSignature:
+    print("Tampering detected!")
+
+=========================
+SIGNER CONFIGURATION
+=========================
+SECTION: Custom Signing Configuration
+
+PURPOSE:
+Explain configurable options of the Signer class.
+
+CONCEPT:
+
+The Signer class supports custom configuration:
+
+key: Secret key used for signing
+
+sep: Separator between value and signature
+
+salt: Namespace isolation
+
+algorithm: Hashing algorithm (default: sha256)
+
+fallback_keys: Additional validation keys
+
+The separator MUST NOT be part of the URL-safe Base64 alphabet.
+
+=========================
+SALT NAMESPACING
+=========================
+SECTION: Using the salt Argument
+
+PURPOSE:
+Explain how salting prevents cross-context signature reuse.
+
+CONCEPT:
+
+Using a salt:
+
+Creates independent signing namespaces
+
+Prevents reuse of signed values across different code paths
+
+Salt values:
+
+Do NOT need to remain secret
+
+Must be consistent within the same verification context
+
+COMMAND:
+signer = Signer(salt="extra")
+signer.sign("My string")
+
+=========================
+TIMESTAMPED SIGNING
+=========================
+SECTION: TimestampSigner
+
+PURPOSE:
+Explain how to create time-limited signed values.
+
+CONCEPT:
+
+TimestampSigner extends Signer by appending a signed timestamp.
+
+This allows validation that a value was generated within a specific time window.
+
+COMMAND:
+from datetime import timedelta
+from django.core.signing import TimestampSigner
+
+signer = TimestampSigner()
+value = signer.sign("hello")
+signer.unsign(value, max_age=20)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Generating temporary or expiring tokens
+
+Enforcing time-based access control
+
+DO NOT USE WHEN:
+
+Tokens must remain valid indefinitely
+
+=========================
+COMPLEX DATA STRUCTURES
+=========================
+SECTION: Protecting Complex Data
+
+PURPOSE:
+Explain JSON-based signing of structured data.
+
+CONCEPT:
+
+Complex data can be signed using:
+
+sign_object() / unsign_object()
+
+signing.dumps() / signing.loads()
+
+These methods:
+
+Use JSON serialization
+
+Prevent arbitrary code execution risks associated with pickle
+
+COMMAND:
+from django.core import signing
+
+value = signing.dumps({"foo": "bar"})
+signing.loads(value)
+
+CONCEPT:
+
+JSON serialization does not preserve tuple types.
+
+Tuples are converted to lists when loaded.
+
+=========================
+DUMPS AND LOADS HELPERS
+=========================
+SECTION: dumps() and loads()
+
+PURPOSE:
+Explain shortcut helpers for timestamped object signing.
+
+CONCEPT:
+
+dumps():
+
+Serializes data
+
+Signs using TimestampSigner
+
+Produces a URL-safe string
+
+loads():
+
+Verifies the signature
+
+Optionally validates expiration using max_age
+
+Raises BadSignature on failure
+
+=========================
+SUMMARY
+=========================
+SUMMARY:
+
+Cryptographic signing detects tampering of untrusted data
+
+SECRET_KEY security is critical
+
+Salt isolates signing contexts
+
+TimestampSigner enables expiring values
+
+JSON serialization ensures safe object signing

@@ -1,0 +1,192 @@
+PURPOSE:
+Explain how to prepare, collect, and serve Django static files in production environments using supported deployment patterns.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Production Django deployments
+
+Projects using django.contrib.staticfiles
+
+SECTION: Overview of Static Files Deployment
+
+PURPOSE:
+Describe the high-level process for making static files available in production.
+
+CONCEPT:
+
+Deploying static files in Django production environments consists of two mandatory steps:
+
+Run the collectstatic command whenever static files change.
+
+Serve the collected static files from a dedicated location configured for static file delivery.
+
+Static files are gathered into a single directory defined by STATIC_ROOT. Depending on the configured static files storage backend, files may need to be moved manually or processed automatically by the storage backend.
+
+Every production deployment differs. The deployment patterns described below illustrate common approaches that must be adapted to individual infrastructure requirements.
+
+SECTION: Core Static Files Settings
+
+PURPOSE:
+Define the critical settings involved in static files deployment.
+
+FILE: STATIC_ROOT
+ROLE: Absolute filesystem path where all collected static files are stored for production serving.
+
+FILE: STATIC_URL
+ROLE: Public URL prefix used to serve static files.
+
+FILE: STORAGES["staticfiles"]
+ROLE: Defines the storage backend used by django.contrib.staticfiles during collection and deployment.
+
+SECTION: Collecting Static Files
+
+PURPOSE:
+Explain how static files are aggregated for production use.
+
+COMMAND:
+CODE:
+collectstatic
+
+CONCEPT:
+
+The collectstatic command gathers static files from all installed apps and configured static directories and places them into STATIC_ROOT. If a custom storage backend is configured, it may automatically handle file transfer or post-processing.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Static files are added, changed, or removed
+
+Preparing a deployment artifact for production
+
+DO NOT USE WHEN:
+
+Serving static files directly from source directories in production
+
+SECTION: Serving Static Files from the Same Server
+
+PURPOSE:
+Describe how to serve static files from the same server that runs Django.
+
+CONCEPT:
+
+In this deployment pattern, the web server responsible for serving the Django application also serves static files.
+
+Typical workflow:
+
+Deploy application code to the server.
+
+Run collectstatic on the server to populate STATIC_ROOT.
+
+Configure the web server to serve files from STATIC_ROOT under STATIC_URL.
+
+This process should be automated when managing multiple servers or frequent deployments.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Running small to medium deployments
+
+Infrastructure simplicity is prioritized
+
+DO NOT USE WHEN:
+
+High traffic or large-scale static file delivery is required
+
+SECTION: Serving Static Files from a Dedicated Server
+
+PURPOSE:
+Explain how to offload static file serving to a separate server.
+
+CONCEPT:
+
+Larger deployments commonly use a separate web server that does not run Django to serve static files. These servers are typically optimized for static content delivery.
+
+Typical workflow:
+
+Run collectstatic locally or in a build environment.
+
+Transfer the contents of STATIC_ROOT to the static file server.
+
+Serve files directly from the static server.
+
+File synchronization tools are commonly used to transfer only changed files.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Scaling static file delivery independently from Django
+
+Optimizing performance for large static assets
+
+DO NOT USE WHEN:
+
+Deployment simplicity outweighs performance considerations
+
+SECTION: Serving Static Files from Cloud Storage or a CDN
+
+PURPOSE:
+Describe static file deployment using cloud storage providers or CDNs.
+
+CONCEPT:
+
+Static files can be served from cloud-based storage services or content delivery networks (CDNs). This approach removes the need to manage static file servers and often improves load performance.
+
+Instead of transferring files to a server, static files are uploaded to the storage provider using a storage backend API.
+
+Custom or third-party storage backends can be configured to integrate Django with cloud storage providers.
+
+FILE: STORAGES["staticfiles"]
+ROLE: Specifies the storage backend responsible for uploading and managing static files.
+
+COMMAND:
+CODE:
+STORAGES = {
+    # ...
+    "staticfiles": {"BACKEND": "myproject.storage.S3Storage"}
+}
+
+
+After configuration, running collectstatic uploads static files using the configured backend. Changing providers typically requires only updating the storage backend configuration.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Serving static files globally
+
+Minimizing infrastructure management
+
+Leveraging CDN caching and performance
+
+DO NOT USE WHEN:
+
+Storage provider APIs are unavailable
+
+Static files must remain strictly on local infrastructure
+
+SECTION: Extending Static Files with Custom Storage Backends
+
+PURPOSE:
+Explain how Django supports extensible static file storage implementations.
+
+CONCEPT:
+
+Django allows custom storage backends to control how static files are stored, processed, and transferred. These backends integrate with collectstatic and can automate post-processing and deployment.
+
+Third-party storage backends exist for many common storage services and APIs.
+
+SUMMARY:
+
+Static files must be collected before production deployment.
+
+STATIC_ROOT defines where collected files are stored.
+
+Static files can be served from the same server, a dedicated server, or cloud storage/CDNs.
+
+Storage backends control how static files are processed and transferred.
+
+collectstatic is the central command for static file deployment.

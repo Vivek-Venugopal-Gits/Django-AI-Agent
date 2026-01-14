@@ -1,0 +1,574 @@
+PURPOSE: This section explains how to use Django's database-abstraction API to create, retrieve, update, and delete objects from models.
+CONCEPT: EXAMPLE MODELS OVERVIEW
+The following models comprise a blog application and are used in examples throughout this guide.
+CODE EXAMPLE:
+from datetime import date
+
+from django.db import models
+
+class Blog(models.Model):
+    name = models.CharField(max_length=100)
+    tagline = models.TextField()
+
+    def __str__(self):
+        return self.name
+
+class Author(models.Model):
+    name = models.CharField(max_length=200)
+    email = models.EmailField()
+
+    def __str__(self):
+        return self.name
+
+class Entry(models.Model):
+    blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
+    headline = models.CharField(max_length=255)
+    body_text = models.TextField()
+    pub_date = models.DateField()
+    mod_date = models.DateField(default=date.today)
+    authors = models.ManyToManyField(Author)
+    number_of_comments = models.IntegerField(default=0)
+    number_of_pingbacks = models.IntegerField(default=0)
+    rating = models.IntegerField(default=5)
+
+    def __str__(self):
+        return self.headline
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django ORM for database interactions.
+
+SECTION: CREATING OBJECTS
+PURPOSE: This section explains how to create and save new model instances to the database.
+CONCEPT: CREATING OBJECTS OVERVIEW
+A model class represents a database table, and an instance represents a record. Instantiate the model with keyword arguments, then call save() to insert it into the database.
+CODE EXAMPLE:
+from blog.models import Blog
+b = Blog(name="Beatles Blog", tagline="All the latest Beatles news.")
+b.save()
+This performs an INSERT SQL statement. Django does not hit the database until save() is called explicitly.
+The save() method has no return value.
+To create and save in one step, use the create() method.
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding new records to the database.
+DO NOT USE WHEN:
+Updating existing records; use save() on loaded instances instead.
+
+SECTION: SAVING CHANGES TO OBJECTS
+PURPOSE: This section describes how to update existing model instances in the database.
+CONCEPT: SAVING CHANGES OVERVIEW
+Call save() on an existing instance to perform an UPDATE SQL statement. Django does not hit the database until save() is called explicitly.
+CODE EXAMPLE:
+Pythonb5.name = "New name"
+b5.save()
+SECTION: SAVING FOREIGNKEY AND MANYTOMANYFIELD FIELDS
+PURPOSE: This section explains how to update ForeignKey and ManyToManyField relationships.
+CONCEPT: SAVING FOREIGNKEY FIELDS
+Assign a related object instance to the ForeignKey field and call save().
+CODE EXAMPLE:
+from blog.models import Blog, Entry
+entry = Entry.objects.get(pk=1)
+cheese_blog = Blog.objects.get(name="Cheddar Talk")
+entry.blog = cheese_blog
+entry.save()
+CONCEPT: SAVING MANYTOMANYFIELD FIELDS
+Use the add() method to add related objects to the ManyToManyField.
+CODE EXAMPLE:
+from blog.models import Author
+joe = Author.objects.create(name="Joe")
+entry.authors.add(joe)
+Add multiple objects at once by passing them to add().
+CODE EXAMPLE:
+john = Author.objects.create(name="John")
+paul = Author.objects.create(name="Paul")
+george = Author.objects.create(name="George")
+ringo = Author.objects.create(name="Ringo")
+entry.authors.add(john, paul, george, ringo)
+DO NOT assign or add objects of the wrong type, as Django will raise an error.
+USAGE GUIDELINES:
+USE WHEN:
+
+Updating relationships in models.
+DO NOT USE WHEN:
+Relationships are not defined in the model.
+
+SECTION: RETRIEVING OBJECTS
+PURPOSE: This section covers constructing QuerySets to retrieve objects from the database.
+CONCEPT: QUERYSET OVERVIEW
+A QuerySet represents a collection of objects from the database, with optional filters. It equates to a SELECT SQL statement.
+Access QuerySets via the model's Manager, typically named objects.
+CODE EXAMPLE:
+Blog.objects
+Managers are accessible via model classes, not instances, to separate table-level and record-level operations.
+USAGE GUIDELINES:
+USE WHEN:
+
+Querying the database for objects.
+DO NOT USE WHEN:
+Accessing from model instances; use class-level access.
+
+SECTION: RETRIEVING ALL OBJECTS
+PURPOSE: This section explains how to get all objects from a model.
+CONCEPT: ALL() METHOD
+Use all() on the Manager to return a QuerySet of all objects.
+CODE EXAMPLE:
+all_entries = Entry.objects.all()
+SECTION: RETRIEVING SPECIFIC OBJECTS WITH FILTERS
+PURPOSE: This section describes refining QuerySets with filters.
+CONCEPT: FILTER AND EXCLUDE METHODS
+filter(**kwargs) returns a new QuerySet matching the lookup parameters. exclude(**kwargs) returns a new QuerySet excluding matches.
+CODE EXAMPLE:
+Entry.objects.filter(pub_date__year=2006)
+Equivalent to:
+CODE EXAMPLE:
+Entry.objects.all().filter(pub_date__year=2006)
+CONCEPT: CHAINING FILTERS
+Chain filter() and exclude() to refine QuerySets.
+CODE EXAMPLE:
+Entry.objects.filter(headline__startswith="What").exclude(
+    pub_date__gte=datetime.date.today()
+).filter(pub_date__gte=datetime.date(2005, 1, 30))
+Each refinement creates a new, independent QuerySet.
+CONCEPT: FILTERED QUERYSETS ARE UNIQUE
+Refining a QuerySet creates a separate, distinct QuerySet.
+CODE EXAMPLE:
+q1 = Entry.objects.filter(headline__startswith="What")
+q2 = q1.exclude(pub_date__gte=datetime.date.today())
+q3 = q1.filter(pub_date__gte=datetime.date.today())
+The original q1 remains unaffected.
+CONCEPT: QUERYSETS ARE LAZY
+Creating a QuerySet does not involve database activity. Filters can be stacked without querying until evaluation.
+CODE EXAMPLE:
+q = Entry.objects.filter(headline__startswith="What")
+q = q.filter(pub_date__lte=datetime.date.today())
+q = q.exclude(body_text__icontains="food")
+print(q)
+The database is hit only on print(q).
+SUMMARY:
+
+Use filter() and exclude() to refine results.
+Chain methods for complex queries.
+QuerySets are independent and lazy-evaluated.
+
+SECTION: RETRIEVING A SINGLE OBJECT WITH GET()
+PURPOSE: This section explains retrieving a single object directly.
+CONCEPT: GET() METHOD
+get() returns the object matching the lookup, raising DoesNotExist if none found or MultipleObjectsReturned if more than one.
+CODE EXAMPLE:
+one_entry = Entry.objects.get(pk=1)
+Use any query expression with get().
+If no match, raises Model.DoesNotExist. If multiple, raises Model.MultipleObjectsReturned.
+USAGE GUIDELINES:
+USE WHEN:
+
+Expecting exactly one result.
+DO NOT USE WHEN:
+Multiple results possible; use filter() instead.
+
+SECTION: OTHER QUERYSET METHODS
+PURPOSE: This section notes additional QuerySet methods.
+CONCEPT: QUERYSET API REFERENCE
+Refer to the QuerySet API for methods beyond all(), get(), filter(), and exclude().
+SECTION: LIMITING QUERYSETS
+PURPOSE: This section describes slicing QuerySets to limit results.
+CONCEPT: SLICING QUERYSETS
+Use Python slice syntax for LIMIT and OFFSET.
+CODE EXAMPLE:
+PythonEntry.objects.all()[:5]
+CODE EXAMPLE:
+Entry.objects.all()[5:10]
+Negative indexing is not supported. Slicing returns a new QuerySet, except with step parameter, which evaluates.
+Further filtering or ordering on sliced QuerySets is prohibited.
+Use indexing for single objects.
+CODE EXAMPLE:
+Entry.objects.order_by("headline")[0]
+Equivalent to [0:1].get(), but raises IndexError if no match.
+USAGE GUIDELINES:
+USE WHEN:
+
+Paginating or limiting results.
+DO NOT USE WHEN:
+Needing negative slicing.
+
+SECTION: FIELD LOOKUPS
+PURPOSE: This section explains specifying WHERE clauses with field lookups.
+CONCEPT: FIELD LOOKUPS OVERVIEW
+Use field__lookuptype=value in filter(), exclude(), get().
+CODE EXAMPLE:
+Entry.objects.filter(pub_date__lte="2006-01-01")
+Invalid arguments raise TypeError.
+Common lookups: exact, iexact, contains, icontains, startswith, endswith, istartswith, iendswith.
+CODE EXAMPLE:
+Entry.objects.get(headline__exact="Cat bites dog")
+CODE EXAMPLE:
+Blog.objects.get(name__iexact="beatles blog")
+CODE EXAMPLE:
+Entry.objects.get(headline__contains="Lennon")
+Refer to field lookup reference for full list.
+SECTION: LOOKUPS THAT SPAN RELATIONSHIPS
+PURPOSE: This section describes querying across model relationships.
+CONCEPT: SPANNING RELATIONSHIPS
+Use double underscores to follow relationships.
+CODE EXAMPLE:
+Entry.objects.filter(blog__name="Beatles Blog")
+Works backwards using lowercase model name.
+CODE EXAMPLE:
+Blog.objects.filter(entry__headline__contains="Lennon")
+If intermediate models lack values, treated as empty but valid.
+Use isnull for missing keys.
+CONCEPT: SPANNING MULTI-VALUED RELATIONSHIPS
+For ManyToManyField or reverse ForeignKey, conditions in one filter() must match the same related object.
+CODE EXAMPLE:
+Blog.objects.filter(entry__headline__contains="Lennon", entry__pub_date__year=2008)
+Chain filters for permissive queries.
+CODE EXAMPLE:
+Blog.objects.filter(entry__headline__contains="Lennon").filter(
+    entry__pub_date__year=2008
+)
+exclude() does not guarantee same-item conditions.
+USAGE GUIDELINES:
+USE WHEN:
+
+Querying related models.
+DO NOT USE WHEN:
+Needing permissive multi-valued queries without chaining.
+
+SECTION: FILTERS CAN REFERENCE FIELDS ON THE MODEL
+PURPOSE: This section explains comparing fields using F expressions.
+CONCEPT: F EXPRESSIONS
+Use F() to reference fields in queries.
+CODE EXAMPLE:
+from django.db.models import F
+Entry.objects.filter(number_of_comments__gt=F("number_of_pingbacks"))
+Supports arithmetic operations.
+CODE EXAMPLE:
+Entry.objects.filter(number_of_comments__gt=F("number_of_pingbacks") * 2)
+Spans relationships.
+CODE EXAMPLE:
+Entry.objects.filter(authors__name=F("blog__name"))
+Adds timedelta to dates.
+CODE EXAMPLE:
+from datetime import timedelta
+Entry.objects.filter(mod_date__gt=F("pub_date") + timedelta(days=3))
+Supports bitwise operations.
+CODE EXAMPLE:
+F("somefield").bitand(16)
+USAGE GUIDELINES:
+USE WHEN:
+
+Comparing fields dynamically.
+DO NOT USE WHEN:
+Introducing joins in updates; raises FieldError.
+
+SECTION: EXPRESSIONS CAN REFERENCE TRANSFORMS
+PURPOSE: This section describes using transforms in expressions.
+CONCEPT: TRANSFORMS IN EXPRESSIONS
+Use transforms like year in filters.
+CODE EXAMPLE:
+from django.db.models import F
+Entry.objects.filter(pub_date__year=F("mod_date__year"))
+In aggregations.
+CODE EXAMPLE:
+from django.db.models import Min
+Entry.objects.aggregate(first_published_year=Min("pub_date__year"))
+With subqueries.
+CODE EXAMPLE:
+from django.db.models import OuterRef, Subquery, Sum
+Entry.objects.values("pub_date__year").annotate(
+    top_rating=Subquery(
+        Entry.objects.filter(
+            pub_date__year=OuterRef("pub_date__year"),
+        )
+        .order_by("-rating")
+        .values("rating")[:1]
+    ),
+    total_comments=Sum("number_of_comments"),
+)
+SECTION: THE PK LOOKUP SHORTCUT
+PURPOSE: This section explains the pk shortcut for primary key queries.
+CONCEPT: PK LOOKUP
+pk stands for primary key, implying id__exact.
+CODE EXAMPLE:
+Blog.objects.get(pk=14)
+Combines with other terms.
+CODE EXAMPLE:
+Blog.objects.filter(pk__in=[1, 4, 7])
+Works across joins.
+SECTION: ESCAPING PERCENT SIGNS AND UNDERSCORES IN LIKE STATEMENTS
+PURPOSE: This section describes handling special characters in LIKE lookups.
+CONCEPT: ESCAPING IN LIKE
+Lookups like contains automatically escape % and _.
+CODE EXAMPLE:
+Entry.objects.filter(headline__contains="%")
+SECTION: CACHING AND QUERYSETS
+PURPOSE: This section explains QuerySet caching behavior.
+CONCEPT: QUERYSET CACHING
+QuerySets cache results after first evaluation to minimize database access.
+CODE EXAMPLE:
+print([e.headline for e in Entry.objects.all()])
+print([e.pub_date for e in Entry.objects.all()])
+This hits the database twice. Save and reuse:
+CODE EXAMPLE:
+queryset = Entry.objects.all()
+print([p.headline for p in queryset])  # Evaluate the query set.
+print([p.pub_date for p in queryset])  # Reuse the cache.
+CONCEPT: WHEN QUERYSETS ARE NOT CACHED
+Partial evaluation (slicing, indexing) checks but does not populate cache.
+CODE EXAMPLE:
+queryset = Entry.objects.all()
+print(queryset[5])  # Queries the database
+print(queryset[5])  # Queries again
+After full evaluation, uses cache.
+CODE EXAMPLE:
+[entry for entry in queryset]  # Queries the database
+print(queryset[5])  # Uses cache
+Actions like list(queryset), bool(queryset) evaluate fully.
+Printing does not populate cache.
+SUMMARY:
+
+Cache populates on full evaluation.
+Reuse QuerySets to avoid redundant queries.
+Partial access does not cache.
+
+SECTION: ASYNCHRONOUS QUERIES
+PURPOSE: This section covers asynchronous ORM queries.
+CONCEPT: ASYNCHRONOUS QUERIES OVERVIEW
+In async code, use async variants to avoid blocking.
+CONCEPT: QUERY ITERATION
+Use async for instead of for.
+CODE EXAMPLE:
+async for entry in Authors.objects.filter(name__startswith="A"):
+    ...
+DO NOT use list() on QuerySets in async; use async for in comprehensions.
+CONCEPT: QUERYSET AND MANAGER METHODS
+Methods returning QuerySets (e.g., filter()) are async-safe. Blocking methods (e.g., get()) have a- prefixed async versions (aget()).
+CODE EXAMPLE:
+user = await User.objects.filter(username=my_input).afirst()
+Refer to QuerySet reference for categorization.
+CONCEPT: TRANSACTIONS
+Transactions are not supported in async queries; raises SynchronousOnlyOperation.
+Use sync_to_async for ORM code in transactions.
+USAGE GUIDELINES:
+USE WHEN:
+
+In async views or code.
+DO NOT USE WHEN:
+In synchronous contexts.
+
+SECTION: QUERYING JSONFIELD
+PURPOSE: This section explains querying JSONField models.
+CONCEPT: STORING AND QUERYING FOR NONE
+None as field value stores SQL NULL. Use Value(None, JSONField()) for JSON null.
+CODE EXAMPLE:
+Dog.objects.create(name="Max", data=None)  # SQL NULL.
+Dog.objects.create(name="Archie", data=Value(None, JSONField()))  # JSON null.
+Querying with None matches JSON null. Use isnull for SQL NULL.
+Set null=False and default=dict for safety.
+CONCEPT: KEY, INDEX, AND PATH TRANSFORMS
+Use key as lookup name.
+CODE EXAMPLE:
+Dog.objects.filter(data__breed="collie")
+Chain for paths.
+CODE EXAMPLE:
+Dog.objects.filter(data__owner__name="Bob")
+Integers as indices.
+Negative indices supported on SQLite.
+Use contains if key clashes with lookup.
+Use isnull for missing keys.
+Chain with lookups like icontains, lt, etc.
+CONCEPT: KT() EXPRESSIONS
+KT(lookup) represents text value of a JSON transform.
+CODE EXAMPLE:
+from django.db.models.fields.json import KT
+Dog.objects.annotate(
+    first_breed=KT("data__breed__1"), owner_name=KT("data__owner__name")
+).filter(first_breed__startswith="lhasa", owner_name="Bob")
+USAGE GUIDELINES:
+USE WHEN:
+
+Extracting JSON values as text.
+DO NOT USE WHEN:
+Lookups other than listed are interpreted as keys; check queries.
+
+SECTION: CONTAINMENT AND KEY LOOKUPS
+PURPOSE: This section describes JSON-specific lookups.
+CONCEPT: CONTAINS LOOKUP
+Returns objects where the dict is contained in the field.
+CODE EXAMPLE:
+Dog.objects.filter(data__contains={"owner": "Bob"})
+CONCEPT: CONTAINED_BY LOOKUP
+Returns objects where field keys are subset of the dict.
+CODE EXAMPLE:
+Dog.objects.filter(data__contained_by={"breed": "collie", "owner": "Bob"})
+CONCEPT: HAS_KEY LOOKUP
+Returns objects with the key.
+CODE EXAMPLE:
+Dog.objects.filter(data__has_key="owner")
+CONCEPT: HAS_KEYS LOOKUP
+Returns objects with all keys.
+CODE EXAMPLE:
+Dog.objects.filter(data__has_keys=["breed", "owner"])
+CONCEPT: HAS_ANY_KEYS LOOKUP
+Returns objects with any keys.
+CODE EXAMPLE:
+Dog.objects.filter(data__has_any_keys=["owner", "breed"])
+SUMMARY:
+
+Use contains for subset checks.
+Use has_key variants for key presence.
+Database-specific limitations apply.
+
+SECTION: COMPLEX LOOKUPS WITH Q OBJECTS
+PURPOSE: This section explains using Q for OR and complex queries.
+CONCEPT: Q OBJECTS
+Q encapsulates keyword arguments.
+CODE EXAMPLE:
+from django.db.models import Q
+Q(question__startswith="What")
+Combine with &, |, ^, ~.
+CODE EXAMPLE:
+Q(question__startswith="Who") | Q(question__startswith="What")
+Pass Q to filter(), etc., before keyword args.
+USAGE GUIDELINES:
+USE WHEN:
+
+Needing OR or NOT in queries.
+DO NOT USE WHEN:
+Simple AND suffices.
+
+SECTION: COMPARING OBJECTS
+PURPOSE: This section describes comparing model instances.
+CONCEPT: COMPARING OBJECTS
+Use == to compare primary keys.
+CODE EXAMPLE:
+some_entry == other_entry
+Works with any primary key name.
+SECTION: DELETING OBJECTS
+PURPOSE: This section explains deleting model instances.
+CONCEPT: DELETE() METHOD
+delete() deletes the object and returns deletions count.
+CODE EXAMPLE:
+e.delete()
+Bulk delete on QuerySets.
+CODE EXAMPLE:
+Entry.objects.filter(pub_date__year=2005).delete()
+Executed in SQL; custom delete() not called unless manual.
+Cascades by default; customizable with on_delete.
+To delete all, use all().delete().
+USAGE GUIDELINES:
+USE WHEN:
+
+Removing records.
+DO NOT USE WHEN:
+Needing per-instance delete hooks; iterate and delete individually.
+
+SECTION: COPYING MODEL INSTANCES
+PURPOSE: This section describes duplicating model instances.
+CONCEPT: COPYING INSTANCES
+Set pk=None and _state.adding=True, then save().
+CODE EXAMPLE:
+blog = Blog(name="My blog", tagline="Blogging is easy")
+blog.save()
+blog.pk = None
+blog._state.adding = True
+blog.save()
+For inheritance, also set id=None.
+Copy relations manually.
+For OneToOneField, duplicate related object.
+Assign values to deferred fields.
+Does not copy non-database relations.
+USAGE GUIDELINES:
+USE WHEN:
+
+Duplicating records.
+DO NOT USE WHEN:
+With deferred fields without assigning values.
+
+SECTION: UPDATING MULTIPLE OBJECTS AT ONCE
+PURPOSE: This section explains bulk updates.
+CONCEPT: UPDATE() METHOD
+update() sets fields on QuerySet and returns updated count.
+CODE EXAMPLE:
+Entry.objects.filter(pub_date__year=2007).update(headline="Everything is the same")
+For ForeignKey, assign instances.
+Only non-relation and ForeignKey fields.
+Bulk SQL; no save(), signals, auto_now.
+Use F for field-based updates.
+CODE EXAMPLE:
+Entry.objects.update(number_of_pingbacks=F("number_of_pingbacks") + 1)
+No joins in F for updates.
+To ensure save() calls, iterate and save.
+USAGE GUIDELINES:
+USE WHEN:
+
+Efficient bulk updates.
+DO NOT USE WHEN:
+Needing hooks or signals.
+
+SECTION: RELATED OBJECTS
+PURPOSE: This section covers accessing related objects via relationships.
+CONCEPT: RELATED OBJECTS OVERVIEW
+ForeignKey, OneToOneField, ManyToManyField provide accessors.
+SECTION: ONE-TO-MANY RELATIONSHIPS
+PURPOSE: This section explains one-to-many access.
+CONCEPT: FORWARD ACCESS
+Access related object via attribute.
+CODE EXAMPLE:
+Pythone.blog
+Set and save to update.
+Set to None for null=True.
+Cached after first access; use select_related() to prepopulate.
+CONCEPT: FOLLOWING RELATIONSHIPS BACKWARD
+Use lowercase_model_set Manager.
+CODE EXAMPLE:
+b.entry_set.all()
+Override with related_name.
+CONCEPT: USING A CUSTOM REVERSE MANAGER
+Specify manager for query.
+CODE EXAMPLE:
+b.entry_set(manager="entries").all()
+For prefetch, use Prefetch().
+CONCEPT: ADDITIONAL METHODS TO HANDLE RELATED OBJECTS
+add(), create(), remove(), clear(), set() for relations.
+SECTION: MANY-TO-MANY RELATIONSHIPS
+PURPOSE: This section describes many-to-many access.
+CONCEPT: MANY-TO-MANY ACCESS
+Similar to backward one-to-many.
+CODE EXAMPLE:
+e.authors.all()
+a.entry_set.all()
+Use related_name.
+Accepts PKs in add(), set(), remove().
+CONCEPT: FILTERING ON MANY-TO-MANY RELATIONSHIPS
+Filters are "sticky"; chain for permissive.
+exclude() behaves differently.
+SECTION: ONE-TO-ONE RELATIONSHIPS
+PURPOSE: This section explains one-to-one access.
+CONCEPT: ONE-TO-ONE ACCESS
+Similar to one-to-many forward.
+Reverse is single object Manager.
+Raises DoesNotExist if missing.
+SECTION: HOW ARE THE BACKWARD RELATIONSHIPS POSSIBLE?
+PURPOSE: This section explains implementation of backward relations.
+CONCEPT: BACKWARD RELATIONS IMPLEMENTATION
+App registry adds backward relations on model load.
+All models must be in INSTALLED_APPS.
+SECTION: QUERIES OVER RELATED OBJECTS
+PURPOSE: This section describes querying with related objects.
+CONCEPT: QUERIES OVER RELATED OBJECTS
+Use object instances or PKs in filters.
+CODE EXAMPLE:
+Entry.objects.filter(blog=b)
+Entry.objects.filter(blog=5)
+SECTION: FALLING BACK TO RAW SQL
+PURPOSE: This section notes using raw SQL when needed.
+CONCEPT: RAW SQL FALLBACK
+Use raw SQL for complex queries; see Performing raw SQL queries.
+Django is an interface; database accessible via other tools.
+SUMMARY:
+
+Use ORM for standard queries.
+Fall back to raw SQL for complexity.

@@ -1,0 +1,232 @@
+SECTION: Custom Template Backend Overview
+
+PURPOSE:
+Explain how to integrate a non-Django template engine into Django using a custom backend.
+
+CONCEPT:
+
+A custom template backend allows Django to render templates using an alternative template system. Each backend is implemented as a Python class that inherits from django.template.backends.base.BaseEngine.
+
+A backend MUST implement:
+
+get_template()
+
+A backend MAY implement:
+
+from_string()
+
+SECTION: BaseEngine Inheritance Requirements
+CONCEPT:
+
+All custom template backends MUST subclass BaseEngine. The backend class is responsible for:
+
+Initializing the underlying template engine
+
+Loading templates by name
+
+Rendering templates with context and request data
+
+SECTION: Example Custom Template Backend Implementation
+
+PURPOSE:
+Demonstrate the minimal required structure for a custom backend using a fictional template engine.
+
+COMMAND:
+from django.template import TemplateDoesNotExist, TemplateSyntaxError
+from django.template.backends.base import BaseEngine
+from django.template.backends.utils import csrf_input_lazy, csrf_token_lazy
+
+import foobar
+
+
+class FooBar(BaseEngine):
+    # Name of the subdirectory containing the templates for this engine
+    # inside an installed application.
+    app_dirname = "foobar"
+
+    def __init__(self, params):
+        params = params.copy()
+        options = params.pop("OPTIONS").copy()
+        super().__init__(params)
+
+        self.engine = foobar.Engine(**options)
+
+    def from_string(self, template_code):
+        try:
+            return Template(self.engine.from_string(template_code))
+        except foobar.TemplateCompilationFailed as exc:
+            raise TemplateSyntaxError(exc.args)
+
+    def get_template(self, template_name):
+        try:
+            return Template(self.engine.get_template(template_name))
+        except foobar.TemplateNotFound as exc:
+            raise TemplateDoesNotExist(exc.args, backend=self)
+        except foobar.TemplateCompilationFailed as exc:
+            raise TemplateSyntaxError(exc.args)
+
+SECTION: Template Wrapper Object
+
+PURPOSE:
+Define how the backend returns a renderable template object.
+
+CONCEPT:
+
+The backend returns a wrapper object that exposes a render() method. Django calls this method during template rendering.
+
+COMMAND:
+class Template:
+    def __init__(self, template):
+        self.template = template
+
+    def render(self, context=None, request=None):
+        if context is None:
+            context = {}
+        if request is not None:
+            context["request"] = request
+            context["csrf_input"] = csrf_input_lazy(request)
+            context["csrf_token"] = csrf_token_lazy(request)
+        return self.template.render(context)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Integrating a third-party template engine
+
+Rendering templates that require request or CSRF context
+
+DO NOT USE WHEN:
+
+Django’s built-in template engine satisfies all requirements
+
+SECTION: Error Handling Requirements
+CONCEPT:
+
+Custom backends MUST translate engine-specific errors into Django exceptions.
+
+REQUIRED EXCEPTION MAPPING:
+
+Template not found → TemplateDoesNotExist
+
+Compilation errors → TemplateSyntaxError
+
+RULE:
+
+TemplateDoesNotExist SHOULD include the backend argument to support debug reporting.
+
+SECTION: Debug Integration for Custom Template Engines
+
+PURPOSE:
+Explain how custom engines integrate with Django’s debug error reporting.
+
+SECTION: Template Postmortem Integration
+CONCEPT:
+
+When TemplateDoesNotExist is raised, Django displays a postmortem showing:
+
+Template engines used
+
+Loaders attempted
+
+Templates tried
+
+REQUIREMENTS FOR CUSTOM ENGINES:
+
+Pass backend and tried when raising TemplateDoesNotExist
+
+Provide origin information on template objects
+
+SECTION: Contextual Line Information in Errors
+
+PURPOSE:
+Enable Django to display the exact location of template errors.
+
+CONCEPT:
+
+Custom engines can attach detailed source information to exceptions using a template_debug attribute.
+
+REQUIRED STRUCTURE:
+
+template_debug MUST be a dictionary containing:
+
+name: Full path to the template
+
+message: Error message
+
+source_lines: Contextual lines around the error
+
+line: Line number where the error occurred
+
+before: Content before the error token
+
+during: The token that caused the error
+
+after: Content after the error token
+
+total: Total number of lines provided
+
+top: Starting line number of source_lines
+
+bottom: Ending line number of source_lines
+
+EXAMPLE:
+{
+    "name": "/path/to/template.html",
+    "message": "Invalid block tag: 'syntax'",
+    "source_lines": [
+        (1, "some\n"),
+        (2, "lines\n"),
+        (3, "before\n"),
+        (4, "Hello {% syntax error %} {{ world }}\n"),
+        (5, "some\n"),
+        (6, "lines\n"),
+        (7, "after\n"),
+        (8, ""),
+    ],
+    "line": 4,
+    "before": "Hello ",
+    "during": "{% syntax error %}",
+    "after": " {{ world }}\n",
+    "total": 9,
+    "bottom": 9,
+    "top": 1,
+}
+
+SECTION: Template Origin API
+
+PURPOSE:
+Provide template source metadata for debugging and third-party tools.
+
+CONCEPT:
+
+Django templates expose an origin attribute that describes where a template came from. This information is used by:
+
+Django’s debug pages
+
+Third-party debugging tools
+
+REQUIRED ORIGIN ATTRIBUTES:
+
+name: Full filesystem path to the template
+
+template_name: Relative template name passed to the loader
+
+loader_name: Optional identifier of the loader used
+
+SECTION: Third-Party Debug Tool Compatibility
+CONCEPT:
+
+Custom engines that provide template.origin metadata can integrate seamlessly with external debugging utilities that rely on Django’s template inspection APIs.
+
+SUMMARY:
+
+Custom template backends subclass BaseEngine
+
+get_template() is mandatory; from_string() is optional
+
+Errors must be translated into Django template exceptions
+
+Debug integration requires explicit metadata
+
+Origin and contextual line data improve tracebacks and tooling support

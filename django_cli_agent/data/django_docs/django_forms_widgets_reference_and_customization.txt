@@ -1,0 +1,332 @@
+SECTION: Django Form Widgets Overview
+
+PURPOSE:
+Explain what widgets are in Django and how they relate to form fields and HTML rendering.
+
+CONCEPT:
+
+A widget is Django’s abstraction of an HTML form input element. Widgets are responsible for:
+
+Rendering HTML form input elements
+
+Extracting raw data from GET and POST dictionaries
+
+Widgets DO NOT handle validation. Validation is handled by form fields.
+Widgets must always be attached to form fields.
+
+Django widgets render HTML5-compliant markup using <!DOCTYPE html> conventions, including boolean attributes such as checked.
+
+SECTION: Specifying Widgets on Form Fields
+
+PURPOSE:
+Explain how to override default widgets used by Django form fields.
+
+CONCEPT:
+
+Each Django form field automatically selects a default widget based on the field type.
+Developers can override this behavior by explicitly specifying a widget when defining the field.
+
+COMMAND:
+from django import forms
+
+class CommentForm(forms.Form):
+    name = forms.CharField()
+    url = forms.URLField()
+    comment = forms.CharField(widget=forms.Textarea)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Default widget does not match desired HTML representation
+
+Input size or format needs adjustment
+
+DO NOT USE WHEN:
+
+Default widget already meets the required behavior
+
+SECTION: Setting Widget Arguments
+
+PURPOSE:
+Explain how to configure widgets using optional arguments.
+
+CONCEPT:
+
+Widgets accept configuration arguments during instantiation to control rendering behavior.
+
+COMMAND:
+from django import forms
+
+BIRTH_YEAR_CHOICES = ["1980", "1981", "1982"]
+FAVORITE_COLORS_CHOICES = {
+    "blue": "Blue",
+    "green": "Green",
+    "black": "Black",
+}
+
+class SimpleForm(forms.Form):
+    birth_year = forms.DateField(
+        widget=forms.SelectDateWidget(years=BIRTH_YEAR_CHOICES)
+    )
+    favorite_colors = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        choices=FAVORITE_COLORS_CHOICES,
+    )
+
+SECTION: Select-Based Widgets and Choices
+
+PURPOSE:
+Explain widgets derived from Select and how choices are propagated.
+
+CONCEPT:
+
+Widgets inheriting from Select display a list of selectable options.
+Choices originate from the form field and propagate automatically to the widget.
+
+Updating ChoiceField.choices also updates widget.choices.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Input values are constrained to a predefined set
+
+DO NOT USE WHEN:
+
+Choices are intrinsic to the data model but represented only at the widget level
+
+SECTION: Customizing Widget Instances
+
+PURPOSE:
+Explain how to customize widget appearance per instance.
+
+CONCEPT:
+
+Widgets render minimal HTML by default.
+Customization requires modifying widget attributes via attrs.
+
+COMMAND:
+class CommentForm(forms.Form):
+    name = forms.CharField(widget=forms.TextInput(attrs={"class": "special"}))
+    url = forms.URLField()
+    comment = forms.CharField(widget=forms.TextInput(attrs={"size": "40"}))
+
+
+Widgets can also be modified dynamically via Form.fields.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Only specific instances require custom styling
+
+DO NOT USE WHEN:
+
+All widgets of a type require consistent styling
+
+SECTION: Customizing Widget Classes
+
+PURPOSE:
+Explain advanced widget customization via subclassing.
+
+CONCEPT:
+
+Widget classes can be subclassed to:
+
+Attach CSS and JavaScript assets
+
+Customize rendering behavior
+
+This is done using:
+
+A Media inner class
+
+A dynamic media property
+
+This approach requires advanced Python knowledge.
+
+SECTION: Base Widget Classes
+
+PURPOSE:
+Describe foundational widget classes used by all Django widgets.
+
+SECTION: Widget Base Class
+
+PURPOSE:
+Define the Widget class API.
+
+CONCEPT:
+
+Widget is an abstract base class providing:
+
+Attribute handling
+
+Rendering hooks
+
+Data extraction logic
+
+KEY ATTRIBUTES AND METHODS:
+
+attrs: HTML attribute dictionary
+
+render(): Produces HTML output
+
+format_value(): Cleans values for rendering
+
+get_context(): Builds rendering context
+
+value_from_datadict(): Extracts submitted data
+
+value_omitted_from_data(): Determines missing values
+
+use_required_attribute(): Controls HTML required
+
+BOOLEAN ATTRIBUTES:
+
+supports_microseconds
+
+use_fieldset
+
+SECTION: MultiWidget
+
+PURPOSE:
+Explain widgets composed of multiple subwidgets.
+
+CONCEPT:
+
+MultiWidget represents a single logical field rendered as multiple HTML inputs.
+It must be paired with MultiValueField or explicitly adapted for single-value fields.
+
+REQUIRED METHOD:
+
+decompress(value): Splits a single value into multiple subvalues
+
+COMMAND:
+from django.forms import MultiWidget, TextInput
+
+widget = MultiWidget(widgets=[TextInput, TextInput])
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+One logical value requires multiple inputs
+
+DO NOT USE WHEN:
+
+Single HTML input is sufficient
+
+SECTION: Built-in Widget Categories
+
+PURPOSE:
+Catalog Django’s built-in widgets by function.
+
+SECTION: Text Input Widgets
+
+PURPOSE:
+Widgets rendering <input> or <textarea> elements.
+
+WIDGET LIST:
+
+TextInput
+
+NumberInput
+
+EmailInput
+
+URLInput
+
+ColorInput (Django 5.2+)
+
+SearchInput (Django 5.2+)
+
+TelInput (Django 5.2+)
+
+PasswordInput
+
+HiddenInput
+
+DateInput
+
+DateTimeInput
+
+TimeInput
+
+Textarea
+
+SECTION: Selector and Checkbox Widgets
+
+PURPOSE:
+Widgets rendering selectable options.
+
+WIDGET LIST:
+
+CheckboxInput
+
+Select
+
+NullBooleanSelect
+
+SelectMultiple
+
+RadioSelect
+
+CheckboxSelectMultiple
+
+CONCEPT:
+
+Widgets rendering multiple options support:
+
+Iteration in templates
+
+Custom labeling and layout control
+
+SECTION: File Upload Widgets
+
+PURPOSE:
+Widgets handling file input.
+
+WIDGET LIST:
+
+FileInput
+
+ClearableFileInput
+
+SECTION: Composite Widgets
+
+PURPOSE:
+Widgets composed of other widgets.
+
+WIDGET LIST:
+
+MultipleHiddenInput
+
+SplitDateTimeWidget
+
+SplitHiddenDateTimeWidget
+
+SelectDateWidget
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Input requires structured or multi-part values
+
+DO NOT USE WHEN:
+
+Simpler widget meets requirements
+
+SUMMARY:
+
+Widgets handle HTML rendering and raw data extraction
+
+Validation logic belongs to form fields, not widgets
+
+Widgets are customizable per instance or per class
+
+Django provides extensive built-in widget coverage
+
+Widget and MultiWidget form the customization foundation

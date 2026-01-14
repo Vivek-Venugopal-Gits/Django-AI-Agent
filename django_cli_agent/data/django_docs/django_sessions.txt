@@ -1,0 +1,200 @@
+PURPOSE: Explains Django's support for anonymous sessions to store/retrieve per-visitor data server-side, using cookies for session IDs.
+Sessions store data server-side; cookies hold IDs (unless cookie backend). Abstract sending/receiving cookies.
+SECTION: ENABLING SESSIONS
+PURPOSE: Guides activating sessions via middleware.
+Include django.contrib.sessions.middleware.SessionMiddleware in MIDDLEWARE (default in startproject).
+Remove if unused to save overhead.
+SECTION: CONFIGURING THE SESSION ENGINE
+PURPOSE: Details backends for session storage: database (default), cache, file, cookie.
+Default: Database (django.contrib.sessions.models.Session); run migrate.
+CONCEPT: USING DATABASE-BACKED SESSIONS
+Add django.contrib.sessions to INSTALLED_APPS; migrate for django_session table.
+CONCEPT: USING CACHED SESSIONS
+For performance; configure cache first.
+cached_db: Write-through (db + cache); reads cache, falls back db. SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+cache: Cache-only; faster but data loss on eviction/restart. SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+Use SESSION_CACHE_ALIAS for non-default cache.
+Warning: Use Memcached/Redis; local-memory not persistent/multi-process safe.
+Persistent cache (e.g., Redis) for cache backend.
+cached_db safer for production.
+CONCEPT: USING FILE-BASED SESSIONS
+SESSION_ENGINE = "django.contrib.sessions.backends.file"
+SESSION_FILE_PATH (default tempfile.gettempdir(), e.g., /tmp); ensure web server read/write permissions.
+CONCEPT: USING COOKIE-BASED SESSIONS
+SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+Data in cookie, signed with SECRET_KEY.
+Recommended: SESSION_COOKIE_HTTPONLY = True to prevent JS access.
+Warning: Signed but not encrypted; client-readable. MAC prevents tampering. No freshness; replay attacks possible. Size limit 4096 bytes; compresses but may exceed.
+USAGE GUIDELINES:
+USE WHEN:
+
+All backends; choose based on performance/security.
+DO NOT USE WHEN:
+Cookie for sensitive data (readable).
+
+SECTION: USING SESSIONS IN VIEWS
+PURPOSE: Details request.session dictionary-like object.
+Activated by SessionMiddleware; request.session available.
+CONCEPT: SESSIONBASE METHODS
+Standard dict: getitem, setitem, delitem, contains, get, setdefault, pop, keys, values, items, update, clear, has_key.
+Additional: flush (delete data/cookie), set_test_cookie, test_cookie_worked, delete_test_cookie, get_session_cookie_age, set_expiry(value), get_expiry_age(**kwargs), get_expiry_date(**kwargs), get_expire_at_browser_close, clear_expired (class), cycle_key.
+Async variants: aset, asetdefault, aset_expiry, aflush, aget, aget_expiry_age, aget_expiry_date, aget_expire_at_browser_close, ahas_key, aitems, akeys, aload, apop, aset_test_cookie, atest_cookie_worked, avalues.
+set_expiry: int (seconds inactivity), datetime/timedelta (expire at), 0 (browser close), None (global policy).
+get_expiry_age/date: Seconds/date until expiry; kwargs modification/expiry.
+cycle_key: New key, retain data (mitigate fixation).
+CONCEPT: SESSION SERIALIZATION
+Default: JSON (SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer").
+Use SESSION_SERIALIZER to change.
+CONCEPT: BUNDLED SERIALIZERS
+JSONSerializer: Basic types; non-string keys become strings; no non-UTF8 bytes/datetimes without custom.
+CONCEPT: WRITE YOUR OWN SERIALIZER
+Implement dumps(obj), loads(data).
+JSON limitations: Convert datetime/Decimal to JSON-safe before storing; fragile decoding.
+CONCEPT: SESSION OBJECT GUIDELINES
+Use string keys; avoid underscore prefixes (reserved). Treat as dict; don't override or set attributes.
+SECTION: EXAMPLES
+PURPOSE: Provides code snippets.
+Prevent multiple comments:
+COMMAND:
+CODE:
+def post_comment(request, new_comment):
+    if request.session.get("has_commented", False):
+        return HttpResponse("You've already commented.")
+    c = comments.Comment(comment=new_comment)
+    c.save()
+    request.session["has_commented"] = True
+    return HttpResponse("Thanks for your comment!")
+Login:
+COMMAND:
+CODE:
+def login(request):
+    m = Member.objects.get(username=request.POST["username"])
+    if m.check_password(request.POST["password"]):
+        request.session["member_id"] = m.id
+        return HttpResponse("You're logged in.")
+    else:
+        return HttpResponse("Your username and password didn't match.")
+Logout:
+COMMAND:
+CODE:
+def logout(request):
+    try:
+        del request.session["member_id"]
+    except KeyError:
+        pass
+    return HttpResponse("You're logged out.")
+django.contrib.auth.logout does more; calls flush.
+SECTION: SETTING TEST COOKIES
+PURPOSE: Tests browser cookie support.
+set_test_cookie in one view; test_cookie_worked in next.
+delete_test_cookie to cleanup.
+Example:
+COMMAND:
+CODE:
+from django.http import HttpResponse
+from django.shortcuts import render
+
+def login(request):
+    if request.method == "POST":
+        if request.session.test_cookie_worked():
+            request.session.delete_test_cookie()
+            return HttpResponse("You're logged in.")
+        else:
+            return HttpResponse("Please enable cookies and try again.")
+    request.session.set_test_cookie()
+    return render(request, "foo/login_form.html")
+SECTION: USING SESSIONS OUT OF VIEWS
+PURPOSE: Manipulates sessions without views.
+Import SessionStore from SESSION_ENGINE.
+COMMAND:
+CODE:
+from importlib import import_module
+from django.conf import settings
+SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
+COMMAND:
+CODE:
+s = SessionStore()
+s["last_login"] = 1376587691
+s.create()
+s.session_key  # '2b1189a188b44ad18c35e113ac6ceead'
+s = SessionStore(session_key="2b1189a188b44ad18c35e113ac6ceead")
+s["last_login"]  # 1376587691
+create() for new; save() for existing (may collide); create loops to avoid.
+get_decoded() for decoded dict.
+Access via django.contrib.sessions.models.Session; call get_decoded.
+SECTION: WHEN SESSIONS ARE SAVED
+PURPOSE: Explains save conditions.
+Saves only if modified (assign/del); not if mutating values (e.g., dict inside).
+Set modified = True to force.
+SESSION_SAVE_EVERY_REQUEST = True saves every request; updates cookie expires.
+No save on 500 status.
+SECTION: BROWSER-LENGTH SESSIONS VS PERSISTENT SESSIONS
+PURPOSE: Controls session duration.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False (default): Persist SESSION_COOKIE_AGE seconds.
+True: Expire on browser close.
+Override per-session with set_expiry(0/None).
+Browser settings may interfere with browser-close expiry.
+SECTION: CLEARING THE SESSION STORE
+PURPOSE: Manages accumulated session data.
+Database/file: Accumulates; use clearsessions command daily via cron.
+Cache: Auto-deletes stale.
+Cookie: Browser-stored.
+SECTION: SETTINGS
+PURPOSE: Lists session-related settings.
+SESSION_CACHE_ALIAS, SESSION_COOKIE_AGE, SESSION_COOKIE_DOMAIN, SESSION_COOKIE_HTTPONLY, SESSION_COOKIE_NAME, SESSION_COOKIE_PATH, SESSION_COOKIE_SAMESITE, SESSION_COOKIE_SECURE, SESSION_ENGINE, SESSION_EXPIRE_AT_BROWSER_CLOSE, SESSION_FILE_PATH, SESSION_SAVE_EVERY_REQUEST, SESSION_SERIALIZER.
+SECTION: SESSION SECURITY
+PURPOSE: Highlights subdomain cookie risks.
+Subdomains set cookies for whole domain; fixation via Referer.
+If SESSION_COOKIE_DOMAIN set, sent to subdomains.
+SECTION: TECHNICAL DETAILS
+PURPOSE: Notes on implementation.
+Session dict accepts JSON-serializable (with JSONSerializer).
+Stored in django_session table.
+Cookie sent only if needed.
+CONCEPT: SESSIONSTORE OBJECT
+From session engine; implements exists/create/save/delete/load/clear_expired.
+Async: aexists etc.
+Custom engine: Inherit SessionBase or existing.
+SECTION: EXTENDING DATABASE-BACKED SESSION ENGINES
+PURPOSE: Customizes db/cached_db engines.
+Inherit AbstractBaseSession and SessionStore.
+AbstractBaseSession: session_key, session_data, expire_date.
+get_session_store_class returns SessionStore.
+get_decoded decodes data.
+BaseSessionManager: encode/save.
+Override in SessionStore: get_model_class (return custom model), create_model_instance (modify data before save).
+Example custom with account_id:
+COMMAND:
+CODE:
+from django.contrib.sessions.backends.db import SessionStore as DBStore
+from django.contrib.sessions.base_session import AbstractBaseSession
+from django.db import models
+
+class CustomSession(AbstractBaseSession):
+    account_id = models.IntegerField(null=True, db_index=True)
+
+    @classmethod
+    def get_session_store_class(cls):
+        return SessionStore
+
+class SessionStore(DBStore):
+    @classmethod
+    def get_model_class(cls):
+        return CustomSession
+
+    def create_model_instance(self, data):
+        obj = super().create_model_instance(data)
+        try:
+            account_id = int(data.get("_auth_user_id"))
+        except (ValueError, TypeError):
+            account_id = None
+        obj.account_id = account_id
+        return obj
+For cached_db override: cache_key_prefix to avoid clash.
+SECTION: SESSION IDS IN URLS
+PURPOSE: Notes no fallback to URL session IDs.
+Intentional; avoids ugly URLs, Referer theft.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - Async added; custom engines.

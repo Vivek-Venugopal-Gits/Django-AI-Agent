@@ -1,0 +1,321 @@
+SECTION: Django Translation System Overview
+
+PURPOSE:
+Explain how Django enables translation and localization across Python code, templates, JavaScript, and URLs.
+
+CONCEPT:
+
+Django internationalization requires developers to explicitly mark strings as translatable. These marked strings are extracted into message files (.po), translated, compiled into binary files (.mo), and applied dynamically based on the user’s language preference.
+
+Django automatically activates translations at runtime when localization middleware is enabled.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Building multilingual Django applications
+
+Supporting region-specific formatting and language preferences
+
+DO NOT USE WHEN:
+
+The application is strictly single-language
+→ Set USE_I18N = False to disable translation overhead
+
+SECTION: Translation Strings in Python Code
+
+PURPOSE:
+Describe how to mark Python strings for translation.
+
+CONCEPT:
+
+Translation strings inform Django that a given text should be translated if a localized version exists.
+
+COMMAND:
+from django.utils.translation import gettext as _
+
+output = _("Welcome to my site.")
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Displaying user-facing text
+
+Returning localized responses
+
+DO NOT USE WHEN:
+
+Storing immutable identifiers or system-level constants
+
+SECTION: Lazy Translations
+
+PURPOSE:
+Explain deferred translation execution.
+
+CONCEPT:
+
+Lazy translation delays evaluation until the string is accessed. This is mandatory for code executed at import time (e.g., models, forms).
+
+COMMAND:
+from django.utils.translation import gettext_lazy as _
+
+class MyThing(models.Model):
+    name = models.CharField(help_text=_("This is the help text"))
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Defining model fields
+
+Declaring class-level attributes
+
+DO NOT USE WHEN:
+
+Immediate translation output is required
+
+SECTION: Pluralization Handling
+
+PURPOSE:
+Enable correct plural forms across languages.
+
+CONCEPT:
+
+Pluralization rules vary by language. Django delegates plural selection to ngettext.
+
+COMMAND:
+from django.utils.translation import ngettext
+
+text = ngettext(
+    "There is %(count)d object",
+    "There are %(count)d objects",
+    count
+) % {"count": count}
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Displaying count-dependent text
+
+DO NOT USE WHEN:
+
+Implementing manual singular/plural logic
+
+SECTION: Contextual Translation
+
+PURPOSE:
+Disambiguate identical strings with different meanings.
+
+CONCEPT:
+
+Context markers allow translators to provide distinct translations for identical text used in different contexts.
+
+COMMAND:
+from django.utils.translation import pgettext
+
+month = pgettext("month name", "May")
+
+SECTION: Translation in Templates
+
+PURPOSE:
+Enable localization directly inside Django templates.
+
+CONCEPT:
+
+Templates use translation tags rather than Python functions.
+
+COMMAND:
+{% load i18n %}
+{% translate "Welcome to our page" %}
+
+COMMAND (Block Translation):
+{% blocktranslate with count=items|length %}
+There is {{ count }} item.
+{% plural %}
+There are {{ count }} items.
+{% endblocktranslate %}
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Translating sentences containing variables
+
+Supporting pluralization in templates
+
+DO NOT USE WHEN:
+
+Embedding control logic inside translation blocks
+
+SECTION: Translation Comments for Translators
+
+PURPOSE:
+Provide guidance to translators.
+
+CONCEPT:
+
+Translator comments are extracted into .po files to clarify intent.
+
+COMMAND:
+# Translators: Appears on homepage only
+_("Welcome to my site.")
+
+SECTION: JavaScript Internationalization
+
+PURPOSE:
+Enable translations inside client-side JavaScript.
+
+CONCEPT:
+
+Django injects translation catalogs into JavaScript using a generated view.
+
+SECTION: JavaScriptCatalog View
+
+PURPOSE:
+Expose translations to JavaScript.
+
+COMMAND:
+from django.views.i18n import JavaScriptCatalog
+
+urlpatterns = [
+    path("jsi18n/", JavaScriptCatalog.as_view(), name="javascript-catalog"),
+]
+
+AVAILABLE FUNCTIONS:
+
+gettext
+
+ngettext
+
+pgettext
+
+npgettext
+
+interpolate
+
+get_format
+
+gettext_noop
+
+SECTION: JSONCatalog View
+
+PURPOSE:
+Provide translations as JSON for custom client frameworks.
+
+CONCEPT:
+
+Returns translation catalog, formatting rules, and pluralization logic.
+
+SECTION: URL Internationalization
+
+PURPOSE:
+Enable language-aware URLs.
+
+CONCEPT:
+
+Django supports:
+
+Language-prefixed URLs
+
+Translated URL patterns
+
+COMMAND:
+from django.conf.urls.i18n import i18n_patterns
+
+urlpatterns += i18n_patterns(
+    path("about/", views.about, name="about"),
+)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Supporting SEO-friendly multilingual URLs
+
+DO NOT USE WHEN:
+
+Mixing translated and non-translated URL paths unsafely
+
+SECTION: Message Files (.po and .mo)
+
+PURPOSE:
+Explain translation storage and compilation.
+
+FILE: django.po
+
+ROLE: Human-editable translation file
+
+FILE: django.mo
+
+ROLE: Compiled binary translation file used at runtime
+
+SECTION: Creating Message Files
+
+PURPOSE:
+Extract translation strings into .po files.
+
+COMMAND:
+django-admin makemessages -l de
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Adding a new language
+
+Updating translations
+
+DO NOT USE WHEN:
+
+GNU gettext utilities are not installed
+
+SECTION: Compiling Translations
+
+PURPOSE:
+Convert .po files into .mo files.
+
+COMMAND:
+django-admin compilemessages
+
+SECTION: JavaScript Message Extraction
+
+PURPOSE:
+Enable translation of JavaScript strings.
+
+COMMAND:
+django-admin makemessages -d djangojs -l de
+
+SECTION: Performance Considerations
+
+PURPOSE:
+Reduce overhead from translation catalogs.
+
+CONCEPT:
+
+Translation catalogs are generated per request and should be cached aggressively.
+
+COMMAND:
+cache_page(86400)(JavaScriptCatalog.as_view())
+
+SECTION: Common Pitfalls
+CONCEPT:
+
+DO NOT use Python f-strings inside translation calls
+
+DO NOT manually implement plural logic
+
+.po files MUST be UTF-8 without BOM
+
+Percent signs require escaping or no-python-format directives
+
+SUMMARY:
+
+Django i18n requires explicit string marking
+
+Lazy translation is mandatory in models and forms
+
+ngettext handles pluralization correctly
+
+Templates, JavaScript, URLs, and Python share a unified translation system

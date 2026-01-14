@@ -1,0 +1,351 @@
+PURPOSE: This section explains all possible metadata options that can be given to a Django model in its internal class Meta.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django models for configuring behavior, database interactions, and metadata.
+
+SECTION: AVAILABLE META OPTIONS
+PURPOSE: This section details the configurable Meta options for Django models.
+CONCEPT: ABSTRACT OPTION
+If abstract = True, this model will be an abstract base class.
+USAGE GUIDELINES:
+USE WHEN:
+
+Creating base classes for inheritance without database tables.
+DO NOT USE WHEN:
+Needing a concrete model with its own database table.
+
+CONCEPT: APP_LABEL OPTION
+If a model is defined outside of an application in INSTALLED_APPS, declare which app it belongs to.
+CODE EXAMPLE:
+app_label = "myapp"
+Represent a model with the format app_label.object_name or app_label.model_name using model._meta.label or model._meta.label_lower respectively.
+USAGE GUIDELINES:
+USE WHEN:
+
+Models are defined outside standard app structures.
+DO NOT USE WHEN:
+Models are within INSTALLED_APPS applications.
+
+CONCEPT: BASE_MANAGER_NAME OPTION
+The attribute name of the manager, for example, 'objects', to use for the model’s _base_manager.
+USAGE GUIDELINES:
+USE WHEN:
+
+Customizing the base manager for a model.
+DO NOT USE WHEN:
+Default manager suffices.
+
+CONCEPT: DB_TABLE OPTION
+The name of the database table to use for the model.
+CODE EXAMPLE:
+db_table = "music_album"
+CONCEPT: TABLE NAMES
+Django automatically derives the name of the database table from the name of the model class and the app that contains it. A model’s database table name is constructed by joining the model’s app label to the model’s class name, with an underscore between them. For example, if you have an app bookstore, a model defined as class Book will have a database table named bookstore_book.
+Override the database table name using the db_table parameter in class Meta.
+If the database table name is an SQL reserved word, or contains characters that aren’t allowed in Python variable names, notably the hyphen, Django quotes column and table names behind the scenes.
+Use lowercase table names when overriding the table name via db_table, particularly if using the MySQL backend.
+In order to meet the 30-char limitation Oracle has on table names, and match the usual conventions for Oracle databases, Django may shorten table names and turn them all-uppercase. To prevent such transformations, use a quoted name as the value for db_table.
+CODE EXAMPLE:
+db_table = '"name_left_in_lowercase"'
+Such quoted names can also be used with Django’s other supported database backends; except for Oracle, however, the quotes have no effect.
+USAGE GUIDELINES:
+USE WHEN:
+
+Customizing table names for specific needs or avoiding defaults.
+DO NOT USE WHEN:
+On MySQL or MariaDB without lowercase names, to avoid issues.
+On Oracle without quoted names if preserving case and length is required.
+
+CONCEPT: DB_TABLE_COMMENT OPTION
+The comment on the database table to use for this model. It is useful for documenting database tables for individuals with direct database access who may not be looking at Django code.
+CODE EXAMPLE:
+class Answer(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    answer = models.TextField()
+
+    class Meta:
+        db_table_comment = "Question answers"
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding documentation directly in the database schema.
+DO NOT USE WHEN:
+No need for database-level comments.
+
+CONCEPT: DB_TABLESPACE OPTION
+The name of the database tablespace to use for this model. The default is the project’s DEFAULT_TABLESPACE setting, if set. If the backend doesn’t support tablespaces, this option is ignored.
+USAGE GUIDELINES:
+USE WHEN:
+
+Optimizing storage with custom tablespaces.
+DO NOT USE WHEN:
+Backend does not support tablespaces.
+
+CONCEPT: DEFAULT_MANAGER_NAME OPTION
+The name of the manager to use for the model’s _default_manager.
+USAGE GUIDELINES:
+USE WHEN:
+
+Specifying a custom default manager.
+DO NOT USE WHEN:
+Default manager is adequate.
+
+CONCEPT: DEFAULT_RELATED_NAME OPTION
+The name that will be used by default for the relation from a related object back to this one. The default is <model_name>_set. This option also sets related_query_name.
+As the reverse name for a field should be unique, be careful if intending to subclass the model. To work around name collisions, part of the name should contain '%(app_label)s' and '%(model_name)s', which are replaced respectively by the name of the application the model is in, and the name of the model, both lowercased.
+USAGE GUIDELINES:
+USE WHEN:
+
+Customizing reverse relation names, especially in inheritance scenarios.
+DO NOT USE WHEN:
+Default naming conventions suffice.
+
+CONCEPT: GET_LATEST_BY OPTION
+The name of a field or a list of field names in the model, typically DateField, DateTimeField, or IntegerField. This specifies the default field(s) to use in the model Manager’s latest() and earliest() methods.
+CODE EXAMPLE:
+ Latest by ascending order_date.
+get_latest_by = "order_date"
+
+Latest by priority descending, order_date ascending.
+get_latest_by = ["-priority", "order_date"]
+USAGE GUIDELINES:
+USE WHEN:
+
+Defining default ordering for latest() and earliest() queries.
+DO NOT USE WHEN:
+No need for custom latest/earliest behavior.
+
+CONCEPT: MANAGED OPTION
+Defaults to True, meaning Django will create the appropriate database tables in migrate or as part of migrations and remove them as part of a flush management command. That is, Django manages the database tables’ lifecycles.
+If False, no database table creation, modification, or deletion operations will be performed for this model. This is useful if the model represents an existing table or a database view that has been created by some other means. This is the only difference when managed=False. All other aspects of model handling are exactly the same as normal. This includes adding an automatic primary key field to the model if not declared. Specify all the columns from the database table when using unmanaged models to avoid confusion.
+If a model with managed=False contains a ManyToManyField that points to another unmanaged model, then the intermediate table for the many-to-many join will also not be created. However, the intermediary table between one managed and one unmanaged model will be created.
+If needing to change this default behavior, create the intermediary table as an explicit model (with managed set as needed) and use the ManyToManyField.through attribute to make the relation use the custom model.
+For tests involving models with managed=False, ensure the correct tables are created as part of the test setup.
+USAGE GUIDELINES:
+USE WHEN:
+
+Modeling existing external tables or views.
+DO NOT USE WHEN:
+Requiring Django to manage table lifecycle.
+
+CONCEPT: ORDER_WITH_RESPECT_TO OPTION
+Makes this object orderable with respect to the given field, usually a ForeignKey. This can be used to make related objects orderable with respect to a parent object.
+CODE EXAMPLE:
+from django.db import models
+
+class Question(models.Model):
+    text = models.TextField()
+    # ...
+
+class Answer(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    # ...
+
+    class Meta:
+        order_with_respect_to = "question"
+When order_with_respect_to is set, two additional methods are provided to retrieve and to set the order of the related objects: get_RELATED_order() and set_RELATED_order(), where RELATED is the lowercased model name.
+CODE EXAMPLE:
+ question = Question.objects.get(id=1)
+>>> question.get_answer_order()
+[1, 2, 3]
+CODE EXAMPLE:
+ question.set_answer_order([3, 1, 2])
+The related objects also get two methods, get_next_in_order() and get_previous_in_order(), which can be used to access those objects in their proper order.
+CODE EXAMPLE:
+ answer = Answer.objects.get(id=2)
+>>> answer.get_next_in_order()
+<Answer: 3>
+>>> answer.get_previous_in_order()
+<Answer: 1>
+Internally, order_with_respect_to adds an additional field/database column named _order and sets the model’s ordering option to this field. Consequently, order_with_respect_to and ordering cannot be used together, and the ordering added by order_with_respect_to will apply whenever obtaining a list of objects of this model.
+Because order_with_respect_to adds a new database column, make and apply the appropriate migrations if adding or changing order_with_respect_to after the initial migrate.
+USAGE GUIDELINES:
+USE WHEN:
+
+Needing ordered relations relative to a parent.
+DO NOT USE WHEN:
+Combining with custom ordering options.
+
+CONCEPT: ORDERING OPTION
+The default ordering for the object, for use when obtaining lists of objects. This is a tuple or list of strings and/or query expressions. Each string is a field name with an optional “-” prefix, which indicates descending order. Fields without a leading “-” will be ordered ascending. Use the string “?” to order randomly.
+CODE EXAMPLE:
+ordering = ["-order_date"]
+CODE EXAMPLE:
+ordering = ["pub_date"]
+CODE EXAMPLE:
+ordering = ["-pub_date"]
+CODE EXAMPLE:
+ordering = ["-pub_date", "author"]
+CODE EXAMPLE:
+from django.db.models import F
+
+ordering = [F("author").asc(nulls_last=True)]
+In GROUP BY queries (for example, those using values() and annotate()), the default ordering is not applied.
+Ordering is not a free operation. Each field added to the ordering incurs a cost to the database. Each foreign key added will implicitly include all of its default orderings as well.
+If a query doesn’t have an ordering specified, results are returned from the database in an unspecified order. A particular ordering is guaranteed only when ordering by a set of fields that uniquely identify each object in the results. For example, if a name field isn’t unique, ordering by it won’t guarantee objects with the same name always appear in the same order.
+USAGE GUIDELINES:
+USE WHEN:
+
+Setting default sort order for querysets.
+DO NOT USE WHEN:
+Performance costs from additional fields are unacceptable.
+
+CONCEPT: PERMISSIONS OPTION
+Extra permissions to enter into the permissions table when creating this object. Add, change, delete, and view permissions are automatically created for each model.
+CODE EXAMPLE:
+permissions = [("can_deliver_pizzas", "Can deliver pizzas")]
+This is a list or tuple of 2-tuples in the format (permission_code, human_readable_permission_name).
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding custom permissions beyond defaults.
+DO NOT USE WHEN:
+Default permissions are sufficient.
+
+CONCEPT: DEFAULT_PERMISSIONS OPTION
+Defaults to ('add', 'change', 'delete', 'view'). Customize this list, for example, by setting this to an empty list if the app doesn’t require any of the default permissions. Specify on the model before the model is created by migrate in order to prevent any omitted permissions from being created.
+USAGE GUIDELINES:
+USE WHEN:
+
+Restricting or removing default permissions.
+DO NOT USE WHEN:
+After initial migration, as it won't affect existing permissions.
+
+CONCEPT: PROXY OPTION
+If proxy = True, a model which subclasses another model will be treated as a proxy model.
+USAGE GUIDELINES:
+USE WHEN:
+
+Creating proxy models for behavior changes without schema alterations.
+DO NOT USE WHEN:
+Needing separate database tables.
+
+CONCEPT: REQUIRED_DB_FEATURES OPTION
+List of database features that the current connection should have so that the model is considered during the migration phase. For example, set this list to ['gis_enabled'], the model will only be synchronized on GIS-enabled databases. Avoid relations between models that may or may not be created as the ORM doesn’t handle this.
+USAGE GUIDELINES:
+USE WHEN:
+
+Conditionally migrating models based on database features.
+DO NOT USE WHEN:
+Models are universal across backends.
+
+CONCEPT: REQUIRED_DB_VENDOR OPTION
+Name of a supported database vendor that this model is specific to. Current built-in vendor names are: sqlite, postgresql, mysql, oracle. If this attribute is not empty and the current connection vendor doesn’t match it, the model will not be synchronized.
+USAGE GUIDELINES:
+USE WHEN:
+
+Creating vendor-specific models.
+DO NOT USE WHEN:
+Models need to work across multiple vendors.
+
+CONCEPT: SELECT_ON_SAVE OPTION
+Determines if Django will use the pre-1.6 django.db.models.Model.save() algorithm. The old algorithm uses SELECT to determine if there is an existing row to be updated. The new algorithm tries an UPDATE directly. In some rare cases the UPDATE of an existing row isn’t visible to Django. An example is the PostgreSQL ON UPDATE trigger which returns NULL. In such cases the new algorithm will end up doing an INSERT even when a row exists in the database.
+Usually there is no need to set this attribute. The default is False.
+USAGE GUIDELINES:
+USE WHEN:
+
+Needing the old save behavior for specific edge cases.
+DO NOT USE WHEN:
+Default new algorithm works fine.
+
+CONCEPT: INDEXES OPTION
+A list of indexes to define on the model.
+CODE EXAMPLE:
+from django.db import models
+
+class Customer(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["last_name", "first_name"]),
+            models.Index(fields=["first_name"], name="first_name_idx"),
+        ]
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding custom indexes for query optimization.
+DO NOT USE WHEN:
+Default indexes suffice.
+
+CONCEPT: UNIQUE_TOGETHER OPTION
+Use UniqueConstraint with the constraints option instead. UniqueConstraint provides more functionality than unique_together. unique_together may be deprecated in the future.
+Sets of field names that, taken together, must be unique.
+CODE EXAMPLE:
+unique_together = [["driver", "restaurant"]]
+This is a list of lists that must be unique when considered together. It’s used in the Django admin and is enforced at the database level (i.e., the appropriate UNIQUE statements are included in the CREATE TABLE statement).
+For convenience, unique_together can be a single list when dealing with a single set of fields.
+CODE EXAMPLE:
+unique_together = ["driver", "restaurant"]
+A ManyToManyField cannot be included in unique_together. If needing to validate uniqueness related to a ManyToManyField, use a signal or an explicit through model.
+The ValidationError raised during model validation when the constraint is violated has the unique_together error code.
+USAGE GUIDELINES:
+USE WHEN:
+
+Enforcing multi-field uniqueness (legacy).
+DO NOT USE WHEN:
+Possible; prefer UniqueConstraint for more features.
+
+CONCEPT: CONSTRAINTS OPTION
+A list of constraints to define on the model.
+CODE EXAMPLE:
+from django.db import models
+
+class Customer(models.Model):
+    age = models.IntegerField()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(age__gte=18), name="age_gte_18"),
+        ]
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding database-level constraints like checks or uniques.
+DO NOT USE WHEN:
+Constraints can be handled at application level.
+
+CONCEPT: VERBOSE_NAME OPTION
+A human-readable name for the object, singular.
+CODE EXAMPLE:
+verbose_name = "pizza"
+If this isn’t given, Django will use a munged version of the class name: CamelCase becomes camel case.
+USAGE GUIDELINES:
+USE WHEN:
+
+Improving readability in admin or logs.
+DO NOT USE WHEN:
+Default derived name is fine.
+
+CONCEPT: VERBOSE_NAME_PLURAL OPTION
+The plural name for the object.
+CODE EXAMPLE:
+verbose_name_plural = "stories"
+If this isn’t given, Django will use verbose_name + "s".
+USAGE GUIDELINES:
+USE WHEN:
+
+Customizing plural forms for readability.
+DO NOT USE WHEN:
+Default pluralization works.
+
+SUMMARY:
+
+Use abstract for base classes without tables.
+Customize db_table for specific table naming, with care for database conventions.
+Set ordering for default queryset sorts, mindful of performance.
+Add constraints and indexes for database optimizations.
+
+SECTION: READ-ONLY META ATTRIBUTES
+PURPOSE: This section describes read-only attributes available on Model Meta.
+CONCEPT: LABEL ATTRIBUTE
+Representation of the object, returns app_label.object_name, e.g. 'polls.Question'.
+CONCEPT: LABEL_LOWER ATTRIBUTE
+Representation of the model, returns app_label.model_name, e.g. 'polls.question'.
+SUMMARY:
+
+label provides app_label.object_name format.
+label_lower provides app_label.model_name format.

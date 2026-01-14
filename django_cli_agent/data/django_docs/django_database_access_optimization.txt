@@ -1,0 +1,132 @@
+PURPOSE: Provide guidelines and techniques to optimize database usage in Django applications, focusing on reducing unnecessary queries, improving efficiency, and leveraging database capabilities.
+DJANGO VERSION: 6.0
+
+SECTION: Profile first
+PURPOSE: Emphasize the importance of measuring performance before applying optimizations.
+Profile queries to identify costly operations. Use tools to inspect raw SQL queries and analyze execution costs.
+CONCEPT: Query analysis methods
+Use QuerySet.explain() to examine how the database executes a specific QuerySet, including indexes and joins used.
+Consider external tools for monitoring database activity or query profiling.
+Optimize for speed, memory, or both based on application needs. Database work may cost differently than equivalent Python work.
+Profile after every change to confirm improvements outweigh any readability reductions.
+All optimization suggestions require verification through profiling, as general principles may not apply in specific cases.
+
+SECTION: Use standard database optimization techniques
+PURPOSE: Apply fundamental database best practices within Django.
+Add indexes as the highest priority after profiling identifies needs.
+CONCEPT: Adding indexes in Django
+Use Meta.indexes or set db_index=True on fields.
+Add indexes to fields frequently used in filter(), exclude(), or order_by() to speed lookups.
+Index selection depends on the database and application; maintaining indexes adds overhead that may outweigh benefits.
+Choose appropriate field types to minimize storage and processing costs.
+
+SECTION: Understand QuerySets
+PURPOSE: Explain core QuerySet behaviors critical for performance.
+Master QuerySet laziness, evaluation timing, and caching to write efficient code.
+CONCEPT: QuerySet evaluation
+QuerySets are lazy and do not hit the database until evaluated.
+Evaluation occurs on iteration, length checks, boolean tests, slicing, or explicit calls like list().
+Caching stores results in memory after evaluation.
+CONCEPT: Cached attributes on ORM objects
+Non-callable attributes cache values after first access.
+CODE:
+entry = Entry.objects.get(id=1)
+>>> entry.blog  # Blog object retrieved from database
+>>> entry.blog  # Cached version, no additional query
+Callable attributes (like related managers) trigger new queries each access.
+CODE:
+entry = Entry.objects.get(id=1)
+>>> entry.authors.all()  # Query performed
+>>> entry.authors.all()  # New query performed
+Templates automatically call callables, which can hide repeated queries.
+Implement caching on custom properties using @cached_property when needed.
+CONCEPT: Using the with template tag
+Use the with template tag to cache QuerySet results within templates.
+CONCEPT: Using iterator()
+QuerySet.iterator() streams results without caching, reducing memory usage for large datasets.
+CONCEPT: Using explain()
+QuerySet.explain() provides detailed execution plans, helping identify inefficient queries or missing indexes.
+
+SECTION: Do database work in the database
+PURPOSE: Shift computation to the database to reduce data transfer and Python overhead.
+Perform filtering, aggregation, and calculations in SQL whenever possible.
+Use filter() and exclude() for database-level filtering.
+Use F expressions to reference other fields in queries.
+Use annotate() for database-level aggregation.
+CONCEPT: Using RawSQL expression
+RawSQL allows injection of custom SQL fragments into queries for advanced needs.
+CONCEPT: Using raw SQL
+Write custom SQL queries when ORM capabilities are insufficient.
+Inspect connection.queries to view generated SQL and refine manually.
+
+SECTION: Retrieve individual objects using unique indexed columns
+PURPOSE: Ensure efficient and safe single-object retrieval.
+Use get() with unique or indexed fields for faster lookups and to guarantee single results.
+Example (efficient):
+Python>>> entry = Entry.objects.get(id=10)
+Avoid non-unique or non-indexed fields:
+Python>>> entry = Entry.objects.get(headline__startswith="News")
+Non-indexed fields slow lookups; non-unique conditions may return multiple rows, increasing transfer costs.
+
+SECTION: Retrieve everything at once
+PURPOSE: Minimize database round-trips by fetching related data in bulk.
+CONCEPT: Using select_related and prefetch_related
+select_related() performs SQL JOINs for forward foreign key and one-to-one relations.
+prefetch_related() issues separate queries for reverse relations and many-to-many, then joins in Python.
+Apply in managers, default managers, views, or using prefetch_related_objects().
+
+SECTION: Don’t retrieve unnecessary data
+PURPOSE: Reduce payload size and processing by loading only required fields.
+CONCEPT: Using values and values_list
+values() and values_list() return dictionaries or tuples instead of model instances when full objects are not needed.
+CONCEPT: Using defer and only
+defer() skips specified fields; only() loads only specified fields.
+Accessing deferred fields triggers additional queries.
+Use cautiously; deferring is most beneficial for large text or expensive-to-convert fields.
+CONCEPT: Efficient membership and existence checks
+Use queryset.contains(obj) instead of obj in queryset.
+Use queryset.count() instead of len(queryset).
+Use queryset.exists() instead of if queryset.
+CONCEPT: Avoiding overuse of count, exists, contains
+These methods issue separate queries if the QuerySet is not yet cached.
+Cache the QuerySet first when multiple checks or iteration follow.
+CONCEPT: Bulk update and delete
+Use QuerySet.update() and QuerySet.delete() for bulk operations.
+These bypass save()/delete() methods and signals.
+CONCEPT: Using foreign key values directly
+Access _id attribute directly instead of related object.
+CODE:
+entry.blog_id
+instead of
+entry.blog.id
+CONCEPT: Removing unnecessary ordering
+Ordering incurs database cost.
+Clear default Meta.ordering with order_by() when order does not matter.
+Indexes can improve ordering performance.
+
+SECTION: Use bulk methods
+PURPOSE: Reduce SQL query count for create, update, and many-to-many operations.
+CONCEPT: Bulk create
+Use bulk_create() to insert multiple objects in fewer queries.
+CODE:
+Entry.objects.bulk_create([
+    Entry(headline="This is a test"),
+    Entry(headline="This is only a test"),
+])
+CONCEPT: Bulk update
+Use bulk_update() to update multiple objects in fewer queries.
+CODE:
+Entry.objects.bulk_update(entries, ["headline"])
+CONCEPT: Bulk many-to-many insert
+Use add() with multiple objects for same-pair insertions.
+Use through model bulk_create() for different pairs or custom through tables.
+CONCEPT: Bulk many-to-many remove
+Use remove() with multiple objects for same-pair removals.
+Use delete() on filtered through model instances for different pairs.
+
+SUMMARY:
+
+Always profile before and after changes.
+Add indexes based on actual query patterns.
+Leverage QuerySet laziness and caching; use select_related/prefetch_related for relations.
+Perform work in the database; minimize data transfer with values, defer/only, and bulk methods.

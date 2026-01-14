@@ -1,0 +1,116 @@
+PURPOSE: Guide developers on adding custom management commands to Django applications for execution via manage.py or django-admin.
+DJANGO VERSION: 6.0
+Custom commands extend administrative tasks and are ideal for standalone scripts or scheduled execution (e.g., cron jobs).
+Place commands in an app's management/commands directory:
+CODE:
+polls/
+    __init__.py
+    models.py
+    management/
+        __init__.py
+        commands/
+            __init__.py
+            closepoll.py
+Django registers each Python module in commands/ (excluding those starting with underscore) as a command.
+The command becomes available in any project including the app in INSTALLED_APPS.
+CONCEPT: Basic command structure
+Each command module must define a Command class subclassing BaseCommand (or a subclass).
+Implement the handle() method for core logic.
+
+CODE:
+from django.core.management.base import BaseCommand, CommandError
+from polls.models import Question as Poll
+
+class Command(BaseCommand):
+    help = "Closes the specified poll for voting"
+
+    def add_arguments(self, parser):
+        parser.add_argument("poll_ids", nargs="+", type=int)
+
+    def handle(self, *args, **options):
+        for poll_id in options["poll_ids"]:
+            try:
+                poll = Poll.objects.get(pk=poll_id)
+            except Poll.DoesNotExist:
+                raise CommandError(f'Poll "{poll_id}" does not exist')
+
+            poll.opened = False
+            poll.save()
+
+            self.stdout.write(
+                self.style.SUCCESS(f'Successfully closed poll "{poll_id}"')
+            )
+Run with:
+manage.py closepoll <poll_id> [<poll_id> ...]
+Write output via self.stdout and self.stderr for testability.
+Specify ending='' in self.stdout.write() to avoid automatic newline.
+CONCEPT: Adding optional arguments
+Override add_arguments() to define positional and optional arguments using argparse.
+CODE:
+(adding --delete flag):
+def add_arguments(self, parser):
+    parser.add_argument("poll_ids", nargs="+", type=int)
+    parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="Delete poll instead of closing it",
+    )
+
+def handle(self, *args, **options):
+    if options["delete"]:
+        poll.delete()
+    # ...
+All built-in commands also accept default options like --verbosity and --traceback.
+CONCEPT: Running without active locale
+Decorate handle() with @no_translations to deactivate translations (e.g., prevent translated content insertion).
+CODE:
+from django.core.management.base import no_translations
+
+class Command(BaseCommand):
+    @no_translations
+    def handle(self, *args, **options):
+        # ...
+Unavailable if command runs without configured settings.
+CONCEPT: Overriding built-in commands
+Django loads commands from apps in reverse INSTALLED_APPS order.
+A command with the same name in a later app (higher in list) overrides earlier ones.
+To expose an overridden third-party command under a new name, create a wrapper importing the original Command class.
+SECTION: BaseCommand reference
+PURPOSE: Detail the base class for custom commands.
+Subclass BaseCommand and implement handle().
+CONCEPT: BaseCommand attributes
+
+help: Description shown in help output.
+missing_args_message: Custom error for missing positional arguments.
+output_transaction: If True, wrap SQL output in BEGIN;/COMMIT;.
+requires_migrations_checks: If True, warn on migrations/database mismatch.
+requires_system_checks: Tags or 'all' for pre-execution checks (default 'all').
+style: Instance for colored output (e.g., self.style.SUCCESS()).
+suppressed_base_arguments: Set of default options to hide in help.
+
+CONCEPT: BaseCommand methods
+
+create_parser(prog_name, subcommand, **kwargs): Returns customized ArgumentParser.
+add_arguments(parser): Add custom arguments.
+get_version(): Returns Django version.
+execute(*args, **options): Performs checks and runs handle() (use call_command() instead of calling directly).
+handle(*args, **options): Implement command logic (required).
+check(app_configs=None, tags=None, ...): Run system checks.
+get_check_kwargs(options): Supplies kwargs to check() (override to customize).
+
+Call super().init() in subclass init().
+CONCEPT: BaseCommand subclasses
+
+AppCommand: For commands processing apps; implement handle_app_config(app_config, **options).
+LabelCommand: For commands processing arbitrary labels; set label attribute and implement handle_label(label, **options).
+
+CONCEPT: Command exceptions
+Raise CommandError for problems; includes optional returncode.
+Intercepted in CLI to print nicely to stderr.
+SUMMARY:
+
+Create commands in app/management/commands/<command>.py.
+Subclass BaseCommand, add arguments, implement handle().
+Use self.stdout/self.stderr for output.
+Override or wrap commands carefully via INSTALLED_APPS order.
+Leverage attributes for help, checks, and styling.

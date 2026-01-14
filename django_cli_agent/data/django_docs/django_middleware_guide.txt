@@ -1,0 +1,153 @@
+SECTION: Middleware
+PURPOSE: This section explains middleware as a framework of hooks into Django’s request/response processing, a low-level plugin system for globally altering input or output.
+CONCEPT: Each middleware component performs a specific function, e.g., AuthenticationMiddleware associates users with requests using sessions.
+SECTION: Writing Your Own Middleware
+PURPOSE: This section describes creating middleware factories that return middleware callables.
+CONCEPT: A middleware factory is a callable taking a get_response callable and returning a middleware. The middleware is a callable taking a request and returning a response.
+CODE:
+def simple_middleware(get_response):
+    # One-time configuration and initialization.
+
+    def middleware(request):
+        # Code to be executed for each request before
+        # the view (and later middleware) are called.
+
+        response = get_response(request)
+
+        # Code to be executed for each request/response after
+        # the view is called.
+
+        return response
+
+    return middleware
+CODE:
+class SimpleMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # One-time configuration and initialization.
+
+    def __call__(self, request):
+        # Code to be executed for each request before
+        # the view (and later middleware) are called.
+
+        response = self.get_response(request)
+
+        # Code to be executed for each request/response after
+        # the view is called.
+
+        return response
+CONCEPT: get_response might be the view or next middleware. Middleware can support sync, async, or both.
+CONCEPT: init requires get_response; initializes global state. Called once on server start.
+CONCEPT: Raise MiddlewareNotUsed in init to mark middleware unused; Django removes it and logs debug message if DEBUG is True.
+SECTION: Activating Middleware
+PURPOSE: This section explains enabling middleware via settings.
+CONCEPT: Add middleware to MIDDLEWARE list as full Python path to factory class or function.
+CODE:
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+CONCEPT: MIDDLEWARE can be empty, but CommonMiddleware recommended. Order matters; e.g., AuthenticationMiddleware after SessionMiddleware.
+SECTION: Middleware Order and Layering
+PURPOSE: This section describes middleware execution order.
+CONCEPT: During request phase, middleware applied top-down from MIDDLEWARE list.
+CONCEPT: Like an onion: each middleware wraps the view. Request passes through all layers; response through same in reverse.
+CONCEPT: Short-circuit if middleware returns response without calling get_response; inner layers skipped.
+SECTION: Other Middleware Hooks
+PURPOSE: This section covers additional methods for middleware.
+CONCEPT: process_view(request, view_func, view_args, view_kwargs): Called before view. Returns None or HttpResponse. If HttpResponse, view skipped.
+CONCEPT: Avoid accessing request.POST in process_view or before view to allow later views to modify upload handlers.
+CONCEPT: CsrfViewMiddleware is an exception, providing decorators for CSRF control.
+CONCEPT: process_exception(request, exception): Called on view exceptions. Returns None or HttpResponse. If HttpResponse, response middleware applied.
+CONCEPT: Middleware run in reverse during response, including process_exception.
+CONCEPT: process_template_response(request, response): Called after view if response has render() method. Returns response with render method; can alter template_name, context_data.
+CONCEPT: Responses auto-rendered after all template response middleware.
+CONCEPT: Middleware run in reverse during response, including process_template_response.
+SECTION: Dealing with Streaming Responses
+PURPOSE: This section explains handling StreamingHttpResponse in middleware.
+CONCEPT: StreamingHttpResponse lacks content attribute; test for streaming and adjust.
+CODE:
+if response.streaming:
+    response.streaming_content = wrap_streaming_content(response.streaming_content)
+else:
+    response.content = alter_content(response.content)
+CONCEPT: Assume streaming_content too large for memory; wrap in new generator, do not consume.
+CODE:
+def wrap_streaming_content(content):
+    for chunk in content:
+        yield alter_content(chunk)
+CONCEPT: StreamingHttpResponse supports sync/async iterators; wrapping must match. Check is_async.
+SECTION: Exception Handling
+PURPOSE: This section describes how Django handles exceptions in middleware.
+CONCEPT: Converts raised exceptions to HTTP responses (4xx or 500).
+CONCEPT: Conversion before/after each middleware; every middleware gets HTTP response from get_response.
+CONCEPT: Set DEBUG_PROPAGATE_EXCEPTIONS=True to propagate exceptions.
+SECTION: Asynchronous Support
+PURPOSE: This section covers middleware support for sync/async requests.
+CONCEPT: Middleware can support sync (default), async, or both. Set sync_capable, async_capable.
+CONCEPT: If both capable, check if get_response is coroutine with iscoroutinefunction.
+CONCEPT: Use decorators: sync_only_middleware, async_only_middleware, sync_and_async_middleware.
+CODE:
+from asgiref.sync import iscoroutinefunction
+from django.utils.decorators import sync_and_async_middleware
+
+@sync_and_async_middleware
+def simple_middleware(get_response):
+    # One-time configuration and initialization goes here.
+    if iscoroutinefunction(get_response):
+
+        async def middleware(request):
+            # Do something here!
+            response = await get_response(request)
+            return response
+
+    else:
+
+        def middleware(request):
+            # Do something here!
+            response = get_response(request)
+            return response
+
+    return middleware
+CONCEPT: For async class-based middleware, mark instances as coroutines if needed.
+CODE:
+from asgiref.sync import iscoroutinefunction, markcoroutinefunction
+
+class AsyncMiddleware:
+    async_capable = True
+    sync_capable = False
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        if iscoroutinefunction(self.get_response):
+            markcoroutinefunction(self)
+
+    async def __call__(self, request):
+        response = await self.get_response(request)
+        # Some logic ...
+        return response
+CONCEPT: Django adapts requests; hybrid middleware may receive mismatched calls.
+SECTION: Upgrading Pre-Django 1.10-Style Middleware
+PURPOSE: This section provides MiddlewareMixin for compatibility.
+CONCEPT: MiddlewareMixin eases creating middleware compatible with MIDDLEWARE and MIDDLEWARE_CLASSES, supporting sync/async.
+CONCEPT: init requires get_response; stores in self.get_response.
+CONCEPT: call calls process_request (if defined), get_response, process_response (if defined).
+CONCEPT: With MIDDLEWARE_CLASSES, call unused; process_request/response called directly.
+CONCEPT: Inheriting MiddlewareMixin sufficient for most cases.
+CONCEPT: Behavioral differences: MIDDLEWARE short-circuits responses; process_exception only for view exceptions; exceptions converted immediately.
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Implementing global request/response alterations in Django.
+SUMMARY:
+
+Middleware as factories returning callables.
+Activate via MIDDLEWARE setting; order matters.
+Hooks: process_view, process_exception, process_template_response.
+Handle streaming responses carefully.
+Support async with flags/decorators.
+Use MiddlewareMixin for compatibility.

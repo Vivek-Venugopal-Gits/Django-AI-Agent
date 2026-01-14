@@ -1,0 +1,162 @@
+SECTION: OVERVIEW: PURPOSE:
+Explain what Django’s authentication system is and what components it provides.
+
+CONCEPT:
+Django includes a built-in user authentication system.
+It manages user accounts, groups, permissions, and cookie-based user sessions.
+The default implementation works out of the box and can be extended and customized to meet project-specific requirements.
+
+The Django authentication system covers both authentication and authorization.
+Authentication verifies that a user is who they claim to be.
+Authorization determines what an authenticated user is allowed to do.
+In the context of this documentation, the term authentication refers to both authentication and authorization tasks.
+
+The authentication system consists of the following core components:
+
+Users
+
+Permissions: Binary yes/no flags that designate whether a user may perform a specific task.
+
+Groups: A mechanism for applying labels and permissions to multiple users at once.
+
+A configurable password hashing system
+
+Forms and view tools for logging in users or restricting access to content
+
+A pluggable backend system
+
+The authentication system is intentionally generic.
+It does not implement some features that are common in other web authentication systems.
+Common missing features that are often implemented via third-party packages include:
+
+Password strength checking
+
+Throttling of login attempts
+
+Authentication against third-party providers such as OAuth
+
+Object-level permissions
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need built-in handling of users, permissions, groups, and sessions.
+
+You require a configurable and extensible authentication and authorization framework.
+
+You want to leverage Django’s password hashing, login forms, and authentication backends.
+
+DO NOT USE WHEN:
+
+You require features such as password strength enforcement, login throttling, third-party authentication, or object-level permissions without adding third-party packages.
+
+You need a non-cookie-based session mechanism that diverges significantly from Django’s session framework.
+
+SUMMARY:
+Django provides a built-in system for authentication and authorization.
+
+Core components include users, groups, permissions, sessions, password hashing, and pluggable backends.
+
+The system is generic and omits some advanced features.
+
+Missing features are typically added through third-party packages.
+
+SECTION: INSTALLATION: PURPOSE:
+Describe how to enable and initialize Django’s authentication system in a project.
+
+CONCEPT:
+Authentication support is provided as a Django contrib module in django.contrib.auth.
+By default, new Django projects include the configuration needed for authentication in the settings.py file created by the django-admin startproject command.
+
+The authentication system requires the following entries in the INSTALLED_APPS setting:
+
+'django.contrib.auth': Provides the core authentication framework and its default models.
+
+'django.contrib.contenttypes': Provides the content type system, which allows you to associate permissions with models that you define.
+
+The authentication system also requires the following middleware in the MIDDLEWARE setting:
+
+SessionMiddleware: Manages sessions across HTTP requests.
+
+AuthenticationMiddleware: Associates users with incoming requests by using session data.
+
+With these settings in place, migrating the database creates the necessary tables for authentication-related models and the permissions for any models in installed apps.
+
+COMMAND:
+Run the database migrations to create authentication tables and permissions:
+
+CODE:
+manage.py migrate
+USAGE GUIDELINES:
+USE WHEN:
+
+You are setting up a new Django project and want to use the built-in authentication system.
+
+You have added or confirmed django.contrib.auth, django.contrib.contenttypes, SessionMiddleware, and AuthenticationMiddleware in settings.
+
+You are initializing or updating the database schema to include auth-related models and permissions.
+
+DO NOT USE WHEN:
+
+You have custom authentication storage that does not rely on Django’s models or migrations.
+
+You are not using Django’s ORM or have removed django.contrib.auth or django.contrib.contenttypes from INSTALLED_APPS.
+
+VERSION AND SCOPE:
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified in this document
+APPLICABILITY: Applies to Django projects that use the built-in authentication framework and the standard Django settings and middleware configuration.
+
+SUMMARY:
+Authentication is provided via django.contrib.auth and depends on django.contrib.contenttypes.
+
+SessionMiddleware and AuthenticationMiddleware must be enabled.
+
+Running python manage.py migrate creates auth-related tables and permissions.
+
+The instructions apply to Django 6.0 and the default project layout.
+
+SECTION: USAGE ENTRY POINTS: PURPOSE:
+List primary documentation areas related to using and customizing the authentication system.
+
+CONCEPT:
+Django’s authentication system exposes several major usage areas:
+
+Using Django’s default authentication implementation
+
+Working with User objects
+
+Managing permissions and authorization
+
+Handling authentication in web requests
+
+Managing users through the Django admin interface
+
+Customizing user models and authentication behavior
+
+Managing passwords in Django
+
+These topics cover day-to-day use of authentication, configuration of access control, and customization of the underlying user model and authentication backends.
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to implement authentication flows using Django’s default tools.
+
+You work directly with user accounts, permissions, or authorization logic.
+
+You customize user models or authentication to match application requirements.
+
+You configure password storage and password reset behaviors.
+
+DO NOT USE WHEN:
+
+You require only static, non-authenticated content.
+
+You are delegating all authentication to an external system without integrating Django’s auth features.
+
+SUMMARY:
+The authentication system supports default usage, admin integration, and request-based authentication.
+It provides APIs for users, permissions, and authorization.
+It is customizable at the user model and backend level.
+Password management is a distinct part of the authentication system.

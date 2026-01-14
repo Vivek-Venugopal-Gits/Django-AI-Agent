@@ -1,0 +1,701 @@
+SECTION: Models
+PURPOSE: This section introduces models as the definitive source of data information, mapping each model to a database table, and outlines their basics.
+Each model is a Python class that subclasses django.db.models.Model. Each attribute of the model represents a database field. Django provides an automatically-generated database-access API for queries.
+
+SECTION: Quick Example
+PURPOSE: This section provides a basic example of defining a model and its corresponding database table.
+CONCEPT:
+Define a Person model with first_name and last_name fields.
+COMMAND:
+CODE:
+from django.db import models
+
+class Person(models.Model):
+    first_name = models.CharField(max_length=30)
+    last_name = models.CharField(max_length=30)
+The Person model creates a database table with an id field added automatically.
+The table name is derived from model metadata but can be overridden. An id field is added automatically but can be overridden. Django uses SQL tailored to the database backend in settings.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Defining basic models and fields.
+SUMMARY:
+
+Models subclass django.db.models.Model.
+Fields are class attributes mapping to database columns.
+Automatic id primary key is added unless overridden.
+Table names are auto-derived but customizable.
+
+
+SECTION: Using Models
+PURPOSE: This section explains how to register models in settings for use in a Django project.
+Edit the settings file to include the app name in INSTALLED_APPS.
+For models in myapp.models, add "myapp" to INSTALLED_APPS.
+Run manage.py makemigrations and manage.py migrate after adding apps.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Integrating models into a project.
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding new models or apps to a project.
+DO NOT USE WHEN:
+Models are not ready for database integration.
+
+
+SECTION: Fields
+PURPOSE: This section describes defining database fields as the required part of models, with examples and naming cautions.
+Fields are class attributes. Avoid field names conflicting with models API like clean, save, or delete.
+CONCEPT:
+Define Musician and Album models with various fields and a foreign key.
+COMMAND:
+CODE:
+from django.db import models
+
+class Musician(models.Model):
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=50)
+    instrument = models.CharField(max_length=100)
+
+class Album(models.Model):
+    artist = models.ForeignKey(Musician, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    release_date = models.DateField()
+    num_stars = models.IntegerField()
+DJANGO VERSION: 6.0
+APPLICABILITY: - Specifying data structure in models.
+SUMMARY:
+
+Fields define database columns.
+Use appropriate Field subclasses.
+Include relationships like ForeignKey.
+Avoid API-conflicting names.
+
+
+SECTION: Field Types
+PURPOSE: This section explains how field types determine database column types, form widgets, and validation.
+Django provides built-in field types. Custom fields can be created if needed.
+The column type specifies data storage like INTEGER or VARCHAR. Default widgets are used in forms. Minimal validation is applied in admin and forms.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Choosing fields for data requirements.
+
+SECTION: Field Options
+PURPOSE: This section details common and field-specific arguments for fields.
+CharField requires max_length for VARCHAR size.
+Common options:
+null: If True, store empty values as NULL. Default is False.
+blank: If True, allow blank values in validation. Default is False. Differs from null as blank is validation-related.
+choices: A sequence of 2-value tuples, mapping, enumeration, or callable for select box options.
+A new migration is created if choices order changes.
+The first tuple element is database value; second is display.
+Use get_FOO_display() for display value.
+CONCEPT:
+Define Person with choices using dictionary.
+COMMAND:
+CODE:
+from django.db import models
+
+class Person(models.Model):
+    SHIRT_SIZES = {
+        "S": "Small",
+        "M": "Medium",
+        "L": "Large",
+    }
+    name = models.CharField(max_length=60)
+    shirt_size = models.CharField(max_length=1, choices=SHIRT_SIZES)
+CONCEPT:
+Use enumeration for choices.
+COMMAND:
+CODE:
+from django.db import models
+
+class Runner(models.Model):
+    MedalType = models.TextChoices("MedalType", "GOLD SILVER BRONZE")
+    name = models.CharField(max_length=60)
+    medal = models.CharField(blank=True, choices=MedalType, max_length=10)
+default: Default value or callable.
+db_default: Database-computed default, using literals or functions. If both default and db_default set, default takes precedence in Python; db_default at database level.
+help_text: Help text for form widgets.
+primary_key: If True, field is primary key. Primary key is read-only; changing it creates new object.
+CONCEPT:
+Primary key change example.
+COMMAND:
+CODE:
+from django.db import models
+
+class Fruit(models.Model):
+    name = models.CharField(max_length=100, primary_key=True)
+unique: If True, unique throughout table.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Customizing field behavior.
+USAGE GUIDELINES:
+USE WHEN:
+
+Needing defaults, choices, or uniqueness.
+DO NOT USE WHEN:
+Overriding without understanding database impacts.
+
+SUMMARY:
+
+null and blank control empty values differently.
+choices limit inputs with display values.
+default and db_default set initial values.
+primary_key and unique enforce constraints.
+
+
+SECTION: Automatic Primary Key Fields
+PURPOSE: This section describes Django's default auto-incrementing primary key and customization.
+By default, add id = models.BigAutoField(primary_key=True) per app or globally.
+Specify primary_key=True on a field to override. Exactly one primary_key=True per model.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Managing unique identifiers.
+USAGE GUIDELINES:
+USE WHEN:
+
+Needing custom primary keys.
+DO NOT USE WHEN:
+Default auto-field suffices.
+
+
+SECTION: Verbose Field Names
+PURPOSE: This section explains providing human-readable names for fields.
+Most fields take optional verbose name as first argument. If omitted, derive from attribute name, replacing underscores with spaces.
+For ForeignKey, ManyToManyField, OneToOneField, use verbose_name keyword.
+Do not capitalize first letter; Django capitalizes as needed.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Improving admin and form readability.
+
+SECTION: Relationships
+PURPOSE: This section covers defining many-to-one, many-to-many, and one-to-one relationships.
+
+SECTION: Many-to-One Relationships
+PURPOSE: This section explains using ForeignKey for many-to-one relationships.
+Use ForeignKey as class attribute, with positional argument as related model class.
+Supports recursive and lazy relationships.
+Name ForeignKey field as lowercase model name, but customizable.
+CONCEPT:
+Manufacturer and Car example.
+COMMAND:
+CODE:
+from django.db import models
+
+class Manufacturer(models.Model):
+    pass
+
+class Car(models.Model):
+    manufacturer = models.ForeignKey(Manufacturer, on_delete=models.CASCADE)
+DJANGO VERSION: 6.0
+APPLICABILITY: - Linking models where many relate to one.
+SUMMARY:
+
+ForeignKey requires related class and on_delete.
+Supports recursion and lazy refs.
+Field name suggests related model.
+
+
+SECTION: Many-to-Many Relationships
+PURPOSE: This section describes using ManyToManyField for many-to-many links.
+Use ManyToManyField as class attribute, with positional related class.
+Supports recursive and lazy.
+Name as plural set of related objects.
+Place in model edited on forms.
+CONCEPT:
+Pizza and Topping example.
+COMMAND:
+CODE:
+from django.db import models
+
+class Topping(models.Model):
+    pass
+
+class Pizza(models.Model):
+    toppings = models.ManyToManyField(Topping)
+DJANGO VERSION: 6.0
+APPLICABILITY: - When entities relate multiply.
+SUMMARY:
+
+ManyToManyField requires related class.
+Field placement affects form editing.
+Supports recursion.
+
+
+SECTION: Extra Fields on Many-to-Many Relationships
+PURPOSE: This section explains using intermediate models for additional data in many-to-many.
+Specify intermediate model with through argument.
+Intermediate must have one foreign key to each model.
+Add UniqueConstraint for uniqueness if needed.
+CONCEPT:
+Person, Group, Membership example.
+COMMAND:
+CODE:
+from django.db import models
+
+class Person(models.Model):
+    name = models.CharField(max_length=128)
+
+    def __str__(self):
+        return self.name
+
+class Group(models.Model):
+    name = models.CharField(max_length=128)
+    members = models.ManyToManyField(Person, through="Membership")
+
+    def __str__(self):
+        return self.name
+
+class Membership(models.Model):
+    person = models.ForeignKey(Person, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    date_joined = models.DateField()
+    invite_reason = models.CharField(max_length=64)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "group"], name="unique_person_group"
+            )
+        ]
+Restrictions: One foreign key to source and target. For self-relationships, two foreign keys allowed.
+Create relationships via intermediate instances or add/create/set with through_defaults.
+remove() removes all if no uniqueness.
+clear() removes all.
+Query using related attributes or intermediate model.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Needing data on relationships.
+USAGE GUIDELINES:
+USE WHEN:
+
+Associations need extra attributes.
+DO NOT USE WHEN:
+Simple many-to-many suffices.
+
+SUMMARY:
+
+Use through for intermediate model.
+Foreign keys to both models.
+Create via instances or methods with defaults.
+Query on attributes or model.
+
+
+SECTION: One-to-One Relationships
+PURPOSE: This section covers using OneToOneField for one-to-one links, often for extension.
+Use OneToOneField as class attribute, with related class.
+Useful for extending models.
+Supports recursive and lazy.
+Multiple OneToOneField possible.
+DJANGO VERSION: 6.0
+APPLICABILITY: - When one model extends another.
+
+SECTION: Models Across Files
+PURPOSE: This section explains relating models from different apps.
+Import related model or use string "app_label.ModelName".
+CONCEPT:
+Restaurant with ZipCode from another app.
+COMMAND:
+CODE:
+from django.db import models
+from geography.models import ZipCode
+
+class Restaurant(models.Model):
+    zip_code = models.ForeignKey(
+        ZipCode,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+    )
+Or lazy:
+COMMAND:
+textfrom django.db import models
+
+class Restaurant(models.Model):
+    zip_code = models.ForeignKey(
+        "geography.ZipCode",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+    )
+DJANGO VERSION: 6.0
+APPLICABILITY: - Cross-app relationships.
+
+SECTION: Field Name Restrictions
+PURPOSE: This section lists restrictions on field names to avoid errors.
+DO NOT use Python reserved words as field names.
+DO NOT use more than one consecutive underscore.
+DO NOT end with underscore.
+DO NOT use "check".
+SQL reserved words are allowed as Django escapes them.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Naming fields safely.
+USAGE GUIDELINES:
+USE WHEN:
+
+Defining fields.
+DO NOT USE WHEN:
+Names violate rules.
+
+
+SECTION: Custom Field Types
+PURPOSE: This section notes creating custom fields for uncommon types.
+DJANGO VERSION: 6.0
+APPLICABILITY: - When built-in fields insufficient.
+
+SECTION: Meta Options
+PURPOSE: This section describes using inner Meta class for model metadata.
+Metadata includes ordering, db_table, verbose names.
+CONCEPT:
+Ox model with Meta.
+COMMAND:
+CODE:
+from django.db import models
+
+class Ox(models.Model):
+    horn_length = models.IntegerField()
+
+    class Meta:
+        ordering = ["horn_length"]
+        verbose_name_plural = "oxen"
+Optional; none required.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Customizing model behavior.
+
+SECTION: Model Attributes
+PURPOSE: This section highlights the objects manager attribute.
+objects is the default Manager for queries. Custom managers possible.
+Accessible via class, not instances.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Querying models.
+
+SECTION: Model Methods
+PURPOSE: This section explains adding custom methods for row-level logic.
+Methods act on instances; managers on tables.
+CONCEPT:
+Person with custom methods.
+COMMAND:
+CODE:
+from django.db import models
+
+class Person(models.Model):
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=50)
+    birth_date = models.DateField()
+
+    def baby_boomer_status(self):
+        "Returns the person's baby-boomer status."
+        import datetime
+
+        if self.birth_date < datetime.date(1945, 8, 1):
+            return "Pre-boomer"
+        elif self.birth_date < datetime.date(1965, 1, 1):
+            return "Baby boomer"
+        else:
+            return "Post-boomer"
+
+    @property
+    def full_name(self):
+        "Returns the person's full name."
+        return f"{self.first_name} {self.last_name}"
+Define str() for string representation.
+Define get_absolute_url() for object URLs.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Adding instance-specific logic.
+SUMMARY:
+
+Custom methods for business logic.
+Override str for display.
+Use properties for computed attributes.
+
+
+SECTION: Overriding Predefined Model Methods
+PURPOSE: This section covers overriding methods like save() and delete().
+Call super() to preserve behavior. Pass **kwargs for future compatibility.
+Update update_fields if modifying fields.
+CONCEPT:
+Blog save override.
+COMMAND:
+textfrom django.db import models
+
+class Blog(models.Model):
+    name = models.CharField(max_length=100)
+    tagline = models.TextField()
+
+    def save(self, **kwargs):
+        do_something()
+        super().save(**kwargs)
+        do_something_else()
+CONCEPT:
+Prevent saving.
+COMMAND:
+CODE:
+from django.db import models
+
+class Blog(models.Model):
+    name = models.CharField(max_length=100)
+    tagline = models.TextField()
+
+    def save(self, **kwargs):
+        if self.name == "Yoko Ono's blog":
+            return
+        else:
+            super().save(**kwargs)
+CONCEPT:
+Update field in save.
+COMMAND:
+CODE:
+from django.db import models
+from django.utils.text import slugify
+
+class Blog(models.Model):
+    name = models.CharField(max_length=100)
+    slug = models.TextField()
+
+    def save(self, **kwargs):
+        self.slug = slugify(self.name)
+        if (
+            update_fields := kwargs.get("update_fields")
+        ) is not None and "name" in update_fields:
+            kwargs["update_fields"] = {"slug"}.union(update_fields)
+        super().save(**kwargs)
+Overrides not called on bulk operations; use signals for delete.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Customizing save/delete.
+USAGE GUIDELINES:
+USE WHEN:
+
+Needing actions on save.
+DO NOT USE WHEN:
+Bulk operations require overrides.
+
+
+SECTION: Executing Custom SQL
+PURPOSE: This section notes using raw SQL in methods.
+DJANGO VERSION: 6.0
+APPLICABILITY: - When ORM insufficient.
+
+SECTION: Model Inheritance
+PURPOSE: This section overviews inheritance styles: abstract, multi-table, proxy.
+Base class subclasses Model. Parents can be separate tables or shared info.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Reusing model structure.
+
+SECTION: Abstract Base Classes
+PURPOSE: This section describes abstract bases for common fields without own tables.
+Set abstract=True in Meta. Fields added to children.
+CONCEPT:
+CommonInfo and Student.
+COMMAND:
+CODE:
+from django.db import models
+
+class CommonInfo(models.Model):
+    name = models.CharField(max_length=100)
+    age = models.PositiveIntegerField()
+
+    class Meta:
+        abstract = True
+
+class Student(CommonInfo):
+    home_group = models.CharField(max_length=5)
+Override fields with another or None.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Factoring common fields.
+
+SECTION: Meta Inheritance in Abstract Bases
+PURPOSE: This section explains Meta inheritance in abstracts.
+Child inherits parent's Meta if none declared. Subclass to extend.
+Django sets abstract=False on installation.
+Some attributes like db_table don't suit abstracts.
+For multiple abstracts, explicitly inherit Meta from all.
+CONCEPT:
+Multiple abstract inheritance.
+COMMAND:
+CODE:
+from django.db import models
+
+class CommonInfo(models.Model):
+    name = models.CharField(max_length=100)
+    age = models.PositiveIntegerField()
+
+    class Meta:
+        abstract = True
+        ordering = ["name"]
+
+class Unmanaged(models.Model):
+    class Meta:
+        abstract = True
+        managed = False
+
+class Student(CommonInfo, Unmanaged):
+    home_group = models.CharField(max_length=5)
+
+    class Meta(CommonInfo.Meta, Unmanaged.Meta):
+        pass
+DJANGO VERSION: 6.0
+APPLICABILITY: - Customizing inherited metadata.
+
+SECTION: Related Name in Abstract Bases
+PURPOSE: This section warns on unique related_name in abstracts.
+Use '%(app_label)s' and '%(class)s' for unique names.
+CONCEPT:
+Base with m2m.
+COMMAND:
+CODE:
+from django.db import models
+
+class Base(models.Model):
+    m2m = models.ManyToManyField(
+        OtherModel,
+        related_name="%(app_label)s_%(class)s_related",
+        related_query_name="%(app_label)s_%(class)ss",
+    )
+
+    class Meta:
+        abstract = True
+
+class ChildA(Base):
+    pass
+
+class ChildB(Base):
+    pass
+DJANGO VERSION: 6.0
+APPLICABILITY: - Avoiding clashes in inheritance.
+USAGE GUIDELINES:
+USE WHEN:
+
+Abstracts have relationships.
+DO NOT USE WHEN:
+No inheritance.
+
+
+SECTION: Multi-Table Inheritance
+PURPOSE: This section describes inheritance where each model has own table, linked by OneToOneField.
+CONCEPT:
+Place and Restaurant.
+COMMAND:
+CODE:
+from django.db import models
+
+class Place(models.Model):
+    name = models.CharField(max_length=50)
+    address = models.CharField(max_length=80)
+
+class Restaurant(Place):
+    serves_hot_dogs = models.BooleanField(default=False)
+    serves_pizza = models.BooleanField(default=False)
+Access child from parent via lowercase name.
+Implicit place_ptr OneToOneField.
+Override with parent_link=True.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Separate tables per subclass.
+SUMMARY:
+
+Each model own table.
+Implicit link to parent.
+Access child via lowercase.
+
+
+SECTION: Meta in Multi-Table Inheritance
+PURPOSE: This section notes child does not inherit parent's Meta fully.
+Inherits ordering and get_latest_by if not specified.
+Explicitly set ordering=[] to disable.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Controlling inherited options.
+
+SECTION: Inheritance and Reverse Relations
+PURPOSE: This section explains implicit link affects related_name.
+Specify related_name for relations on subclass to avoid clashes.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Adding relations in inheritance.
+
+SECTION: Specifying Parent Link Field
+PURPOSE: This section describes customizing the implicit OneToOneField name.
+Create OneToOneField with parent_link=True.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Customizing inheritance links.
+
+SECTION: Proxy Models
+PURPOSE: This section covers proxies for changing Python behavior without new tables.
+Set proxy=True in Meta.
+Operates on parent's table.
+CONCEPT:
+MyPerson proxy.
+COMMAND:
+CODE:
+from django.db import models
+
+class Person(models.Model):
+    first_name = models.CharField(max_length=30)
+    last_name = models.CharField(max_length=30)
+
+class MyPerson(Person):
+    class Meta:
+        proxy = True
+
+    def do_something(self):
+        pass
+Queries return requested model type.
+Inherit from one non-abstract; multiple abstracts ok.
+Managers inherited; define to override default.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Altering behavior without data changes.
+SUMMARY:
+
+proxy=True for same table.
+Changes Python methods/managers.
+Queries return original type.
+
+
+SECTION: Differences Between Proxy and Unmanaged Models
+PURPOSE: This section contrasts proxy with managed=False.
+Use managed=False for views or external tables.
+Use proxy=True for Python changes with same structure.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Choosing inheritance type.
+
+SECTION: Multiple Inheritance
+PURPOSE: This section explains inheriting from multiple parents.
+Python resolution rules apply.
+Useful for mix-ins.
+Avoid complex hierarchies.
+For common id, use explicit AutoField or OneToOneField.
+CONCEPT:
+Common ancestor for ids.
+COMMAND:
+CODE:
+class Piece(models.Model):
+    pass
+
+class Article(Piece):
+    article_piece = models.OneToOneField(
+        Piece, on_delete=models.CASCADE, parent_link=True
+    )
+
+class Book(Piece):
+    book_piece = models.OneToOneField(Piece, on_delete=models.CASCADE, parent_link=True)
+
+class BookReview(Book, Article):
+    pass
+DJANGO VERSION: 6.0
+APPLICABILITY: - Combining multiple bases.
+
+SECTION: Field Name Hiding Not Permitted
+PURPOSE: This section states overriding fields from parents is restricted.
+Cannot override non-abstract fields.
+Abstract fields can be overridden or removed.
+Managers referenced by overridden fields may cause bugs.
+Extra attributes like _id cannot be overridden without changing field.
+Raises FieldError on override.
+Fields resolved depth-first.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Avoiding inheritance conflicts.
+USAGE GUIDELINES:
+USE WHEN:
+
+Inheriting fields.
+DO NOT USE WHEN:
+Overriding non-abstracts.
+
+
+SECTION: Organizing Models in a Package
+PURPOSE: This section describes splitting models into multiple files.
+Create models/ directory with init.py.
+Import models in init.py.
+Explicit imports preferred over *.
+DJANGO VERSION: 6.0
+APPLICABILITY: - Large apps with many models.

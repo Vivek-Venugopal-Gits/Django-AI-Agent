@@ -1,0 +1,177 @@
+PURPOSE: Introduces background tasks for running code outside the request-response cycle to improve performance and user experience.
+Background tasks offload work to be run asynchronously, reducing latency. For example, sending emails without delaying page loads.
+Django handles task definition, queuing, and results; execution requires external workers.
+SECTION: BACKGROUND TASK FUNDAMENTALS
+PURPOSE: Explains how tasks are created, stored, and executed.
+Enqueuing creates a Task in the Queue Store with metadata and ID. Workers claim and execute tasks, updating status and results in the Queue Store. Workers run outside Django.
+SECTION: CONFIGURING A TASK BACKEND
+PURPOSE: Guides setting up backends for task storage and execution via TASKS setting.
+Backends determine storage and execution. Built-in for dev/test; production needs external.
+Multiple backends supported.
+SECTION: IMMEDIATE EXECUTION BACKEND
+PURPOSE: Describes backend that runs tasks synchronously, default if unspecified.
+Runs tasks immediately in the current process.
+COMMAND:
+CODE:
+TASKS = {"default": {"BACKEND": "django.tasks.backends.immediate.ImmediateBackend"}}
+Useful for gradual adoption or tests.
+USAGE GUIDELINES:
+USE WHEN:
+
+Developing or testing without infrastructure.
+DO NOT USE WHEN:
+Production; no background execution.
+
+SECTION: DUMMY BACKEND
+PURPOSE: Details no-op backend for development/testing.
+Stores results but doesn't execute; status always READY.
+COMMAND:
+CODE:
+TASKS = {"default": {"BACKEND": "django.tasks.backends.dummy.DummyBackend"}}
+Access results via backend.results; clear with .clear().
+USAGE GUIDELINES:
+USE WHEN:
+
+Simulating without execution.
+DO NOT USE WHEN:
+Production.
+
+SECTION: THIRD-PARTY BACKENDS
+PURPOSE: Explains using external backends for production.
+Set BACKEND to import path. Inherit BaseTaskBackend; implement enqueue().
+COMMAND:
+CODE:
+TASKS = {
+    "default": {
+        "BACKEND": "path.to.backend",
+    }
+}
+Reference built-ins for examples.
+SECTION: ASYNCHRONOUS SUPPORT
+PURPOSE: Notes developing async support.
+BaseTaskBackend has async methods (a* prefix); arguments same.
+SECTION: RETRIEVING BACKENDS
+PURPOSE: Describes accessing configured backends.
+Use task_backends['alias'] or default_task_backend.
+COMMAND:
+CODE:
+from django.tasks import task_backends
+
+task_backends["default"]  # Default backend
+task_backends["reserve"]  # Another
+COMMAND:
+CODE:
+from django.tasks import default_task_backend
+SECTION: DEFINING TASKS
+PURPOSE: Guides creating tasks with @task decorator on functions.
+Define in tasks.py (convention).
+COMMAND:
+CODE:
+from django.core.mail import send_mail
+from django.tasks import task
+
+@task
+def email_users(emails, subject, message):
+    return send_mail(
+        subject=subject, message=message, from_email=None, recipient_list=emails
+    )
+Customize via decorator args: priority, queue_name.
+COMMAND:
+CODE:
+@task(priority=2, queue_name="emails")
+def email_users(emails, subject, message):
+    ...
+Returns Task instance.
+SECTION: TASK CONTEXT
+PURPOSE: Explains receiving execution context.
+Use takes_context=True; context is TaskContext.
+COMMAND:
+CODE:
+import logging
+from django.core.mail import send_mail
+from django.tasks import task
+
+logger = logging.getLogger(__name__)
+
+@task(takes_context=True)
+def email_users(context, emails, subject, message):
+    logger.debug(
+        f"Attempt {context.attempt} to send user email. Task result id: {context.task_result.id}."
+    )
+    return send_mail(
+        subject=subject, message=message, from_email=None, recipient_list=emails
+    )
+SECTION: MODIFYING TASKS
+PURPOSE: Details creating modified task instances.
+Use .using() to override attributes without changing original.
+COMMAND:
+CODE:
+email_users.priority  # 0
+email_users.using(priority=10).priority  # 10
+SECTION: ENQUEUEING TASKS
+PURPOSE: Explains adding tasks to queue.
+Call .enqueue(args); returns TaskResult.
+COMMAND:
+CODE:
+result = email_users.enqueue(
+    emails=["user@example.com"],
+    subject="You have a message",
+    message="Hello there!",
+)
+Async: .aenqueue().
+Args/returns must be JSON-serializable; no datetimes, tuples without conversion.
+SECTION: TRANSACTIONS
+PURPOSE: Handles database visibility in transactions.
+Use on_commit with partial to enqueue post-commit.
+COMMAND:
+CODE:
+from functools import partial
+from django.db import transaction
+
+with transaction.atomic():
+    Thing.objects.create(num=1)
+    transaction.on_commit(partial(my_task.enqueue, thing_num=1))
+SUMMARY:
+
+Define with @task.
+Enqueue with .enqueue().
+Handle transactions to ensure data visibility.
+
+SECTION: TASK RESULTS
+PURPOSE: Describes retrieving and using task outcomes.
+TaskResult has id; use .get_result(id) on task or backend.
+COMMAND:
+CODE:
+result = email_users.get_result(result_id)
+Or on backend:
+COMMAND:
+CODE:
+from django.tasks import default_task_backend
+result = default_task_backend.get_result(result_id)
+Async: .aget_result().
+Some backends raise NotImplementedError.
+SECTION: UPDATING RESULTS
+PURPOSE: Explains refreshing result status.
+Call .refresh() or .arefresh().
+COMMAND:
+CODE:
+result.status  # RUNNING
+result.refresh()  # or await result.arefresh()
+result.status  # SUCCESSFUL
+SECTION: RETURN VALUES
+PURPOSE: Details accessing task function returns.
+Use .return_value; raises ValueError if not successful/finished.
+COMMAND:
+CODE:
+result.return_value  # 42
+SECTION: ERRORS
+PURPOSE: Describes handling task failures.
+.errors list of TaskError with exception_class and traceback string.
+COMMAND:
+CODE:
+result.errors[0].exception_class  # <class 'ValueError'>
+result.errors[0].traceback  # Traceback ...
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - New in 6.0; for async work.

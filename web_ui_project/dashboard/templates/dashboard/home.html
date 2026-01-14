@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - Django AI Agent</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        .btn-secondary {
+            background-color: #95a5a6;
+        }
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+        h1 {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 Django AI Agent Dashboard</h1>
+        <p>Welcome, {{ user.username }}!</p>
+    </div>
+
+    <div class="card">
+        <h2>Quick Actions</h2>
+        <p>Start building Django projects using natural language.</p>
+        
+        <a href="{% url 'dashboard:new_project' %}" class="btn">➕ Create New Project</a>
+        <a href="{% url 'dashboard:project_list' %}" class="btn btn-secondary">📋 View All Projects</a>
+        <a href="{% url 'accounts:logout' %}" class="btn btn-secondary">🚪 Logout</a>
+    </div>
+
+    <div class="card">
+        <h2>How it works</h2>
+        <ol>
+            <li>Create a new project or select an existing one</li>
+            <li>Chat with the AI agent using natural language</li>
+            <li>The agent writes actual Django code to your project files</li>
+            <li>Review and use the generated code in your application</li>
+        </ol>
+    </div>
+</body>
+</html>

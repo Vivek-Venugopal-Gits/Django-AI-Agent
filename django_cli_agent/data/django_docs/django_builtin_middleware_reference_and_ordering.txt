@@ -1,0 +1,419 @@
+=========================
+MIDDLEWARE OVERVIEW
+=========================
+SECTION: Django Middleware Overview
+
+PURPOSE:
+Explain what middleware is and its role in Django’s request/response lifecycle.
+
+CONCEPT:
+
+Middleware is a framework of hooks into Django’s request/response processing. Each middleware component is responsible for performing a specific function on requests and/or responses.
+
+Django includes a set of built-in middleware components that handle common web application concerns such as security, sessions, authentication, localization, caching, and compression.
+
+=========================
+CACHE MIDDLEWARE
+=========================
+SECTION: Site-Wide Cache Middleware
+
+PURPOSE:
+Explain how Django enables full-site caching via middleware.
+
+CONCEPT:
+
+Django provides two middleware classes to enable site-wide caching. When enabled, each page is cached for the duration specified by the cache configuration.
+
+FILE: UpdateCacheMiddleware
+ROLE: Stores responses in the cache before they are returned.
+
+FILE: FetchFromCacheMiddleware
+ROLE: Retrieves cached responses before view processing.
+
+Caching duration is controlled by the cache configuration and applies globally.
+
+=========================
+COMMON MIDDLEWARE
+=========================
+SECTION: CommonMiddleware
+
+PURPOSE:
+Explain URL normalization and request filtering features.
+
+CONCEPT:
+
+CommonMiddleware provides several core behaviors:
+
+Blocks user agents listed in DISALLOWED_USER_AGENTS
+
+Normalizes URLs using trailing slashes and www prefixes
+
+Sets the Content-Length header for non-streaming responses
+
+URL normalization ensures each resource has a single canonical URL.
+
+If a URL does not end with a slash and no matching route exists, Django attempts a slash-appended version and redirects if found.
+
+COMMAND:
+from django.views.decorators.common import no_append_slash
+
+@no_append_slash
+def sensitive_fbv(request, *args, **kwargs):
+    """View to be excluded from APPEND_SLASH."""
+    return HttpResponse()
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Enforcing consistent URL structures
+
+Blocking known bad user agents
+
+DO NOT USE WHEN:
+
+Application requires multiple valid URL variants
+
+=========================
+BROKEN LINK EMAILS
+=========================
+SECTION: BrokenLinkEmailsMiddleware
+
+PURPOSE:
+Explain automated error notification for broken links.
+
+CONCEPT:
+
+This middleware sends email notifications to site managers when broken links (404 errors) are detected.
+
+Notifications are sent only to configured managers.
+
+=========================
+GZIP COMPRESSION
+=========================
+SECTION: GZipMiddleware
+
+PURPOSE:
+Explain response compression and security mitigations.
+
+CONCEPT:
+
+GZipMiddleware compresses response content for browsers that support gzip encoding.
+
+Compression is skipped if:
+
+Response body is smaller than 200 bytes
+
+Content-Encoding is already set
+
+Client does not support gzip
+
+To mitigate BREACH-style attacks, Django injects random bytes into compressed responses.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Reducing bandwidth usage for large responses
+
+DO NOT USE WHEN:
+
+Middleware needs to read or modify uncompressed response bodies
+
+=========================
+CONDITIONAL GET HANDLING
+=========================
+SECTION: ConditionalGetMiddleware
+
+PURPOSE:
+Explain HTTP conditional request handling.
+
+CONCEPT:
+
+This middleware manages ETag and Last-Modified headers.
+
+If a request includes cache validators and content is unchanged, Django returns a 304 Not Modified response.
+
+=========================
+LOCALIZATION
+=========================
+SECTION: LocaleMiddleware
+
+PURPOSE:
+Explain per-request language selection.
+
+CONCEPT:
+
+LocaleMiddleware determines the active language from request data and customizes content accordingly.
+
+It supports internationalization by selecting translations based on request context.
+
+=========================
+MESSAGE FRAMEWORK
+=========================
+SECTION: MessageMiddleware
+
+PURPOSE:
+Explain temporary message storage for user feedback.
+
+CONCEPT:
+
+This middleware enables cookie- and session-based messaging.
+
+Messages persist across requests and are commonly used for user notifications.
+
+=========================
+SECURITY MIDDLEWARE
+=========================
+SECTION: SecurityMiddleware
+
+PURPOSE:
+Explain built-in HTTP security protections.
+
+CONCEPT:
+
+SecurityMiddleware adds multiple HTTP headers to harden applications against common attacks.
+
+Supported protections include:
+
+HTTPS enforcement
+
+Content type sniffing prevention
+
+Referrer policy control
+
+Cross-origin isolation
+
+HTTP Strict Transport Security (HSTS)
+
+Each feature is independently configurable.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Django directly handles dynamic requests
+
+DO NOT USE WHEN:
+
+Security headers are fully managed by a front-end proxy
+
+SECTION: HTTP Strict Transport Security (HSTS)
+
+PURPOSE:
+Explain HTTPS enforcement at the browser level.
+
+CONCEPT:
+
+HSTS instructs browsers to refuse insecure HTTP connections for a defined period.
+
+Once enabled, browsers will block users from bypassing certificate errors.
+
+DO NOT enable HSTS unless the entire domain is served exclusively over HTTPS.
+
+SECTION: Referrer Policy
+
+PURPOSE:
+Explain control over the Referer header.
+
+CONCEPT:
+
+The Referrer Policy header controls how much referrer information browsers send.
+
+Policies range from sending the full URL to sending no referrer at all.
+
+Disabling referrers entirely interferes with CSRF protection when using HTTPS.
+
+SECTION: Cross-Origin Opener Policy (COOP)
+
+PURPOSE:
+Explain cross-origin browsing context isolation.
+
+CONCEPT:
+
+COOP isolates browsing contexts to prevent cross-origin data leaks.
+
+The default and most secure policy is same-origin.
+
+SECTION: X-Content-Type-Options
+
+PURPOSE:
+Explain MIME sniffing protection.
+
+CONCEPT:
+
+Setting X-Content-Type-Options: nosniff prevents browsers from guessing content types.
+
+This protects against malicious file uploads being executed as scripts.
+
+SECTION: SSL Redirect
+
+PURPOSE:
+Explain forced HTTPS redirection.
+
+CONCEPT:
+
+When enabled, all HTTP requests are permanently redirected to HTTPS.
+
+This feature is intended for environments where HTTPS enforcement cannot be handled externally.
+
+=========================
+SESSION MANAGEMENT
+=========================
+SECTION: SessionMiddleware
+
+PURPOSE:
+Explain session handling.
+
+CONCEPT:
+
+This middleware enables session support and stores session data between requests.
+
+=========================
+SITE IDENTIFICATION
+=========================
+SECTION: CurrentSiteMiddleware
+
+PURPOSE:
+Explain site resolution.
+
+CONCEPT:
+
+Adds the current site object to each incoming request.
+
+=========================
+AUTHENTICATION
+=========================
+SECTION: AuthenticationMiddleware
+
+PURPOSE:
+Explain user association with requests.
+
+CONCEPT:
+
+Adds the authenticated user object to every request.
+
+SECTION: LoginRequiredMiddleware
+
+PURPOSE:
+Explain global authentication enforcement.
+
+CONCEPT:
+
+This middleware redirects unauthenticated users to a login page unless explicitly excluded.
+
+It MUST be placed after AuthenticationMiddleware.
+
+COMMAND:
+MIDDLEWARE = [
+    "...",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
+    "...",
+]
+
+COMMAND:
+from django.contrib.auth.decorators import login_not_required
+
+@login_not_required
+def contact_us(request): ...
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Most views require authentication
+
+DO NOT USE WHEN:
+
+Login views are not excluded
+
+SECTION: Remote User Authentication
+
+PURPOSE:
+Explain server-provided authentication.
+
+CONCEPT:
+
+These middleware classes support authentication via web server environment variables.
+
+FILE: RemoteUserMiddleware
+ROLE: Uses server-provided user identity.
+
+FILE: PersistentRemoteUserMiddleware
+ROLE: Restricts server authentication to login pages.
+
+=========================
+CSRF PROTECTION
+=========================
+SECTION: CsrfViewMiddleware
+
+PURPOSE:
+Explain CSRF attack prevention.
+
+CONCEPT:
+
+Protects against cross-site request forgery by validating tokens in state-changing requests.
+
+=========================
+CLICKJACKING PROTECTION
+=========================
+SECTION: XFrameOptionsMiddleware
+
+PURPOSE:
+Explain frame embedding protection.
+
+CONCEPT:
+
+Prevents the site from being embedded in frames to mitigate clickjacking attacks.
+
+=========================
+CONTENT SECURITY POLICY
+=========================
+SECTION: ContentSecurityPolicyMiddleware
+
+PURPOSE:
+Explain CSP enforcement.
+
+CONCEPT:
+
+Introduced in Django 6.0.
+
+Adds Content Security Policy headers to control which sources of content browsers may load.
+
+Supports enforcement and report-only modes.
+
+=========================
+MIDDLEWARE ORDERING
+=========================
+SECTION: Middleware Execution Order
+
+PURPOSE:
+Explain correct middleware placement.
+
+CONCEPT:
+
+Middleware ordering is critical. Some middleware depend on headers or state set by others.
+
+Key ordering principles:
+
+Security middleware should appear near the top
+
+Session middleware must precede authentication
+
+Cache middleware must respect Vary header changes
+
+Authentication must precede authorization enforcement
+
+=========================
+SUMMARY
+=========================
+SUMMARY:
+
+Middleware modifies requests and responses globally
+
+Ordering affects correctness and security
+
+SecurityMiddleware provides multiple protections
+
+Authentication and session middleware are tightly coupled

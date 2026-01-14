@@ -1,0 +1,55 @@
+PURPOSE: This section explains searching data in Django databases, from simple textual queries to advanced full-text search, with examples and recommendations.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Web apps for user-input searches.
+
+SECTION: USE CASES
+PURPOSE: This section outlines common search scenarios and solutions.
+CONCEPT: STANDARD TEXTUAL QUERIES
+Text fields support lookups like contains.
+CODE EXAMPLE:
+Author.objects.filter(name__contains="Terry")
+ [<Author: Terry Gilliam>, <Author: Terry Jones>]
+Fragile: requires exact substring.
+Better: icontains for case-insensitive.
+CONCEPT: A DATABASE’S MORE ADVANCED COMPARISON FUNCTIONS
+PostgreSQL: django.contrib.postgres tools.
+Other DBs: plugins/user functions; build via custom lookups/functions.
+CONCEPT: UNACCENTED COMPARISON
+For non-English.
+CODE EXAMPLE:
+Author.objects.filter(name__unaccent__icontains="Helen")
+ [<Author: Helen Mirren>, <Author: Helena Bonham Carter>, <Author: Hélène Joy>]
+Asymmetric: Helen matches Hélène, not reverse.
+CONCEPT: TRIGRAM_SIMILAR
+Compares letter sequences.
+CODE EXAMPLE:
+Author.objects.filter(name__unaccent__lower__trigram_similar="Hélène")
+ [<Author: Helen Mirren>, <Author: Hélène Joy>]
+Longer names less similar.
+Choice depends on data/language/text type.
+CONCEPT: DOCUMENT-BASED SEARCH
+For large text: ignores stop words, stemming, weighting.
+Prominent: Elastic, Solr.
+Need layer to translate models to documents with DB IDs.
+Third-party libraries help.
+CONCEPT: POSTGRESQL SUPPORT
+Built-in full text search.
+django.contrib.postgres helpers.
+CODE EXAMPLE:
+Entry.objects.filter(body_text__search="cheese")
+ [<Entry: Cheese on Toast recipes>, <Entry: Pizza recipes>]
+
+Entry.objects.annotate(
+    search=SearchVector("blog__tagline", "body_text"),
+).filter(search="cheese")
+ [<Entry: Cheese on Toast recipes>, <Entry: Pizza Recipes>, <Entry: Dairy farming in Argentina>]
+See contrib.postgres Full text search docs.
+SUMMARY:
+
+Simple: field lookups (contains/icontains).
+Advanced: PostgreSQL unaccent/trigram.
+Full-text: external (Elastic/Solr) or PostgreSQL built-in.
+Build custom for other DBs.

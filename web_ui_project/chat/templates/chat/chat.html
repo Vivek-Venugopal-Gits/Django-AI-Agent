@@ -1,0 +1,18 @@
+<h2>Project: {{ project.name }}</h2>
+
+<div style="border:1px solid #ccc; padding:10px; height:400px; overflow-y:scroll;">
+    {% for msg in messages %}
+        <p>
+            <strong>{{ msg.sender|upper }}:</strong><br>
+            <pre>{{ msg.message }}</pre>
+        </p>
+        <hr>
+    {% endfor %}
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <textarea name="message" rows="4" style="width:100%;" placeholder="Ask the AI..."></textarea>
+    <br><br>
+    <button type="submit">Send</button>
+</form>

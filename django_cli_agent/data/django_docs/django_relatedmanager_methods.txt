@@ -1,0 +1,119 @@
+APPLICABILITY: RelatedManager methods for ForeignKey and ManyToManyField relationships
+SECTION: RelatedManager Overview: Defines RelatedManager usage in one-to-many and many-to-many field contexts.
+CONCEPT: RelatedManager Definition
+RelatedManager provides methods for reverse ForeignKey relations and both sides of ManyToManyField relations.
+
+CODE:
+from django.db import models
+
+class Blog(models.Model):
+    pass
+
+class Entry(models.Model):
+    blog = models.ForeignKey(Blog, on_delete=models.CASCADE, null=True)
+Access via blog.entry_set for reverse ForeignKey.
+
+CODE:
+class Topping(models.Model):
+    pass
+
+class Pizza(models.Model):
+    toppings = models.ManyToManyField(Topping)
+Access via topping.pizza_set and pizza.toppings for ManyToManyField.
+
+COMMAND: add()
+RelatedManager.add(*objs, bulk=True, through_defaults=None)
+RelatedManager.aadd(*objs, bulk=True, through_defaults=None)
+
+Adds specified model objects to related object set.
+
+CODE:
+>>> b = Blog.objects.get(id=1)
+>>> e = Entry.objects.get(id=234)
+>>> b.entry_set.add(e)
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding existing objects to ForeignKey or ManyToManyField relations
+
+Creating ManyToMany relationships via bulk_create()
+
+DO NOT USE WHEN:
+
+Needing custom save() logic on ForeignKey objects (use bulk=False)
+
+Objects not already saved for ForeignKey relations
+
+COMMAND: create()
+RelatedManager.create(through_defaults=None, **kwargs)
+RelatedManager.acreate(through_defaults=None, **kwargs)
+
+Creates new object, saves it, and adds to related set. Returns created object.
+
+CODE:
+>>> b = Blog.objects.get(id=1)
+>>> e = b.entry_set.create(
+...     headline="Hello", body_text="Hi", pub_date=datetime.date(2005, 1, 1))
+No need to specify relationship field keyword argument.
+
+COMMAND: remove()
+RelatedManager.remove(*objs, bulk=True)
+RelatedManager.aremove(*objs, bulk=True)
+
+Removes specified model objects from related object set.
+
+CODE:
+>>> b = Blog.objects.get(id=1)
+>>> e = Entry.objects.get(id=234)
+>>> b.entry_set.remove(e)
+USAGE GUIDELINES:
+USE WHEN:
+
+ForeignKey has null=True
+Removing ManyToMany relationships
+
+DO NOT USE WHEN:
+
+ForeignKey lacks null=True (raises error)
+
+COMMAND: clear()
+RelatedManager.clear(bulk=True)
+RelatedManager.aclear(bulk=True)
+
+Removes all objects from related object set without deleting objects.
+
+CODE:
+>>> b = Blog.objects.get(id=1)
+>>> b.entry_set.clear()
+USAGE GUIDELINES:
+USE WHEN:
+
+ForeignKey has null=True
+Clearing ManyToMany relationships
+
+DO NOT USE WHEN:
+
+ForeignKey lacks null=True
+
+COMMAND: set()
+RelatedManager.set(objs, bulk=True, clear=False, through_defaults=None)
+RelatedManager.aset(objs, bulk=True, clear=False, through_defaults=None)
+
+Replaces entire set of related objects.
+
+CODE:
+>>> new_list = [obj1, obj2, obj3]
+>>> e.related_set.set(new_list)
+USAGE GUIDELINES:
+USE WHEN:
+
+Replacing complete related object set
+clear=True for atomic replacement
+DO NOT USE WHEN:
+Avoiding race conditions (compound operation)
+
+SUMMARY:
+RelatedManager handles reverse ForeignKey and ManyToManyField operations
+add()/create() for adding; remove()/clear() for removal; set() for replacement
+ForeignKey methods require null=True for remove/clear
+All methods apply changes immediately; no save() needed

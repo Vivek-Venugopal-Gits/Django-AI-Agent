@@ -1,0 +1,82 @@
+PURPOSE: Describes Django's tools for managing data split across pages with navigation links.
+Django offers high-level and low-level pagination methods.
+SECTION: PAGINATOR CLASS
+PURPOSE: Details the core class for splitting QuerySets into pages.
+Paginator handles splitting data into Page objects.
+COMMAND:
+CODE:
+from django.core.paginator import Paginator
+CONCEPT: PAGINATOR INITIALIZATION
+Paginator(list_or_queryset, per_page)
+COMMAND:
+CODE:
+objects = ["john", "paul", "george", "ringo"]
+p = Paginator(objects, 2)
+Attributes: count (total items), num_pages, page_range (range iterator).
+CONCEPT: GETTING A PAGE
+p.page(number) returns Page object.
+COMMAND:
+CODE:
+page1 = p.page(1)
+page1.object_list  # ['john', 'paul']
+Page methods: has_next(), has_previous(), has_other_pages(), next_page_number(), previous_page_number(), start_index(), end_index().
+Raises EmptyPage for invalid numbers.
+Paginator prefers count() over len() for efficiency with QuerySets.
+SECTION: PAGINATING A LISTVIEW
+PURPOSE: Explains built-in pagination in ListView.
+Set paginate_by attribute.
+COMMAND:
+CODE:
+from django.views.generic import ListView
+from myapp.models import Contact
+
+class ContactListView(ListView):
+    paginate_by = 2
+    model = Contact
+Adds paginator and page_obj to context.
+Template navigation example:
+COMMAND:
+CODE:
+django{% for contact in page_obj %}
+    {# Each "contact" is a Contact model object. #}
+    {{ contact.full_name|upper }}<br>
+    ...
+{% endfor %}
+
+<div class="pagination">
+    <span class="step-links">
+        {% if page_obj.has_previous %}
+            <a href="?page=1">&laquo; first</a>
+            <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+        {% endif %}
+
+        <span class="current">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+        </span>
+
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">next</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+        {% endif %}
+    </span>
+</div>
+SECTION: USING PAGINATOR IN A VIEW FUNCTION
+PURPOSE: Shows manual pagination in function-based views.
+COMMAND:
+CODE:
+from django.core.paginator import Paginator
+from django.shortcuts import render
+from myapp.models import Contact
+
+def listing(request):
+    contact_list = Contact.objects.all()
+    paginator = Paginator(contact_list, 25)  # Show 25 contacts per page.
+
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    return render(request, "list.html", {"page_obj": page_obj})
+Use same template as ListView.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - Works with lists, QuerySets, or count()/len() objects.

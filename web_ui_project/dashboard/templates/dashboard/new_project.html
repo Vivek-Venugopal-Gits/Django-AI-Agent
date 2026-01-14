@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create New Project - Django AI Agent</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        .btn {
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        .btn-secondary {
+            background-color: #95a5a6;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+        .help-text {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        h1 {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>➕ Create New Project</h1>
+    </div>
+
+    <div class="card">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="project_name">Project Name</label>
+                <input 
+                    type="text" 
+                    id="project_name" 
+                    name="project_name" 
+                    placeholder="My Django Blog"
+                    required
+                >
+                <p class="help-text">Give your project a descriptive name</p>
+            </div>
+
+            <div class="form-group">
+                <label for="root_path">Project Directory Path</label>
+                <input 
+                    type="text" 
+                    id="root_path" 
+                    name="root_path" 
+                    placeholder="C:/Users/YourName/Projects/my_blog"
+                    required
+                >
+                <p class="help-text">
+                    Full path to your Django project directory.<br>
+                    Examples:<br>
+                    • Windows: <code>C:/Users/YourName/Projects/my_blog</code><br>
+                    • Linux/Mac: <code>/home/username/projects/my_blog</code>
+                </p>
+            </div>
+
+            <button type="submit" class="btn">Create Project & Start Chat</button>
+            <a href="{% url 'dashboard:home' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</body>
+</html>

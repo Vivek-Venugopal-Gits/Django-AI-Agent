@@ -1,0 +1,197 @@
+SECTION: Tutorial Overview - Writing Your First Django App, Part 3
+PURPOSE:
+This section continues the poll application tutorial by focusing on creating public-facing views, handling URLs, and integrating templates.
+SECTION: Views Concept
+CONCEPT:
+Views represent types of web pages in a Django application, each serving a specific function with an associated template. Examples include index pages displaying recent items, detail pages for individual items, and action handlers like voting.
+In the poll application, views include:
+
+Question index: Displays the latest questions.
+Question detail: Shows question text and a voting form.
+Question results: Displays voting results.
+Vote action: Processes votes for a choice.
+
+Views are Python functions or class-based methods that handle requests. Django selects views based on URL patterns after the domain.
+URL patterns define general URL forms, mapped in URLconfs.
+SECTION: Adding Basic Views
+CONCEPT:
+Add views to polls/views.py that accept arguments like question_id.
+Code for polls/views.py:
+def detail(request, question_id):
+    return HttpResponse("You're looking at question %s." % question_id)
+
+def results(request, question_id):
+    response = "You're looking at the results of question %s."
+    return HttpResponse(response % question_id)
+
+def vote(request, question_id):
+    return HttpResponse("You're voting on question %s." % question_id)
+SECTION: Mapping Views to URLs
+CONCEPT:
+Update polls/urls.py to map new views using path().
+Code for polls/urls.py:
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    # ex: /polls/
+    path("", views.index, name="index"),
+    # ex: /polls/5/
+    path("<int:question_id>/", views.detail, name="detail"),
+    # ex: /polls/5/results/
+    path("<int:question_id>/results/", views.results, name="results"),
+    # ex: /polls/5/vote/
+    path("<int:question_id>/vote/", views.vote, name="vote"),
+]
+Access views at URLs like /polls/34/, which call detail with question_id=34.
+Django processes URLs by matching patterns in the root URLconf, stripping matched parts, and delegating to included URLconfs.
+Angle brackets capture URL segments as keyword arguments to views. Converters like int validate patterns.
+SUMMARY:
+
+Views handle specific page types.
+URLconfs map patterns to views.
+Captures send URL parts as arguments.
+
+SECTION: Enhancing Views with Database Interaction
+CONCEPT:
+Views return HttpResponse objects or raise exceptions like Http404. They can interact with databases, templates, or generate various content.
+Update index view in polls/views.py to query recent questions:
+Code for polls/views.py:
+from django.http import HttpResponse
+
+from .models import Question
+
+def index(request):
+    latest_question_list = Question.objects.order_by("-pub_date")[:5]
+    output = ", ".join([q.question_text for q in latest_question_list])
+    return HttpResponse(output)
+Hardcoding design in views limits flexibility; use templates instead.
+SECTION: Template Setup
+CONCEPT:
+Create a templates directory in the polls app. Django searches for templates in app-specific templates subdirectories when APP_DIRS is True.
+Use polls/templates/polls/index.html for namespacing.
+Code for polls/templates/polls/index.html:
+{% if latest_question_list %}
+    <ul>
+    {% for question in latest_question_list %}
+        <li><a href="/polls/{{ question.id }}/">{{ question.question_text }}</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No polls are available.</p>
+{% endif %}
+Update index view to render the template:
+Code for polls/views.py:
+from django.http import HttpResponse
+from django.template import loader
+
+from .models import Question
+
+def index(request):
+    latest_question_list = Question.objects.order_by("-pub_date")[:5]
+    template = loader.get_template("polls/index.html")
+    context = {"latest_question_list": latest_question_list}
+    return HttpResponse(template.render(context, request))
+Templates use dot lookups for attributes and support loops like {% for %}.
+USAGE GUIDELINES:
+USE WHEN:
+
+Separating design from logic.
+DO NOT USE WHEN:
+Hardcoding simple responses without need for reuse.
+
+SECTION: Render Shortcut
+CONCEPT:
+Use render() to simplify loading templates and rendering with context.
+Updated index view:
+Code for polls/views.py:
+from django.shortcuts import render
+
+from .models import Question
+
+def index(request):
+    latest_question_list = Question.objects.order_by("-pub_date")[:5]
+    context = {"latest_question_list": latest_question_list}
+    return render(request, "polls/index.html", context)
+render() takes request, template name, and context dictionary.
+Apply to all views; remove unnecessary imports like loader and HttpResponse if not used.
+SECTION: Handling 404 Errors
+CONCEPT:
+Raise Http404 if requested objects do not exist.
+Update detail view:
+Code for polls/views.py:
+from django.http import Http404
+from django.shortcuts import render
+
+from .models import Question
+
+def detail(request, question_id):
+    try:
+        question = Question.objects.get(pk=question_id)
+    except Question.DoesNotExist:
+        raise Http404("Question does not exist")
+    return render(request, "polls/detail.html", {"question": question})
+SECTION: Get Object or 404 Shortcut
+CONCEPT:
+Use get_object_or_404() to fetch objects or raise Http404.
+Updated detail view:
+Code for polls/views.py:
+from django.shortcuts import get_object_or_404, render
+
+from .models import Question
+
+def detail(request, question_id):
+    question = get_object_or_404(Question, pk=question_id)
+    return render(request, "polls/detail.html", {"question": question})
+Takes model and keyword arguments; uses model's get().
+Similarly, get_list_or_404() uses filter() and raises Http404 on empty lists.
+Maintains loose coupling between models and views.
+SUMMARY:
+
+Raise Http404 for missing objects.
+Shortcuts simplify common patterns.
+Avoid coupling layers.
+
+SECTION: Template Usage in Detail View
+CONCEPT:
+Use templates to display model data.
+Code for polls/templates/polls/detail.html:
+<h1>{{ question.question_text }}</h1>
+<ul>
+{% for choice in question.choice_set.all %}
+    <li>{{ choice.choice_text }}</li>
+{% endfor %}
+</ul>
+Dot lookups access attributes; loops iterate related objects.
+SECTION: Removing Hardcoded URLs
+CONCEPT:
+Avoid hardcoded URLs in templates; use {% url %} tag with named paths.
+Update polls/templates/polls/index.html:
+HTML<li><a href="{% url 'detail' question.id %}">{{ question.question_text }}</a></li>
+References name from path() in URLconf.
+Change URLs in URLconf without updating templates.
+SECTION: Namespacing URLs
+CONCEPT:
+Add app_name in app URLconf for namespaces in multi-app projects.
+Update polls/urls.py:
+from django.urls import path
+
+from . import views
+
+app_name = "polls"
+urlpatterns = [
+    path("", views.index, name="index"),
+    path("<int:question_id>/", views.detail, name="detail"),
+    path("<int:question_id>/results/", views.results, name="results"),
+    path("<int:question_id>/vote/", views.vote, name="vote"),
+]
+Update template:
+<li><a href="{% url 'polls:detail' question.id %}">{{ question.question_text }}</a></li>
+Differentiates same-named views across apps.
+USAGE GUIDELINES:
+USE WHEN:
+
+Projects have multiple apps.
+DO NOT USE WHEN:
+Single-app projects without name conflicts.

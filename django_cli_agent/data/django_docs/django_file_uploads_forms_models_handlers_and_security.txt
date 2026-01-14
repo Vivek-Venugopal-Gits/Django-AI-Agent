@@ -1,0 +1,361 @@
+SECTION: FILE UPLOADS
+PURPOSE: Explain how Django handles file uploads via request.FILES, how files are stored, and how to customize upload behavior.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: Django projects that accept file uploads via forms and HTTP requests.
+​
+CONCEPT: HIGH-LEVEL BEHAVIOR
+When Django handles an upload, uploaded files are exposed through request.FILES, a dictionary-like object keyed by form field names.
+​
+This document describes how files are stored in memory or on disk and how to adjust the defaults using upload handlers and settings.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Accepting files from HTML forms using FileField, ImageField, or subclasses.
+​
+Customizing how and where uploaded file data is buffered before saving.
+​
+DO NOT USE WHEN:
+
+Serving files to clients; use Django’s file-serving utilities or a web server for that purpose.
+
+SECTION: BASIC FILE UPLOADS
+PURPOSE: Show how to accept and process single-file uploads with forms and views.
+​
+CONCEPT: FORM DEFINITION
+forms.py
+
+python
+from django import forms
+
+class UploadFileForm(forms.Form):
+    title = forms.CharField(max_length=50)
+    file = forms.FileField()
+Each FileField or ImageField in the form corresponds to a key in request.FILES, so this form’s file data is available as request.FILES["file"].
+​
+CONCEPT: WHEN request.FILES IS POPULATED
+request.FILES contains uploaded file data only when all of the following are true:
+​
+The request method is POST.
+
+At least one file input was submitted.
+
+The form uses enctype="multipart/form-data".
+​
+Otherwise, request.FILES is empty.​
+
+COMMAND: BASIC UPLOAD VIEW
+views.py
+
+python
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from .forms import UploadFileForm
+
+# Imaginary function to handle an uploaded file.
+from somewhere import handle_uploaded_file
+
+def upload_file(request):
+    if request.method == "POST":
+        form = UploadFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            handle_uploaded_file(request.FILES["file"])
+            return HttpResponseRedirect("/success/url/")
+    else:
+        form = UploadFileForm()
+    return render(request, "upload.html", {"form": form})
+The view must pass both request.POST and request.FILES into the form constructor so that file data is bound correctly.
+​
+COMMAND: HANDLING AN UPLOADED FILE
+python
+def handle_uploaded_file(f):
+    with open("some/file/name.txt", "wb+") as destination:
+        for chunk in f.chunks():
+            destination.write(chunk)
+Looping over UploadedFile.chunks() avoids loading large files entirely into memory.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Implementing simple single-file upload endpoints.
+​
+DO NOT USE WHEN:
+
+You need model-level handling and automatic storage; use ModelForm with a FileField instead.
+
+SUMMARY:
+Use request.FILES with multipart/form-data and POST to receive files.
+​
+Bind request.FILES into forms and iterate over f.chunks() for large uploads.
+​
+SECTION: HANDLING UPLOADED FILES WITH A MODEL
+PURPOSE: Demonstrate saving uploaded files to model instances using FileField and ModelForm.
+​
+CONCEPT: MODELFORMS WITH FILEFIELD
+When using a ModelForm whose model has a FileField, calling form.save() automatically saves the uploaded file to the path defined by the field’s upload_to argument.
+​
+COMMAND: MODELFORM-BASED UPLOAD
+python
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from .forms import ModelFormWithFileField
+
+def upload_file(request):
+    if request.method == "POST":
+        form = ModelFormWithFileField(request.POST, request.FILES)
+        if form.is_valid():
+            # file is saved
+            form.save()
+            return HttpResponseRedirect("/success/url/")
+    else:
+        form = ModelFormWithFileField()
+    return render(request, "upload.html", {"form": form})
+CONCEPT: MANUAL MODEL INSTANCE CONSTRUCTION
+You can construct model instances manually and assign request.FILES["file"] to a FileField attribute.
+​
+python
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from .forms import UploadFileForm
+from .models import ModelWithFileField
+
+def upload_file(request):
+    if request.method == "POST":
+        form = UploadFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            instance = ModelWithFileField(file_field=request.FILES["file"])
+            instance.save()
+            return HttpResponseRedirect("/success/url/")
+    else:
+        form = UploadFileForm()
+    return render(request, "upload.html", {"form": form})
+CONCEPT: ASSIGNING FILES OUTSIDE A REQUEST
+Outside a request context (for example in management commands), assign a File-like object such as ContentFile to a model FileField.
+​
+python
+from django.core.management.base import BaseCommand
+from django.core.files.base import ContentFile
+
+class MyCommand(BaseCommand):
+    def handle(self, *args, **options):
+        content_file = ContentFile(b"Hello world!", name="hello-world.txt")
+        instance = ModelWithFileField(file_field=content_file)
+        instance.save()
+USAGE GUIDELINES:
+USE WHEN:
+
+You want files to be stored via Django’s storage backends using upload_to paths.
+​
+DO NOT USE WHEN:
+
+You need custom non-model storage logic; instead, manage files manually in your view or service layer.
+
+SUMMARY:
+ModelForm.save() persists both model data and uploaded files via upload_to.
+​
+You can assign file-like objects to FileField attributes manually inside or outside a request.
+​
+SECTION: UPLOADING MULTIPLE FILES
+PURPOSE: Show how to accept multiple files from a single form field using custom form widgets and fields.
+​
+CONCEPT: CUSTOM MULTIPLE FILE FIELD
+Django’s standard FileField validates a single file, so multiple uploads via one field require a custom widget and form field.
+​
+The widget must set allow_multiple_selected=True, and the field’s clean() method must handle lists or tuples of files.
+​
+COMMAND: MULTIPLE FILE FIELD IMPLEMENTATION
+forms.py
+
+python
+from django import forms
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+class MultipleFileField(forms.FileField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            result = [single_file_clean(d, initial) for d in data]
+        else:
+            result = [single_file_clean(data, initial)]
+        return result
+
+class FileFieldForm(forms.Form):
+    file_field = MultipleFileField()
+COMMAND: HANDLING MULTIPLE FILES IN A FORMVIEW
+views.py
+
+python
+from django.views.generic.edit import FormView
+from .forms import FileFieldForm
+
+class FileFieldFormView(FormView):
+    form_class = FileFieldForm
+    template_name = "upload.html"  # Replace with your template.
+    success_url = "..."  # Replace with your URL or reverse().
+
+    def form_valid(self, form):
+        files = form.cleaned_data["file_field"]
+        for f in files:
+            ...  # Do something with each file.
+        return super().form_valid(form)
+CONCEPT: LIMITATIONS
+This approach supports multiple files at the form level only and does not allow multiple files to be stored in a single model FileField.
+​
+To associate multiple files with one logical entity, use related models or multiple FileField instances instead of a single multi-file FileField.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Accepting multiple files from a single input for processing within a view or form.
+​
+DO NOT USE WHEN:
+
+You need multiple files stored in a single model field; design a related model instead.
+
+SUMMARY:
+Implement multi-file uploads via a custom widget and MultipleFileField.
+​
+Handle the list of uploaded files in form_valid() or equivalent view logic.
+​
+SECTION: UPLOAD HANDLERS
+PURPOSE: Describe how Django uses upload handlers to manage where and how uploaded file data is buffered.
+​
+CONCEPT: UPLOAD HANDLERS AND SETTINGS
+Upload handlers process incoming file data and are listed in the FILE_UPLOAD_HANDLERS setting.
+​
+Default handlers are:
+
+python
+[
+    "django.core.files.uploadhandler.MemoryFileUploadHandler",
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]
+Together, MemoryFileUploadHandler and TemporaryFileUploadHandler stream small files into memory and large files to temporary disk files.
+​
+CONCEPT: WHERE UPLOADED DATA IS STORED
+Files smaller than 2.5 MB are held entirely in memory for fast saving.
+​
+Larger files are streamed into temporary files in the system temp directory, such as /tmp/tmpzfp6I6.upload on Unix-like systems.
+​
+These thresholds and locations are defaults that can be customized with file upload settings.
+​
+CONCEPT: FILE UPLOAD SETTINGS
+Django provides several settings (collectively “File Upload Settings”) that influence upload size limits, temp storage, and handler classes.
+​
+Adjust those settings to change thresholds, storage directories, or handlers globally.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Tuning performance or memory usage for large uploads.
+​
+Changing where temporary files live or which handlers operate.
+​
+DO NOT USE WHEN:
+
+Default behavior is adequate and you do not have specific performance or storage requirements.
+
+SUMMARY:
+Upload handlers control whether file data is held in memory or on disk.
+​
+Default behavior uses in-memory buffers for small files and temporary files for larger ones.
+​
+SECTION: CUSTOM AND PER-REQUEST UPLOAD HANDLERS
+PURPOSE: Explain how to modify upload handlers per request and how CSRF middleware affects this.
+​
+CONCEPT: CUSTOM HANDLERS
+You can implement custom upload handlers to enforce quotas, compress uploads on the fly, track progress, or stream directly to non-local storage.
+​
+Custom handlers subclass django.core.files.uploadhandler.FileUploadHandler and implement methods such as new_file() and receive_data_chunk().
+​
+CONCEPT: PER-REQUEST HANDLER MODIFICATION
+Per-request handler configuration is done by modifying request.upload_handlers before accessing request.POST or request.FILES.
+​
+Insert a handler at the beginning to ensure it runs before defaults:
+
+python
+request.upload_handlers.insert(0, ProgressBarUploadHandler(request))
+To completely replace handlers:
+
+python
+request.upload_handlers = [ProgressBarUploadHandler(request)]
+CONCEPT: MODIFICATION ORDER AND CSRF
+Upload handlers must be modified before any access to request.POST or request.FILES; otherwise, Django raises an error because upload processing has already begun.
+​
+CsrfViewMiddleware (enabled by default) accesses request.POST, so views that modify request.upload_handlers must be excluded from CSRF processing and then re-protected in a separate function or method.
+​
+COMMAND: FUNCTION-BASED VIEW WITH PROGRESS HANDLER
+python
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
+
+@csrf_exempt
+def upload_file_view(request):
+    request.upload_handlers.insert(0, ProgressBarUploadHandler(request))
+    return _upload_file_view(request)
+
+@csrf_protect
+def _upload_file_view(request):
+    # Process request
+    ...
+COMMAND: CLASS-BASED VIEW WITH PROGRESS HANDLER
+python
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
+
+@method_decorator(csrf_exempt, name="dispatch")
+class UploadFileView(View):
+    def setup(self, request, *args, **kwargs):
+        request.upload_handlers.insert(0, ProgressBarUploadHandler(request))
+        super().setup(request, *args, **kwargs)
+
+    @method_decorator(csrf_protect)
+    def post(self, request, *args, **kwargs):
+        # Process request
+        ...
+This pattern ensures handlers are configured before any POST data is read, while still enforcing CSRF protection for the actual processing logic.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You need custom per-request upload behavior such as progress tracking or alternate storage.
+​
+DO NOT USE WHEN:
+
+Default handler behavior is sufficient; unnecessary customization adds complexity.
+
+SUMMARY:
+Modify request.upload_handlers early in the request lifecycle, before POST/FILES access.
+​
+Wrap handler modification with csrf_exempt and reapply csrf_protect to maintain CSRF security.
+​
+SECTION: SECURITY CONSIDERATIONS
+PURPOSE: Highlight security risks of user uploads and point to mitigation strategies.
+​
+CONCEPT: RISK OF UNTRUSTED CONTENT
+Accepting user-uploaded files from untrusted sources introduces risks such as code execution, malware distribution, and data exfiltration.
+​
+Django’s security documentation provides guidance on handling user-uploaded content safely, including validation, storage isolation, and serving mechanisms.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Designing upload endpoints; apply validation, restrict file types, and isolate storage locations.
+​
+DO NOT USE WHEN:
+
+Treating uploaded data as trusted; always validate and sanitize.
+
+SUMMARY:
+User uploads are inherently unsafe; treat all uploaded content as untrusted.
+​
+Follow Django’s user-uploaded content security recommendations for mitigation.

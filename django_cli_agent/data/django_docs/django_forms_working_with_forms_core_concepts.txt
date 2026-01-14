@@ -1,0 +1,383 @@
+SECTION: Overview of Django Forms
+
+PURPOSE:
+Explain what web forms are and why Django provides abstractions for handling them.
+
+CONCEPT:
+
+Web forms allow users to submit data to a server. Django provides tools to define, render, validate, and process forms securely and consistently.
+
+Forms are essential for accepting user input beyond static content publishing. Django automates repetitive and error-prone form-handling tasks while enforcing validation and security best practices.
+
+SECTION: HTML Forms Fundamentals
+
+PURPOSE:
+Describe how standard HTML forms work and how data is submitted.
+
+CONCEPT:
+
+An HTML form consists of elements enclosed within <form>...</form> tags. These elements collect user input and send it to a server.
+
+Each form specifies:
+
+WHERE: the destination URL (action)
+
+HOW: the HTTP method (method)
+
+Forms may include simple HTML inputs or advanced widgets using JavaScript and CSS.
+
+SECTION: HTTP Methods for Forms
+
+PURPOSE:
+Explain correct usage of GET and POST with forms.
+
+CONCEPT:
+
+Only GET and POST should be used with forms.
+
+POST sends data in the request body and is required for operations that change system state.
+
+GET appends data to the URL and must only be used for read-only operations.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Use POST for database changes, authentication, sensitive data
+
+Use GET for searches and bookmarkable queries
+
+DO NOT USE WHEN:
+
+DO NOT use GET for passwords, large payloads, binary data, or administrative actions
+
+SECTION: Django’s Role in Form Handling
+
+PURPOSE:
+Define Django’s responsibilities in form processing.
+
+CONCEPT:
+
+Django automates three major form tasks:
+
+Preparing data for display
+
+Rendering HTML form elements
+
+Receiving, validating, and processing submitted data
+
+Manual handling is possible but discouraged due to complexity and security risks.
+
+SECTION: Forms in Django Architecture
+
+PURPOSE:
+Clarify what “form” means in Django contexts.
+
+CONCEPT:
+
+In Django, “form” may refer to:
+
+The HTML <form> element
+
+A Form or ModelForm class
+
+Submitted and validated data
+
+The full end-to-end workflow
+
+SECTION: The Django Form Class
+
+PURPOSE:
+Explain the core Form abstraction.
+
+CONCEPT:
+
+django.forms.Form defines:
+
+Fields and validation rules
+
+HTML representation
+
+Data cleaning behavior
+
+Form fields map to HTML inputs similarly to how model fields map to database columns.
+
+ModelForm builds on Form by mapping model fields automatically.
+
+SECTION: Form Fields and Widgets
+
+PURPOSE:
+Explain how fields manage data and UI.
+
+CONCEPT:
+
+Each form field:
+
+Is a Python class
+
+Handles validation and data conversion
+
+Uses a widget to render HTML
+
+Different field types handle different data formats and validation logic.
+
+SECTION: Form Lifecycle: Instantiate, Bind, Render
+
+PURPOSE:
+Explain how forms are created and reused.
+
+CONCEPT:
+
+Forms are instantiated in views, not retrieved from the database.
+
+Forms may be:
+
+Empty (unbound)
+
+Prepopulated
+
+Bound to submitted data
+
+Bound forms retain user input and validation errors after submission.
+
+SECTION: Manual HTML Form Example
+
+PURPOSE:
+Illustrate limitations of plain HTML forms.
+
+COMMAND:
+<form action="/your-name/" method="post">
+    <label for="your_name">Your name: </label>
+    <input id="your_name" type="text" name="your_name" value="{{ current_name }}">
+    <input type="submit" value="OK">
+</form>
+
+CONCEPT:
+
+Plain HTML forms require manual validation, error handling, and data persistence, which does not scale well.
+
+SECTION: Building a Django Form
+
+PURPOSE:
+Demonstrate form definition using Django.
+
+FILE: forms.py
+
+ROLE: Defines form structure and validation rules
+
+COMMAND:
+from django import forms
+
+class NameForm(forms.Form):
+    your_name = forms.CharField(label="Your name", max_length=100)
+
+CONCEPT:
+
+max_length enforces HTML constraints and server-side validation
+
+Fields generate HTML automatically
+
+SECTION: Form Validation and Cleaned Data
+
+PURPOSE:
+Explain validation mechanics.
+
+CONCEPT:
+
+Calling is_valid():
+
+Runs all field validators
+
+Returns True if valid
+
+Populates cleaned_data with validated Python values
+
+SECTION: Processing Forms in Views
+
+PURPOSE:
+Show how forms are handled in views.
+
+FILE: views.py
+
+ROLE: Handles form submission and response logic
+
+COMMAND:
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from .forms import NameForm
+
+def get_name(request):
+    if request.method == "POST":
+        form = NameForm(request.POST)
+        if form.is_valid():
+            return HttpResponseRedirect("/thanks/")
+    else:
+        form = NameForm()
+
+    return render(request, "name.html", {"form": form})
+
+CONCEPT:
+
+POST binds data to the form
+
+Invalid forms re-render with errors
+
+Valid forms redirect after processing
+
+SECTION: Rendering Forms in Templates
+
+PURPOSE:
+Explain default form rendering.
+
+COMMAND:
+<form action="/your-name/" method="post">
+    {% csrf_token %}
+    {{ form }}
+    <input type="submit" value="Submit">
+</form>
+
+CONCEPT:
+
+Django expands {{ form }} into labeled input elements.
+The <form> tag and submit button must be provided manually.
+
+SECTION: CSRF Protection
+
+PURPOSE:
+Explain security requirements.
+
+CONCEPT:
+
+Forms submitted via POST must include CSRF tokens to prevent forgery attacks.
+
+SECTION: HTML5 Validation Behavior
+
+PURPOSE:
+Explain browser-level validation interactions.
+
+CONCEPT:
+
+Certain Django fields render HTML5 input types that trigger browser validation.
+
+Validation may be disabled by:
+
+Adding novalidate to <form>
+
+Overriding the widget
+
+SECTION: Bound vs Unbound Forms
+
+PURPOSE:
+Clarify form state handling.
+
+CONCEPT:
+
+Unbound form: no submitted data
+
+Bound form: contains submitted data and validation results
+
+ATTRIBUTE:
+
+form.is_bound indicates form state.
+
+SECTION: Working with Multiple Fields
+
+PURPOSE:
+Demonstrate complex form definitions.
+
+COMMAND:
+class ContactForm(forms.Form):
+    subject = forms.CharField(max_length=100)
+    message = forms.CharField(widget=forms.Textarea)
+    sender = forms.EmailField()
+    cc_myself = forms.BooleanField(required=False)
+
+SECTION: Accessing Validated Data
+
+PURPOSE:
+Explain cleaned_data usage.
+
+CONCEPT:
+
+After validation, all field values are available in form.cleaned_data as Python types.
+
+SECTION: Example Form Processing Logic
+
+PURPOSE:
+Demonstrate server-side handling.
+
+COMMAND:
+if form.is_valid():
+    subject = form.cleaned_data["subject"]
+    message = form.cleaned_data["message"]
+    sender = form.cleaned_data["sender"]
+    cc_myself = form.cleaned_data["cc_myself"]
+
+SECTION: Form Templates and Custom Rendering
+
+PURPOSE:
+Explain template customization strategies.
+
+CONCEPT:
+
+Form output is generated using templates and can be customized globally, per form, per field, or per render call.
+
+SECTION: Rendering Fields Manually
+
+PURPOSE:
+Provide granular layout control.
+
+CONCEPT:
+
+Fields expose attributes for labels, errors, values, and widgets.
+
+Manual rendering requires explicit error handling.
+
+SECTION: Looping Over Fields
+
+PURPOSE:
+Reduce duplication in templates.
+
+COMMAND:
+{% for field in form %}
+    {{ field.errors }}
+    {{ field.label_tag }} {{ field }}
+{% endfor %}
+
+SECTION: Hidden vs Visible Fields
+
+PURPOSE:
+Handle special field types correctly.
+
+CONCEPT:
+
+Hidden fields should be rendered separately to avoid confusing error placement.
+
+SECTION: Further Capabilities
+
+PURPOSE:
+Identify advanced form features.
+
+CONCEPT:
+
+Django forms also support:
+
+Formsets
+
+ModelForms
+
+Inline formsets
+
+Media assets
+
+SUMMARY:
+
+Django forms abstract validation, rendering, and data processing
+
+Form and ModelForm are core abstractions
+
+Views manage binding and validation
+
+Templates control presentation
+
+Security and validation are enforced by default

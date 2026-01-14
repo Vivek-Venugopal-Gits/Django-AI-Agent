@@ -1,0 +1,200 @@
+SECTION: FILE STORAGE API OVERVIEW
+PURPOSE: Summarize Django’s file storage abstractions, including default storage access, local filesystem storage, in-memory storage, and the base Storage API.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: All Django projects that read, write, or manage files via storage backends and FileField/ImageField.
+​
+SECTION: GETTING THE DEFAULT STORAGE CLASS
+PURPOSE: Explain how to access and instantiate storage backends configured in STORAGES.
+​
+CONCEPT: storages REGISTRY
+django.core.files.storage.storages is a dictionary-like registry that returns storage instances by alias from the STORAGES setting.
+​
+storages.backends exposes the raw backend configuration from STORAGES, and storages.create_storage() builds a storage instance from a backend definition dict.
+​
+COMMAND: STORAGES USAGE EXAMPLE
+python
+>>> from django.core.files.storage import storages
+>>> storages.backends
+{'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+ 'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+ 'custom': {'BACKEND': 'package.storage.CustomStorage'}}
+>>> storage_instance = storages.create_storage({"BACKEND": "package.storage.CustomStorage"})
+CONCEPT: DefaultStorage AND default_storage
+DefaultStorage provides lazy access to the storage backend specified by the default key in STORAGES, delegating to storages internally.
+​
+default_storage is a DefaultStorage instance used by Django as the default storage for file operations unless overridden.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Accessing the project’s default storage or a named storage backend by alias.
+​
+Creating storage instances in tests or third-party packages using backend definitions.
+​
+DO NOT USE WHEN:
+
+You need hard-coded paths or direct filesystem access; use FileSystemStorage or OS file APIs instead.
+​
+SUMMARY:
+Use storages to retrieve or instantiate storage backends defined in STORAGES.
+​
+Use default_storage for the project’s primary storage backend.
+​
+SECTION: FILESYSTEMSTORAGE CLASS
+PURPOSE: Describe the local filesystem-based storage backend and its key options.
+​
+CONCEPT: LOCAL FILE STORAGE
+FileSystemStorage(location=None, base_url=None, file_permissions_mode=None, directory_permissions_mode=None, allow_overwrite=False) implements storage on the local filesystem.
+​
+It inherits from Storage and implements all public storage methods such as save(), open(), delete(), exists(), listdir(), size(), and url().
+​
+CONCEPT: CORE ATTRIBUTES
+location: Absolute directory path where files are stored; defaults to MEDIA_ROOT.
+​
+base_url: URL prefix from which stored files are served; defaults to MEDIA_URL.
+​
+file_permissions_mode: Permissions applied to saved files; defaults to FILE_UPLOAD_PERMISSIONS.
+​
+directory_permissions_mode: Permissions applied to created directories; defaults to FILE_UPLOAD_DIRECTORY_PERMISSIONS.
+​
+allow_overwrite: When True, saving can overwrite existing files with the same name; default is False (storage will choose a unique name instead).
+​
+The delete() method does not raise an exception if the file does not exist.
+​
+CONCEPT: CREATED TIME
+FileSystemStorage.get_created_time(name) returns a datetime representing the file’s system ctime, using os.path.getctime().
+​
+On Unix-like systems this is the last metadata change time; on Windows it is the file creation time.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Storing uploaded or generated files on the local filesystem using MEDIA_ROOT and MEDIA_URL.
+​
+DO NOT USE WHEN:
+
+You require remote or cloud-backed storage; implement or configure a different Storage subclass instead.
+​
+SUMMARY:
+FileSystemStorage backs MEDIA_ROOT file storage with filesystem paths and URLs derived from settings.
+​
+It honors permission settings and can optionally allow overwriting files.
+​
+SECTION: INMEMORYSTORAGE CLASS
+PURPOSE: Describe the memory-based storage backend and its primary use case.
+​
+CONCEPT: MEMORY-ONLY STORAGE
+InMemoryStorage(location=None, base_url=None, file_permissions_mode=None, directory_permissions_mode=None) provides an in-memory storage backend without persistence.
+​
+It is mainly useful for speeding up tests by avoiding disk I/O.
+​
+CONCEPT: ATTRIBUTES
+location: Directory name prefix assigned to files; defaults to MEDIA_ROOT.
+​
+base_url: URL prefix used to serve stored files; defaults to MEDIA_URL.
+​
+file_permissions_mode: File permissions value for compatibility with FileSystemStorage; defaults to FILE_UPLOAD_PERMISSIONS.
+​
+directory_permissions_mode: Directory permissions value for compatibility with FileSystemStorage; defaults to FILE_UPLOAD_DIRECTORY_PERMISSIONS.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Running tests or transient processes where file persistence is not required.
+​
+DO NOT USE WHEN:
+
+You need durable storage across requests or process restarts.
+​
+SUMMARY:
+InMemoryStorage trades durability for speed by keeping files only in memory.
+​
+It mimics FileSystemStorage’s interface for easy substitution, especially in tests.
+​
+SECTION: STORAGE BASE CLASS
+PURPOSE: Define the standard Storage interface that all Django storage backends implement or extend.
+​
+CONCEPT: STORAGE API CONTRACT
+Storage provides a unified API for saving, opening, deleting, and inspecting files across different backends.
+​
+Subclasses override or extend these methods to support local, remote, or custom storage behaviors.
+​
+CONCEPT: CORE METHODS
+open(name, mode='rb'): Opens the file referenced by name and returns a File (or subclass) object; remote backends may be slow to read/write.
+​
+save(name, content, max_length=None): Saves a new file, returning the actual stored name; may adjust name to ensure uniqueness via get_available_name().
+​
+content must be a File or file-like object that can be wrapped in File.
+​
+delete(name): Deletes the file; may raise NotImplementedError if deletion is unsupported.
+​
+exists(name): Returns True if a file with the given name exists.
+​
+size(name): Returns the file’s size in bytes; may raise NotImplementedError if unsupported.
+​
+url(name): Returns a URL where the file contents can be accessed; may raise NotImplementedError if the backend does not support URLs.
+​
+path(name): Returns a local filesystem path for the file, if available; otherwise raises NotImplementedError (e.g., remote storage).
+​
+listdir(path): Returns (directories, files) lists for the given path or raises NotImplementedError if listing is unsupported.
+​
+CONCEPT: FILENAME AND NAME MANAGEMENT
+get_valid_name(name): Returns a filename sanitized for the target storage system.
+​
+get_alternative_name(file_root, file_ext): Returns an alternative filename by appending _<random 7-char alphanumeric> before the extension.
+​
+get_available_name(name, max_length=None): Returns a unique name suitable for saving new content; uses get_alternative_name() if name is taken and enforces max_length if supplied.
+​
+Raises SuspiciousFileOperation if it cannot find a free unique name under max_length.
+​
+generate_filename(filename): Validates filename via get_valid_name() and returns a final filename for save().
+​
+If filename includes a path from FileField.upload_to, only the leaf name is passed to get_valid_name(), and the path is prepended back.
+​
+CONCEPT: TIME METADATA METHODS
+get_accessed_time(name): Returns the last-accessed time as datetime; may raise NotImplementedError if unsupported.
+​
+get_created_time(name): Returns the file creation time as datetime; may raise NotImplementedError if unsupported.
+​
+get_modified_time(name): Returns the last-modified time as datetime; may raise NotImplementedError if unsupported.
+​
+For these methods, if USE_TZ=True, the returned datetime is timezone-aware; otherwise, it is naive in the local timezone (typically derived from TIME_ZONE).
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Implementing custom storage backends or interacting with storage generically across backends.
+​
+DO NOT USE WHEN:
+
+You need functionality outside the standard API; extend Storage and implement additional behavior as needed.
+​
+SUMMARY:
+Storage defines the core interface for all Django storage backends.
+​
+Methods cover file creation, deletion, metadata, names, and URLs in a backend-agnostic way.
+​
+SECTION: ECOSYSTEM STORAGE BACKENDS
+PURPOSE: Note availability of community-maintained storage backends for external services.
+​
+CONCEPT: COMMUNITY BACKENDS
+Django’s ecosystem includes many third-party Storage backends for external services such as cloud storage and CDN-backed systems.
+​
+These backends are cataloged on the Community Ecosystem “storage and static files” section and in the Django Packages “Storage Backends” grid.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to integrate with cloud or third-party storage rather than implementing a custom backend from scratch.
+​
+DO NOT USE WHEN:
+
+The built-in FileSystemStorage or InMemoryStorage already satisfies your storage requirements.
+
+SUMMARY:
+Django supports pluggable storage backends, including many community-maintained options.
+​
+Choose or implement a backend that matches your deployment and storage needs.

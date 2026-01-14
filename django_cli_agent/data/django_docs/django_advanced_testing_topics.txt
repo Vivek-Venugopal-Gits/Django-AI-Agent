@@ -1,0 +1,93 @@
+PURPOSE: Cover specialized testing techniques beyond basic unittest usage, including direct view testing, multi-database setups, custom runners, and integrations.
+DJANGO VERSION: 6.0
+
+SECTION: RequestFactory
+PURPOSE: Test views in isolation as pure functions without routing, middleware, or full request cycle.
+django.test.RequestFactory generates request objects for direct view invocation.
+API mirrors test client but limited to HTTP methods (no follow).
+No middleware support; manually set session/auth if needed.
+CONCEPT: RequestFactory usage
+CODE:
+from django.test import RequestFactory, TestCase
+from .views import my_view
+
+class SimpleTest(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_details(self):
+        request = self.factory.get("/customer/details/")
+        request.user = AnonymousUser()  # or authenticated user
+        response = my_view(request)
+        self.assertEqual(response.status_code, 200)
+For class-based views: MyView.as_view()(request)
+CONCEPT: AsyncRequestFactory
+django.test.AsyncRequestFactory creates ASGI requests.
+Compatible API; returns ASGIRequest.
+Add scope items via **defaults.
+
+SECTION: Testing class-based views
+PURPOSE: Ensure correct configuration when testing outside request cycle.
+Call view.setup(request) before accessing context or dispatching.
+CODE:
+request = RequestFactory().get("/")
+view = HomeView()
+view.setup(request)
+context = view.get_context_data()
+
+SECTION: Multiple host names
+PURPOSE: Support ALLOWED_HOSTS validation in tests.
+Include tested hosts in ALLOWED_HOSTS or override per test.
+Use client headers={"host": "example.com"}.
+
+SECTION: Multiple databases testing
+PURPOSE: Handle complex database configurations in tests.
+CONCEPT: Primary/replica mirroring
+Set TEST: { "MIRROR": "default" } on replica to redirect to default test database.
+Requires TransactionTestCase for commit/rollback observation.
+CONCEPT: Database creation order
+Use TEST: { "DEPENDENCIES": [...] } to define creation dependencies.
+Circular dependencies raise ImproperlyConfigured.
+
+SECTION: TransactionTestCase advanced features
+PURPOSE: Optimize and control behavior for non-transactional tests.
+CONCEPT: available_apps
+Limit flushed/created content types and permissions to specified apps.
+Speeds up tests with many models.
+Private API; subject to change.
+CONCEPT: reset_sequences
+reset_sequences = True: Reset auto-increment sequences before each test.
+
+SECTION: SerializeMixin
+PURPOSE: Run test classes sequentially when sharing resources.
+Uses filesystem lockfile.
+Set lockfile = __file__ to serialize all classes in same file.
+
+SECTION: Testing reusable applications
+PURPOSE: Run app tests independently using Django runner.
+Typical structure: runtests.py, tests/ package, test_settings.py.
+runtests.py sets DJANGO_SETTINGS_MODULE and invokes runner.
+
+SECTION: Custom test runners
+PURPOSE: Use alternative frameworks or customize execution.
+Set TEST_RUNNER to custom DiscoverRunner subclass.
+Override methods for setup, discovery, execution, teardown.
+Add arguments via add_arguments().
+CONCEPT: DiscoverRunner options
+Controls pattern, verbosity, parallel, tags, shuffle, etc.
+
+SECTION: Testing utilities
+django.test.utils: setup/teardown_test_environment, setup/teardown_databases.
+django.db.connection.creation: create_test_db, destroy_test_db.
+
+SECTION: Coverage integration
+Run tests with coverage.py:
+Bashcoverage run --source='.' manage.py test myapp
+coverage report
+
+SUMMARY:
+
+Use RequestFactory for isolated view testing.
+Handle multi-db, hosts, and serialization carefully.
+Customize runners for alternative frameworks or optimizations.
+Integrate coverage for code quality metrics.

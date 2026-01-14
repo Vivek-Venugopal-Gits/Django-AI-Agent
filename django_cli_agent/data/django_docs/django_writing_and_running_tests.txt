@@ -1,0 +1,97 @@
+PURPOSE: Provide guidance on creating unit tests using Django's extensions to Python's unittest framework and executing them with the test runner.
+DJANGO VERSION: 6.0
+Django uses Python's unittest module with class-based tests.
+CONCEPT: Basic test structure
+Subclass django.test.TestCase for tests involving database access (provides transaction isolation).
+Example:
+CODE:
+from django.test import TestCase
+from myapp.models import Animal
+
+class AnimalTestCase(TestCase):
+    def setUp(self):
+        Animal.objects.create(name="lion", sound="roar")
+        Animal.objects.create(name="cat", sound="meow")
+
+    def test_animals_can_speak(self):
+        """Animals that can speak are correctly identified"""
+        lion = Animal.objects.get(name="lion")
+        cat = Animal.objects.get(name="cat")
+        self.assertEqual(lion.speak(), 'The lion says "roar"')
+        self.assertEqual(cat.speak(), 'The cat says "meow"')
+Use django.test.TestCase instead of unittest.TestCase for database tests to avoid order-dependent behavior.
+CONCEPT: Test location and organization
+Default startapp creates tests.py.
+For larger suites, restructure into a tests package with submodules (e.g., test_models.py, test_views.py).
+SECTION: Running tests
+PURPOSE: Explain how to execute tests using the manage.py test command.
+COMMAND: Run all tests
+CODE:
+./manage.py test
+Discovers tests in files named test*.py by default (uses unittest discovery).
+CONCEPT: Specifying tests to run
+Provide test labels (dotted paths):
+
+Module: ./manage.py test animals.tests
+Package: ./manage.py test animals
+TestCase class: ./manage.py test animals.tests.AnimalTestCase
+Test method: ./manage.py test animals.tests.AnimalTestCase.test_animals_can_speak
+Directory path: ./manage.py test animals/
+
+Custom pattern: ./manage.py test --pattern="tests_*.py"
+Ctrl-C gracefully waits for current test to finish; second Ctrl-C halts immediately.
+Run with warnings: python -Wa manage.py test
+SECTION: The test database
+PURPOSE: Describe how Django handles database isolation for tests.
+Separate blank test databases are created (named test_<NAME>).
+Destroyed after tests complete.
+Preserve with --keepdb (creates if missing, applies migrations).
+On interruption, prompts to reuse/destroy (suppress with --noinput).
+SQLite uses in-memory database by default.
+Configure via TEST dictionary in DATABASES (e.g., NAME, CHARSET, COLLATION).
+User needs privileges to create databases.
+Avoid import-time database queries (use lazy loading).
+SECTION: Test execution order
+PURPOSE: Explain the order Django runs tests to ensure isolation.
+
+All TestCase subclasses first (clean database per test).
+Other Django tests (SimpleTestCase, TransactionTestCase).
+Plain unittest.TestCase or doctests.
+
+Randomize/reverse within groups with --shuffle / --reverse.
+Failures on load reported first.
+SECTION: Rollback emulation
+PURPOSE: Handle initial migration data in non-transactional tests.
+Initial data from migrations available only in TestCase.
+Enable with serialized_rollback = True on TestCase/TransactionTestCase (slows tests ~3x).
+Exclude apps via TEST_NON_SERIALIZED_APPS.
+Disables post_migrate signal during flush.
+SECTION: Other test conditions
+PURPOSE: Note differences from production settings.
+DEBUG=False always.
+Caches not cleared automatically.
+SECTION: Understanding test output
+PURPOSE: Interpret test runner messages and results.
+Shows database/table creation.
+Success: "Ran X tests... OK"
+Failures: Full traceback and summary.
+Return code: 0 (all pass), 1 (failures/errors).
+SECTION: Speeding up tests
+PURPOSE: Provide techniques to reduce test execution time.
+CONCEPT: Parallel execution
+Use --parallel (auto or specify N processes).
+Distributes TestCase subclasses; requires isolation.
+Needs tblib for tracebacks.
+CONCEPT: Faster password hashing
+Set PASSWORD_HASHERS to faster algorithms (e.g., MD5PasswordHasher) in test settings.
+Include fixture hashers.
+CONCEPT: Preserve test database
+Use --keepdb.
+CONCEPT: In-memory media storage
+Use InMemoryStorage to avoid disk access for media files.
+SUMMARY:
+
+Write tests subclassing django.test.TestCase.
+Run with ./manage.py test, specifying labels as needed.
+Tests use isolated databases; preserve with --keepdb.
+Ensure isolation; use parallel, faster hashers, and in-memory storage for speed.

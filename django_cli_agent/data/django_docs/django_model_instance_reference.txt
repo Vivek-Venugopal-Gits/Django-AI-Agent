@@ -1,0 +1,251 @@
+PURPOSE: This section describes the details of the Model API, including creating, refreshing, validating, saving, deleting, and other instance methods.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django models for instance operations.
+
+SECTION: CREATING OBJECTS
+PURPOSE: This section explains instantiating and saving new model instances.
+CONCEPT: CREATING OBJECTS OVERVIEW
+Instantiate the model with keyword arguments for field names. Instantiation does not touch the database; call save() to persist.
+CODE EXAMPLE:
+class Model(**kwargs)
+DO NOT override init to customize; use classmethod or custom manager instead to avoid issues.
+CODE EXAMPLE:
+from django.db import models
+
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+
+    @classmethod
+    def create(cls, title):
+        book = cls(title=title)
+        # do something with the book
+        return book
+
+book = Book.create("Pride and Prejudice")
+CODE EXAMPLE:
+class BookManager(models.Manager):
+    def create_book(self, title):
+        book = self.create(title=title)
+        # do something with the book
+        return book
+
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+
+    objects = BookManager()
+
+book = Book.objects.create_book("Pride and Prejudice")
+USAGE GUIDELINES:
+USE WHEN:
+
+Creating new instances.
+DO NOT USE WHEN:
+Custom init may prevent saving or cause recursion.
+
+SECTION: CUSTOMIZING MODEL LOADING
+PURPOSE: This section describes customizing instance creation from the database.
+CONCEPT: FROM_DB METHOD
+Customizes model instance creation when loading from database.
+CODE EXAMPLE:
+@classmethod
+def from_db(cls, db, field_names, values):
+    if len(values) != len(cls._meta.concrete_fields):
+        values = list(values)
+        values.reverse()
+        values = [
+            values.pop() if f.attname in field_names else DEFERRED
+            for f in cls._meta.concrete_fields
+        ]
+    instance = cls(*values)
+    instance._state.adding = False
+    instance._state.db = db
+    # customization to store the original field values on the instance
+    instance._loaded_values = dict(
+        zip(field_names, (value for value in values if value is not DEFERRED))
+    )
+    return instance
+db: database alias.
+field_names: loaded fields.
+values: loaded values.
+Use DEFERRED for deferred fields.
+USAGE GUIDELINES:
+USE WHEN:
+
+Tracking initial values or custom loading.
+DO NOT USE WHEN:
+Standard loading suffices.
+
+SECTION: REFRESHING OBJECTS FROM DATABASE
+PURPOSE: This section explains reloading model values from the database.
+CONCEPT: REFRESH_FROM_DB METHOD
+Reloads non-deferred fields from database, clears cached relations.
+CODE EXAMPLE:
+refresh_from_db(using=None, fields=None, from_queryset=None)
+Async: arefresh_from_db
+using: database alias.
+fields: specific fields to reload.
+from_queryset: custom queryset.
+CODE EXAMPLE:
+def test_update_result(self):
+    obj = MyModel.objects.create(val=1)
+    MyModel.objects.filter(pk=obj.pk).update(val=F("val") + 1)
+    # At this point obj.val is still 1, but the value in the database
+    # was updated to 2. The object's updated value needs to be reloaded
+    # from the database.
+    obj.refresh_from_db()
+    self.assertEqual(obj.val, 2)
+Deferred fields load through this; customizable.
+CONCEPT: GET_DEFERRED_FIELDS METHOD
+Returns set of deferred attribute names.
+CODE EXAMPLE:
+get_deferred_fields()
+USAGE GUIDELINES:
+USE WHEN:
+
+Ensuring latest data, avoiding races.
+DO NOT USE WHEN:
+In async for deferred fields without care.
+
+SECTION: VALIDATING OBJECTS
+PURPOSE: This section describes validating model instances.
+CONCEPT: VALIDATION STEPS
+Four steps: clean_fields, clean, validate_unique, validate_constraints.
+full_clean() performs all.
+CODE EXAMPLE:
+full_clean(exclude=None, validate_unique=True, validate_constraints=True)
+Raises ValidationError with message_dict.
+exclude: set of fields to skip.
+CONCEPT: CLEAN_FIELDS METHOD
+Validates individual fields.
+CODE EXAMPLE:
+clean_fields(exclude=None)
+CONCEPT: CLEAN METHOD
+Custom whole-model validation.
+CODE EXAMPLE:
+def clean(self):
+    if self.status == "draft" and self.pub_date is not None:
+        raise ValidationError({"pub_date": _("Draft entries may not have a publication date.")})
+    if self.status == "published" and self.pub_date is None:
+        self.pub_date = datetime.date.today()
+Raise ValidationError with dict for field errors.
+Not called by save().
+For excluded form fields, override clean_fields().
+CONCEPT: VALIDATE_UNIQUE METHOD
+Validates uniqueness constraints.
+CODE EXAMPLE:
+validate_unique(exclude=None)
+CONCEPT: VALIDATE_CONSTRAINTS METHOD
+Validates Meta.constraints.
+CODE EXAMPLE:
+validate_constraints(exclude=None)
+USAGE GUIDELINES:
+USE WHEN:
+
+Manual validation needed.
+DO NOT USE WHEN:
+Relying on ModelForm; handles automatically.
+
+SECTION: SAVING OBJECTS
+PURPOSE: This section explains saving model instances to the database.
+CONCEPT: SAVE METHOD
+Saves the instance.
+CODE EXAMPLE:
+save(..., force_insert=False, force_update=False, using=DEFAULT_DB_ALIAS, update_fields=None)
+Async: asave
+CONCEPT: AUTO-INCREMENTING PRIMARY KEYS
+AutoField calculates ID on first save.
+CONCEPT: THE PK PROPERTY
+Alias for primary key field(s).
+CONCEPT: EXPLICITLY SPECIFYING AUTO-PRIMARY-KEY VALUES
+Set ID before save; careful with collisions.
+CONCEPT: WHAT HAPPENS WHEN YOU SAVE?
+Steps: pre-save signal, preprocess data, prepare for DB, insert/update, post-save signal.
+CONCEPT: HOW DJANGO KNOWS TO UPDATE VS. INSERT
+If pk set (and no default/db_default), UPDATE; else INSERT (may fallback).
+CONCEPT: FORCING AN INSERT OR UPDATE
+force_insert=True for INSERT, force_update=True for UPDATE.
+Raises error if both.
+For multi-table, force_insert tuple of parents.
+NotUpdated if forced update affects no rows (new in 6.0).
+CONCEPT: UPDATING ATTRIBUTES BASED ON EXISTING FIELDS
+Use F expressions.
+CONCEPT: SPECIFYING WHICH FIELDS TO SAVE
+update_fields: iterable of field names.
+Forces update.
+Only calls pre_save() for those fields.
+USAGE GUIDELINES:
+USE WHEN:
+
+Persisting changes.
+DO NOT USE WHEN:
+Overriding without care; see overriding methods.
+
+SECTION: DELETING OBJECTS
+PURPOSE: This section explains deleting model instances.
+CONCEPT: DELETE METHOD
+Deletes the instance.
+CODE EXAMPLE:
+delete(using=DEFAULT_DB_ALIAS, keep_parents=False)
+Async: adelete
+Returns deletions count.
+keep_parents=True keeps parent data in multi-table.
+USAGE GUIDELINES:
+USE WHEN:
+
+Removing instances.
+DO NOT USE WHEN:
+Needing custom deletion; override delete().
+
+SECTION: PICKLING OBJECTS
+PURPOSE: This section warns about pickling model instances.
+CONCEPT: PICKLING OBJECTS OVERVIEW
+Pickles current state; unpickled not current DB.
+Version-specific; RuntimeWarning across versions.
+DO NOT use for long-term archival.
+SECTION: OTHER MODEL INSTANCE METHODS
+PURPOSE: This section covers special instance methods.
+CONCEPT: STR()
+Called by str(); return human-readable representation.
+CONCEPT: EQ()
+Equality by pk and concrete class.
+None pk not equal.
+CONCEPT: HASH()
+Hash of pk; TypeError if no pk.
+CONCEPT: GET_ABSOLUTE_URL()
+Canonical URL.
+CODE EXAMPLE:
+def get_absolute_url(self):
+    from django.urls import reverse
+    return reverse("people-detail", kwargs={"pk": self.pk})
+Use in templates.
+Avoid user input in URL.
+ASCII only, URL-encoded.
+SECTION: EXTRA INSTANCE METHODS
+PURPOSE: This section describes auto-generated methods.
+CONCEPT: GET_FOO_DISPLAY()
+For choices fields, human-readable value.
+CONCEPT: GET_NEXT_BY_FOO(**kwargs), GET_PREVIOUS_BY_FOO(**kwargs)
+Next/previous by Date/DateTimeField.
+Raises DoesNotExist.
+Not on unsaved.
+USAGE GUIDELINES:
+USE WHEN:
+
+Navigation by dates.
+DO NOT USE WHEN:
+Overriding without care.
+
+SECTION: OTHER ATTRIBUTES
+PURPOSE: This section covers additional attributes.
+CONCEPT: _STATE
+ModelState with adding (bool), db (alias).
+CONCEPT: _IS_PK_SET()
+Returns if pk is set (new in 5.2).
+SUMMARY:
+Use save() for persistence.
+Validate with full_clean().
+Override clean() for custom validation.
+Use get_absolute_url() for URLs.

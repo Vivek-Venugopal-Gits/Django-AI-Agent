@@ -1,0 +1,124 @@
+SECTION: Writing Views
+PURPOSE: This section explains how to create view functions in Django that handle web requests and return responses.
+CONCEPT: A view function takes a web request and returns a web response, such as HTML, a redirect, a 404 error, XML, or an image. Include arbitrary logic as needed. Place views in views.py in the project or application directory.
+SECTION: A Simple View
+PURPOSE: This section provides an example of a basic view that returns the current date and time as HTML.
+CODE:
+from django.http import HttpResponse
+import datetime
+
+def current_datetime(request):
+    now = datetime.datetime.now()
+    html = '<html lang="en"><body>It is now %s.</body></html>' % now
+    return HttpResponse(html)
+CONCEPT: Import HttpResponse from django.http and datetime. Define the view function with an HttpRequest object as the first parameter, named request. Return an HttpResponse object with the generated response.
+CONCEPT: View function names do not follow specific requirements but should indicate purpose clearly.
+CONCEPT: Adjust the TIME_ZONE setting in settings.py from its default America/Chicago if it does not match the location.
+SECTION: Mapping URLs to Views
+PURPOSE: This section describes connecting views to URLs.
+CONCEPT: Create a URLconf to map a URL to the view function.
+SECTION: Returning Errors
+PURPOSE: This section covers returning HTTP error codes using HttpResponse subclasses.
+CONCEPT: Use subclasses of HttpResponse for common status codes other than 200.
+CODE:
+from django.http import HttpResponse, HttpResponseNotFound
+
+def my_view(request):
+    # ...
+    if foo:
+        return HttpResponseNotFound("<h1>Page not found</h1>")
+    else:
+        return HttpResponse("<h1>Page was found</h1>")
+CONCEPT: Pass the status code to HttpResponse for uncommon codes.
+CODE:
+Pythonfrom django.http import HttpResponse
+
+def my_view(request):
+    # ...
+    # Return a "created" (201) response code.
+    return HttpResponse(status=201)
+SECTION: The Http404 Exception
+PURPOSE: This section explains using the Http404 exception for consistent 404 error handling.
+CONCEPT: Raise Http404 in a view to return the standard 404 error page with code 404.
+CODE:
+from django.http import Http404
+from django.shortcuts import render
+from polls.models import Poll
+
+def detail(request, poll_id):
+    try:
+        p = Poll.objects.get(pk=poll_id)
+    except Poll.DoesNotExist:
+        raise Http404("Poll does not exist")
+    return render(request, "polls/detail.html", {"poll": p})
+CONCEPT: Create a 404.html template in the top-level template directory for custom 404 pages when DEBUG is False. Provide a message to Http404 for debugging when DEBUG is True; avoid using these messages in production.
+USAGE GUIDELINES:
+USE WHEN:
+
+Handling not-found errors consistently across the site.
+DO NOT USE WHEN:
+Custom error pages are not needed or DEBUG is True without debugging messages.
+
+SECTION: Customizing Error Views
+PURPOSE: This section describes overriding default error views.
+CONCEPT: Set handlers in the URLconf to override default error views.
+CONCEPT: Override page_not_found() with handler404.
+CODE:
+handler404 = "mysite.views.my_custom_page_not_found_view"
+CONCEPT: Override server_error() with handler500.
+CODE:
+handler500 = "mysite.views.my_custom_error_view"
+CONCEPT: Override permission_denied() with handler403.
+CODE:
+handler403 = "mysite.views.my_custom_permission_denied_view"
+CONCEPT: Override bad_request() with handler400.
+CODE:
+handler400 = "mysite.views.my_custom_bad_request_view"
+SECTION: Testing Custom Error Views
+PURPOSE: This section provides an example for testing custom error handlers.
+CONCEPT: Raise the appropriate exception in a test view to test the response.
+CODE:
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse
+from django.test import SimpleTestCase, override_settings
+from django.urls import path
+
+def response_error_handler(request, exception=None):
+    return HttpResponse("Error handler content", status=403)
+
+def permission_denied_view(request):
+    raise PermissionDenied
+
+urlpatterns = [
+    path("403/", permission_denied_view),
+]
+
+handler403 = response_error_handler
+
+# ROOT_URLCONF must specify the module that contains handler403 = ...
+@override_settings(ROOT_URLCONF=__name__)
+class CustomErrorHandlerTests(SimpleTestCase):
+    def test_handler_renders_template_response(self):
+        response = self.client.get("/403/")
+        # Make assertions on the response here. For example:
+        self.assertContains(response, "Error handler content", status_code=403)
+SECTION: Async Views
+PURPOSE: This section introduces asynchronous views for performance benefits.
+CONCEPT: Define views as async functions using async def. Django detects and runs them in an async context. Use an ASGI-based server for benefits.
+CODE:
+import datetime
+from django.http import HttpResponse
+
+async def current_datetime(request):
+    now = datetime.datetime.now()
+    html = '<html lang="en"><body>It is now %s.</body></html>' % now
+    return HttpResponse(html)
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Web applications requiring custom request handling in Django.
+SUMMARY:
+
+Define views as functions returning HttpResponse.
+Map views to URLs via URLconf.
+Handle errors with HttpResponse subclasses or Http404.
+Customize and test error views in URLconf.

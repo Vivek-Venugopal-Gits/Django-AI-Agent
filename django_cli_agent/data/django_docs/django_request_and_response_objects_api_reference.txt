@@ -1,0 +1,767 @@
+SECTION: REQUEST AND RESPONSE OBJECTS
+PURPOSE: Describe the HttpRequest, HttpResponse, and related classes used by Django to represent incoming HTTP requests and outgoing responses.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: All Django projects handling HTTP requests and responses via django.http.
+​
+CONCEPT: QUICK OVERVIEW
+Django creates an HttpRequest instance for each incoming HTTP request and passes it as the first argument to the selected view function.
+​
+Each view must return an HttpResponse (or subclass) instance to represent the outgoing HTTP response.
+​
+SECTION: HTTPREQUEST OBJECTS
+PURPOSE: Define the HttpRequest API, including core attributes and methods.
+​
+CONCEPT: HttpRequest CLASS
+HttpRequest is defined in django.http and represents the incoming HTTP request, including metadata such as method, path, headers, query parameters, body, and uploaded files.
+
+Unless otherwise documented, HttpRequest attributes are read-only.
+​
+SECTION: HTTPREQUEST CORE ATTRIBUTES
+PURPOSE: Describe commonly used core attributes on HttpRequest.
+​
+CONCEPT: SCHEME, PATH, METHOD
+HttpRequest.scheme: String with the request scheme, usually http or https.
+​
+HttpRequest.path: String with the full path part of the URL, excluding scheme, domain, and query string (e.g. "/music/bands/the_beatles/").
+​
+HttpRequest.path_info: Path-info portion of the URL, independent of server script prefix configuration (e.g. may be "/music/bands/the_beatles/" even if path is "/minfo/music/bands/the_beatles/").
+​
+HttpRequest.method: Uppercase HTTP method string like "GET" or "POST".
+​
+COMMAND: METHOD CHECK EXAMPLE
+python
+if request.method == "GET":
+    do_something()
+elif request.method == "POST":
+    do_something_else()
+CONCEPT: BODY AND ENCODING
+HttpRequest.body: Raw HTTP request body as a bytestring, used for non-form payloads such as binary data or XML.
+​
+Request body can be read via file-like methods read(), readline(), readlines(), and __iter__(); accessing body after such reads raises RawPostDataException.
+​
+HttpRequest.encoding: Optional encoding used to decode form data; if None, DEFAULT_CHARSET is used and writing to this attribute changes decoding for GET and POST.
+​
+CONCEPT: CONTENT TYPE AND PARAMETERS
+HttpRequest.content_type: MIME type of the request from CONTENT_TYPE.
+​
+HttpRequest.content_params: Dictionary of key/value parameters from the CONTENT_TYPE header.
+​
+SUMMARY:
+Use scheme, path, path_info, and method for routing and logic.
+​
+Use body and file-like read methods for raw payloads, not form data.
+​
+Control form-decoding via the encoding attribute.
+​
+SECTION: QUERY DATA, COOKIES, FILES, AND META
+PURPOSE: Explain access to query parameters, POST data, cookies, uploaded files, and low-level headers.
+​
+CONCEPT: GET AND POST DATA
+HttpRequest.GET: QueryDict of all HTTP GET parameters.
+​
+HttpRequest.POST: QueryDict of POST form parameters when form-encoded; may be empty even for POST requests without form data.
+​
+POST never includes uploaded file data; use FILES for file uploads.
+​
+DO NOT use if request.POST to detect the POST method; use if request.method == "POST".
+​
+CONCEPT: COOKIES AND FILE UPLOADS
+HttpRequest.COOKIES: Dictionary of all cookies with string keys and values.
+​
+HttpRequest.FILES: QueryDict-like object mapping input field names to UploadedFile objects.
+​
+FILES is populated only if the method is POST and the form uses enctype="multipart/form-data"; otherwise FILES is empty.
+​
+CONCEPT: META HEADERS AND HEADERS VIEW
+HttpRequest.META: Dictionary of all environment and HTTP headers with keys such as CONTENT_LENGTH, CONTENT_TYPE, HTTP_HOST, REMOTE_ADDR, and REQUEST_METHOD.
+​
+Non-content headers are uppercased, hyphens replaced with underscores, and prefixed with HTTP_ (e.g. X-Bender → HTTP_X_BENDER).
+​
+runserver strips headers containing underscores to prevent spoofing, matching servers like Nginx and Apache 2.4+.
+​
+HttpRequest.headers: Case-insensitive, dict-like access to HTTP headers (including Content-Length and Content-Type), stylized for display but accessible regardless of case or hyphen/underscore usage.
+​
+COMMAND: HEADERS USAGE EXAMPLE
+python
+>>> request.headers
+{'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6', ...}
+
+>>> "User-Agent" in request.headers
+True
+>>> "user-agent" in request.headers
+True
+
+>>> request.headers["User-Agent"]
+"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)"
+>>> request.headers.get("user-agent")
+"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)"
+Templates can access headers via attribute-style access, such as {{ request.headers.user_agent }}.
+​
+SUMMARY:
+Use GET and POST (both QueryDict) for form/query parameters.
+​
+Use COOKIES for cookie values and FILES for uploaded file objects.
+​
+Use META for raw environment variables and headers for normalized HTTP headers.
+​
+SECTION: URL RESOLUTION AND REQUEST CONTEXT ATTRIBUTES
+PURPOSE: Explain attributes related to URL resolution and those set by application or middleware code.
+​
+CONCEPT: resolver_match
+HttpRequest.resolver_match: ResolverMatch instance representing the result of URL resolution.
+​
+Available in views and in process_view() middleware but not in middleware called before URL resolving.
+​
+CONCEPT: APPLICATION-SET ATTRIBUTES
+HttpRequest.current_app: Used by the url template tag as current_app for reverse().
+​
+HttpRequest.urlconf: Overrides ROOT_URLCONF as the root URLconf for the current request; set to None to revert.
+​
+HttpRequest.exception_reporter_filter: Per-request override for DEFAULT_EXCEPTION_REPORTER_FILTER.
+​
+HttpRequest.exception_reporter_class: Per-request override for DEFAULT_EXCEPTION_REPORTER.
+​
+CONCEPT: MIDDLEWARE-SET ATTRIBUTES
+HttpRequest.session: Dict-like session object from SessionMiddleware.
+​
+HttpRequest.site: Current Site or RequestSite from CurrentSiteMiddleware.
+​
+HttpRequest.user: AUTH_USER_MODEL instance for the authenticated user or AnonymousUser if not authenticated, provided by AuthenticationMiddleware.
+​
+COMMAND: AUTHENTICATION CHECK EXAMPLE
+python
+if request.user.is_authenticated:
+    # Do something for logged-in users.
+    ...
+else:
+    # Do something for anonymous users.
+    ...
+HttpRequest.auser(): Coroutine returning the authenticated user (or AnonymousUser) usable from async contexts.
+​
+SUMMARY:
+resolver_match exposes URL resolution details to views.
+​
+Application and middleware can attach extra attributes like current_app, session, and user to the request.
+​
+auser() provides async-compatible user retrieval.
+​
+SECTION: HTTPREQUEST METHODS (HOST, URL, COOKIES, SECURITY)
+PURPOSE: Describe frequently used HttpRequest methods for host, URL building, cookies, and security-related operations.
+​
+CONCEPT: HOST AND PORT
+HttpRequest.get_host(): Returns the originating host based on HTTP_X_FORWARDED_HOST (if USE_X_FORWARDED_HOST is enabled), HTTP_HOST, or SERVER_NAME and SERVER_PORT following PEP 3333.
+​
+Raises DisallowedHost if the host is not listed in ALLOWED_HOSTS or the domain is invalid per RFC 1034/1035.
+​
+HttpRequest.get_port(): Returns the originating port using HTTP_X_FORWARDED_PORT (if USE_X_FORWARDED_PORT is enabled) or SERVER_PORT.
+​
+CONCEPT: FULL PATH AND ABSOLUTE URI
+HttpRequest.get_full_path(): Returns path plus query string if present (e.g. "/minfo/music/bands/the_beatles/?print=true").
+​
+HttpRequest.get_full_path_info(): Like get_full_path() but uses path_info instead (e.g. "/music/bands/the_beatles/?print=true").
+​
+HttpRequest.build_absolute_uri(location=None): Returns an absolute URI for the given location, defaulting to request.get_full_path().
+​
+If location is already absolute, it is returned unchanged; otherwise, an absolute URI is built from the current request.
+​
+The generated URI always uses the scheme of the current request; mixing HTTP and HTTPS is discouraged.
+​
+COMMAND: ABSOLUTE URI EXAMPLES
+python
+>>> request.build_absolute_uri()
+'https://example.com/music/bands/the_beatles/?print=true'
+>>> request.build_absolute_uri("/bands/")
+'https://example.com/bands/'
+>>> request.build_absolute_uri("https://example2.com/bands/")
+'https://example2.com/bands/'
+CONCEPT: SIGNED COOKIES
+HttpRequest.get_signed_cookie(key, default=RAISE_ERROR, salt='', max_age=None): Returns the value of a signed cookie or raises BadSignature if the signature is invalid.
+​
+If default is provided, invalid signatures or missing cookies return default instead of raising.
+​
+Optional salt strengthens protection against brute-force attacks; optional max_age enforces a maximum age in seconds.
+​
+COMMAND: SIGNED COOKIE EXAMPLES
+python
+>>> request.get_signed_cookie("name")
+'Tony'
+>>> request.get_signed_cookie("name", salt="name-salt")
+'Tony'
+>>> request.get_signed_cookie("nonexistent-cookie")
+KeyError: 'nonexistent-cookie'
+>>> request.get_signed_cookie("nonexistent-cookie", False)
+False
+>>> request.get_signed_cookie("cookie-that-was-tampered-with")
+BadSignature: ...
+>>> request.get_signed_cookie("name", max_age=60)
+SignatureExpired: ...
+>>> request.get_signed_cookie("name", False, max_age=60)
+False
+CONCEPT: SECURITY HELPERS
+HttpRequest.is_secure(): Returns True if the request was made over HTTPS.
+​
+SUMMARY:
+Use get_host, get_port, get_full_path, and build_absolute_uri for host and URL generation.
+​
+Use get_signed_cookie with salt and max_age for tamper-resistant cookies.
+​
+Use is_secure() to detect HTTPS requests.
+​
+SECTION: CONTENT NEGOTIATION HELPERS
+PURPOSE: Describe methods that help with content negotiation using the Accept header.
+​
+CONCEPT: get_preferred_type
+HttpRequest.get_preferred_type(media_types): Returns the preferred MIME type from media_types based on the request Accept header, or None if none are acceptable.
+​
+Takes into account quality values (q) and parameters in MIME types; defaults to the first item in media_types when Accept: */* is sent.
+​
+COMMAND: get_preferred_type EXAMPLES
+python
+>>> request.get_preferred_type(["text/html", "application/json"])
+"text/html"
+>>> request.get_preferred_type(["application/json", "text/plain"])
+"application/json"
+>>> request.get_preferred_type(["application/xml", "text/plain"])
+None
+With an Accept header like text/vcard;version=3.0,text/html;q=0.5:
+
+python
+>>> request.get_preferred_type(
+...     [
+...         "text/vcard; version=4.0",
+...         "text/vcard; version=3.0",
+...         "text/vcard",
+...         "text/directory",
+...     ]
+... )
+"text/vcard; version=3.0"
+CONCEPT: accepts
+HttpRequest.accepts(mime_type): Returns True if the request Accept header allows the given mime_type.
+​
+Many browsers send Accept: */*, so accepts("text/html") often returns True for normal browser requests.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Implementing content negotiation for APIs or views returning multiple possible content types.
+​
+Combined with caching, decorate views that vary on Accept using vary_on_headers('Accept').
+​
+DO NOT USE WHEN:
+
+You are returning a single fixed content type regardless of the Accept header.
+
+SUMMARY:
+get_preferred_type and accepts implement HTTP Accept header-based content negotiation.
+​
+Always coordinate with caching by varying on the Accept header when necessary.
+​
+SECTION: HTTPREQUEST STREAMING INTERFACE
+PURPOSE: Explain using HttpRequest as a file-like stream for large request bodies.
+​
+CONCEPT: FILE-LIKE METHODS
+Methods: read(size=None), readline(), readlines(), and __iter__() implement a file-like interface for HttpRequest.
+​
+These methods support streaming consumption of large bodies such as XML documents without loading them fully into memory.
+​
+COMMAND: XML STREAMING EXAMPLE
+python
+import xml.etree.ElementTree as ET
+
+for element in ET.iterparse(request):
+    process(element)
+SUMMARY:
+Use HttpRequest’s file-like methods for streaming large request bodies.
+​
+Avoid accessing body after using streaming methods to prevent RawPostDataException.
+​
+SECTION: QUERYDICT OBJECTS
+PURPOSE: Describe the QueryDict class used for request.GET and request.POST.
+​
+CONCEPT: QueryDict CLASS
+QueryDict is a dictionary-like class that supports multiple values per key and backs HttpRequest.GET and HttpRequest.POST.
+​
+Most QueryDict instances from requests are immutable; use copy() to obtain a mutable copy.
+​
+SECTION: QUERYDICT CORE METHODS
+PURPOSE: Summarize core QueryDict initialization, access, and update behavior.
+​
+CONCEPT: CONSTRUCTION AND IMMUTABILITY
+QueryDict(query_string=None, mutable=False, encoding=None) constructs a QueryDict from the given query string.
+​
+Example: QueryDict("a=1&a=2&c=3") → {'a': ['1', '2'], 'c': ['3']}.
+​
+encoding controls decoding and defaults to DEFAULT_CHARSET.
+​
+QueryDict.fromkeys(iterable, value='', mutable=False, encoding=None) builds a new QueryDict with repeated keys mapping to a list of identical values.
+​
+CONCEPT: VALUE ACCESS AND MUTATION
+__getitem__(key): Returns the last value for the key, or [] if the key exists with no values; raises MultiValueDictKeyError if absent.
+​
+__setitem__(key, value): Sets the key to [value] and requires a mutable QueryDict.
+​
+__contains__(key): Returns True if the key exists.
+​
+get(key, default=None): Same as __getitem__() but returns default when key is missing.
+​
+setdefault(key, default=None): Like dict.setdefault() but uses __setitem__().
+​
+CONCEPT: MERGING AND ITERATION
+update(other_dict): Appends values from another QueryDict or dict instead of overwriting, preserving all previous values.
+​
+items() and values(): Work like dictionary counterparts but return iterators using last-value semantics.
+​
+COMMAND: QueryDict EXAMPLES
+python
+>>> QueryDict("a=1&a=2&c=3")
+<QueryDict: {'a': ['1', '2'], 'c': ['3']}>
+
+>>> q = QueryDict("a=1", mutable=True)
+>>> q.update({"a": "2"})
+>>> q.getlist("a")
+['1', '2']
+>>> q["a"]
+'2'
+SUMMARY:
+QueryDict supports multi-valued keys and immutability by default.
+​
+Use copy() to mutate and update() to append values.
+​
+SECTION: QUERYDICT MULTI-VALUE OPERATIONS
+PURPOSE: Detail QueryDict methods for lists, popping, and encoding.
+​
+CONCEPT: LIST-ORIENTED METHODS
+copy(): Returns a mutable deep copy of the QueryDict.
+​
+getlist(key, default=None): Returns a list of values for the key, or default.
+​
+setlist(key, list_): Sets the list of values for the key.
+​
+appendlist(key, item): Appends an item to the list of values for the key.
+​
+setlistdefault(key, default_list=None): Like setdefault() but operates on lists of values.
+​
+lists(): Returns (key, [values]) pairs including all values.
+​
+CONCEPT: REMOVAL, DICT VIEW, AND URL ENCODING
+pop(key): Returns the list of values for a key and removes them; raises KeyError if absent.
+​
+popitem(): Removes and returns an arbitrary (key, [values]) pair; raises KeyError on empty dict.
+​
+dict(): Returns a single-valued dict form where each key maps to its last value.
+​
+urlencode(safe=None): Returns a URL-encoded query string representation; safe marks characters that must not be encoded.
+​
+COMMAND: LIST AND ENCODING EXAMPLES
+python
+>>> q = QueryDict("a=1&a=2&a=3")
+>>> q.lists()
+[('a', ['1', '2', '3'])]
+
+>>> q = QueryDict("a=2&b=3&b=5")
+>>> q.urlencode()
+'a=2&b=3&b=5'
+
+>>> q = QueryDict(mutable=True)
+>>> q["next"] = "/a&b/"
+>>> q.urlencode(safe="/")
+'next=/a%26b/'
+SUMMARY:
+Use getlist, setlist, appendlist, and lists for multi-valued parameters.
+​
+urlencode() serializes QueryDict contents back into a query string.
+​
+SECTION: HTTPRESPONSE OBJECTS
+PURPOSE: Describe HttpResponse usage, attributes, methods, and subclasses.
+​
+CONCEPT: HttpResponse CLASS
+HttpResponse instances are created by views and returned to Django; they are not created automatically.
+​
+HttpResponse lives in django.http and encapsulates response content, status code, headers, and cookies.
+​
+SECTION: HTTPRESPONSE USAGE
+PURPOSE: Show typical patterns for constructing and populating HttpResponse instances.
+​
+CONCEPT: PASSING STRINGS AND BYTES
+Typical construction patterns:
+
+python
+>>> from django.http import HttpResponse
+>>> response = HttpResponse("Here's the text of the web page.")
+>>> response = HttpResponse("Text only, please.", content_type="text/plain")
+>>> response = HttpResponse(b"Bytestrings are also accepted.")
+>>> response = HttpResponse(memoryview(b"Memoryview as well."))
+CONCEPT: INCREMENTAL WRITE
+You can treat HttpResponse as a file-like object for incremental content:
+
+python
+>>> response = HttpResponse()
+>>> response.write("<p>Here's the text of the web page.</p>")
+>>> response.write("<p>Here's another paragraph.</p>")
+CONCEPT: PASSING ITERATORS
+You can pass an iterator as content; HttpResponse immediately consumes and stores it as a single content value and closes objects that provide close().
+​
+To stream content without pre-computing it, use StreamingHttpResponse instead.
+​
+SUMMARY:
+HttpResponse accepts strings, bytes, memoryviews, or iterators (consumed immediately).
+​
+Use write() for incremental content or StreamingHttpResponse for true streaming.
+​
+SECTION: HTTPRESPONSE HEADERS AND ATTACHMENTS
+PURPOSE: Explain header manipulation and returning file attachments.
+​
+CONCEPT: HEADER MANIPULATION
+Use HttpResponse.headers for setting or deleting headers:
+
+python
+>>> response = HttpResponse()
+>>> response.headers["Age"] = 120
+>>> del response.headers["Age"]
+You can also treat HttpResponse like a dictionary, which proxies to headers and does not raise KeyError on del:
+
+python
+>>> response = HttpResponse()
+>>> response["Age"] = 120
+>>> del response["Age"]
+You can set headers in the constructor via headers={...}.
+​
+For complex multi-valued headers, use:
+
+django.utils.cache.patch_cache_control() to add Cache-Control directives.
+​
+django.utils.cache.patch_vary_headers() to modify Vary safely.
+​
+Newlines are forbidden in header values; attempting to set them raises BadHeaderError.
+​
+CONCEPT: FILE ATTACHMENT RESPONSES
+To force the browser to treat a response as a file download, set Content-Type and Content-Disposition:
+
+python
+>>> response = HttpResponse(
+...     my_data,
+...     headers={
+...         "Content-Type": "application/vnd.ms-excel",
+...         "Content-Disposition": 'attachment; filename="foo.xls"',
+...     },
+... )
+SUMMARY:
+Manipulate headers via headers or dict-style access.
+​
+Use Content-Disposition: attachment for download responses.
+​
+SECTION: HTTPRESPONSE ATTRIBUTES
+PURPOSE: Detail important HttpResponse attributes.
+​
+CONCEPT: CONTENT AND TEXT
+HttpResponse.content: Bytestring of the response body.
+​
+HttpResponse.text (new in Django 5.2): String decoded from content using charset or UTF-8 if unspecified.
+​
+CONCEPT: COOKIES AND HEADERS
+HttpResponse.cookies: http.cookies.SimpleCookie containing cookies set on the response.
+​
+HttpResponse.headers: Case-insensitive dict-like mapping of header names to values except Set-Cookie, which is managed via cookies.
+​
+CONCEPT: CHARSET, STATUS CODE, AND STREAMING FLAG
+HttpResponse.charset: Character set used to encode the response; derived from content_type or DEFAULT_CHARSET.
+​
+HttpResponse.status_code: HTTP status code; changing this without setting reason_phrase also updates reason_phrase.
+​
+HttpResponse.reason_phrase: Reason phrase corresponding to the status code, following HTTP defaults if not explicitly set.
+​
+HttpResponse.streaming: Always False, used by middleware to distinguish streaming responses.
+​
+HttpResponse.closed: True if the response is closed.
+​
+SUMMARY:
+content and text expose body data; headers and cookies control HTTP metadata.
+​
+status_code, reason_phrase, and charset define protocol-level response behavior.
+​
+SECTION: HTTPRESPONSE CONSTRUCTOR AND HEADER METHODS
+PURPOSE: Explain HttpResponse.__init__ and header-related dictionary-style methods.
+​
+CONCEPT: HttpResponse.init
+Signature:
+
+HttpResponse(content=b'', content_type=None, status=200, reason=None, charset=None, headers=None).
+​
+Behavior:
+
+content is typically an iterator, bytes, memoryview, or string; non-string types are converted to bytes.
+​
+Default content_type is "text/html; charset=utf-8" derived from DEFAULT_CHARSET.
+​
+status is an HTTP status code; you can use http.HTTPStatus aliases.
+​
+reason optionally overrides the default reason phrase.
+​
+charset overrides the charset detection from content_type.
+​
+headers is a dictionary of initial headers.
+​
+CONCEPT: HEADER ACCESS METHODS
+__setitem__(header, value): Sets the header value (string inputs expected).
+​
+__delitem__(header): Deletes the header silently if missing.
+​
+__getitem__(header): Returns the header value.
+​
+get(header, alternate=None): Returns header or alternate.
+​
+has_header(header): Case-insensitive existence check.
+​
+items(): Iterates over header (name, value) pairs.
+​
+setdefault(header, value): Sets a header only if not already present.
+​
+SUMMARY:
+Configure HttpResponse via constructor arguments and dictionary-like header methods.
+​
+Use HTTPStatus for readable status codes when desired.
+​
+SECTION: HTTPRESPONSE COOKIE METHODS
+PURPOSE: Describe cookie-related API on HttpResponse.
+​
+CONCEPT: set_cookie
+set_cookie(key, value='', max_age=None, expires=None, path='/', domain=None, secure=False, httponly=False, samesite=None) sets an HTTP cookie.
+​
+max_age: timedelta, integer seconds, or None for session-length cookies; if expires is omitted, it is computed from max_age.
+​
+expires: Explicit expiration string ("Wdy, DD-Mon-YY HH:MM:SS GMT") or UTC datetime; max_age is computed when using datetime.
+​
+domain: Enables cross-subdomain cookies (e.g. "example.com").
+​
+secure=True: Restricts cookie to HTTPS requests.
+​
+httponly=True: Prevents client-side JavaScript from reading the cookie (HttpOnly).
+​
+samesite: 'Strict', 'Lax', or 'None' to control cross-site cookie sending behavior.
+​
+User agents typically support cookies up to 4096 bytes; larger cookies might not be set by browsers.
+​
+CONCEPT: set_signed_cookie
+set_signed_cookie(key, value, salt='', max_age=None, expires=None, path='/', domain=None, secure=False, httponly=False, samesite=None) behaves like set_cookie() but cryptographically signs the value.
+​
+Use with HttpRequest.get_signed_cookie() and ensure any salt is reused consistently.
+​
+CONCEPT: delete_cookie
+delete_cookie(key, path='/', domain=None, samesite=None) deletes a cookie with the given key.
+​
+path and domain must match the original cookie for deletion to work reliably.
+​
+SUMMARY:
+Use set_cookie and set_signed_cookie to send cookies to the client.
+​
+Use delete_cookie with matching path and domain to remove cookies.
+​
+SECTION: HTTPRESPONSE STREAM-LIKE METHODS
+PURPOSE: Describe methods that allow HttpResponse to act as a stream.
+​
+CONCEPT: FILE / STREAM INTERFACE
+close(): Called at the end of the request by the WSGI or ASGI server.
+​
+write(content), flush(), and tell(): Implement a file-like interface for writing and inspecting position.
+​
+getvalue(): Returns HttpResponse.content and makes the response behave like a stream.
+​
+readable(): Always False.
+​
+seekable(): Always False.
+​
+writable(): Always True.
+​
+writelines(lines): Writes a list of strings to the response without adding line separators.
+​
+SUMMARY:
+Use write and writelines for incremental content generation.
+​
+Stream-related methods exist primarily for compatibility with APIs expecting stream-like objects.
+​
+SECTION: HTTPRESPONSE SUBCLASSES
+PURPOSE: Summarize built-in HttpResponse subclasses for common HTTP statuses.
+​
+CONCEPT: REDIRECT RESPONSES
+HttpResponseRedirect: 302 redirect by default; first argument is the redirect target URL (absolute, absolute path, or relative path).
+​
+preserve_request=False (default) sets status code 302; True sets status code 307.
+​
+url attribute exposes the target URL (equivalent to the Location header).
+​
+HttpResponsePermanentRedirect: Like HttpResponseRedirect but uses 301 by default and 308 when preserve_request=True.
+​
+CONCEPT: COMMON ERROR AND STATUS RESPONSES
+HttpResponseNotModified: 304 Not Modified; takes no arguments and must not have content.
+​
+HttpResponseBadRequest: 400 Bad Request.
+​
+HttpResponseNotFound: 404 Not Found.
+​
+HttpResponseForbidden: 403 Forbidden.
+​
+HttpResponseNotAllowed: 405 Method Not Allowed; first required argument is a list of allowed methods (e.g. ['GET', 'POST']).
+​
+HttpResponseGone: 410 Gone.
+​
+HttpResponseServerError: 500 Internal Server Error.
+​
+If a custom HttpResponse subclass implements render(), Django treats it like SimpleTemplateResponse and render() must return a valid response object.
+​
+CONCEPT: CUSTOM RESPONSE CLASSES
+You can define your own subclasses, for example:
+
+python
+from http import HTTPStatus
+from django.http import HttpResponse
+
+class HttpResponseNoContent(HttpResponse):
+    status_code = HTTPStatus.NO_CONTENT
+SUMMARY:
+Use built-in HttpResponse subclasses for common redirect and error scenarios.
+​
+Create custom subclasses with specific status_code as needed.
+​
+SECTION: JSONRESPONSE OBJECTS
+PURPOSE: Describe JsonResponse for JSON-encoded HTTP responses.
+​
+CONCEPT: JsonResponse CLASS
+JsonResponse(data, encoder=DjangoJSONEncoder, safe=True, json_dumps_params=None, **kwargs) is an HttpResponse subclass for JSON.
+​
+Default Content-Type is application/json.
+​
+data must be a dict by default; safe=False allows any JSON-serializable object.
+​
+encoder defaults to DjangoJSONEncoder; json_dumps_params passes extra keyword arguments to json.dumps().
+​
+COMMAND: JsonResponse EXAMPLES
+python
+>>> from django.http import JsonResponse
+>>> response = JsonResponse({"foo": "bar"})
+>>> response.content
+b'{"foo": "bar"}'
+
+>>> response = JsonResponse([1, 2, 3], safe=False)
+If safe=True and a non-dict is passed, a TypeError is raised.
+​
+Security note: Historically, non-dict objects in JSON could assist certain JavaScript attack vectors; modern ECMAScript 5 browsers mitigate this, but dict-based APIs remain recommended for forward compatibility.
+​
+SUMMARY:
+Use JsonResponse for JSON APIs with dict payloads by default.
+​
+Set safe=False only when intentionally returning non-dict JSON.
+​
+SECTION: STREAMINGHTTPRESPONSE OBJECTS
+PURPOSE: Describe StreamingHttpResponse for streaming responses, especially under WSGI vs ASGI.
+​
+CONCEPT: StreamingHttpResponse CLASS
+StreamingHttpResponse streams response content instead of buffering it and is not a subclass of HttpResponse, but shares the HttpResponseBase base class.
+​
+It is intended for large or long-lived responses such as streamed CSV output, and behaves differently under WSGI and ASGI.
+​
+CONCEPT: WSGI VS ASGI BEHAVIOR
+Under WSGI, streaming ties up a worker process for the response duration, which can hurt performance; heavy tasks should generally be done outside the request-response cycle.
+​
+Under ASGI, streaming does not block other requests and enables long-polling and server-sent event patterns.
+​
+You must provide a sync iterator under WSGI and an async iterator under ASGI; mismatched types are coerced with a warning and full consumption, which defeats streaming.
+​
+CONCEPT: KEY DIFFERENCES FROM HTTPRESPONSE
+Expects an iterator yielding bytes, memoryviews, or strings; iterator type must match protocol (sync vs async).
+​
+No content or text attributes; instead, streaming_content holds the iterator and must not be fully consumed by middleware.
+​
+File-like tell() and write() are not supported and raise exceptions.
+​
+ATTRIBUTES
+streaming_content: Iterator of encoded chunks.
+​
+status_code and reason_phrase: Same semantics as HttpResponse.
+​
+streaming: Always True.
+​
+is_async: Indicates whether streaming_content is an async iterator.
+​
+HANDLING DISCONNECTS IN STREAMING RESPONSES
+python
+async def streaming_response():
+    try:
+        # Do some work here
+        async for chunk in my_streaming_iterator():
+            yield chunk
+    except asyncio.CancelledError:
+        # Handle disconnect
+        ...
+        raise
+
+async def my_streaming_view(request):
+    return StreamingHttpResponse(streaming_response())
+USAGE GUIDELINES:
+USE WHEN:
+
+You must stream large responses without fully materializing them, especially under ASGI.
+​
+DO NOT USE WHEN:
+
+You can generate the full response body cheaply or when middleware requiring full content must function normally.
+​
+SUMMARY:
+StreamingHttpResponse streams content via an iterator and is protocol-aware (WSGI vs ASGI).
+​
+Avoid mismatched iterator types and only use streaming when necessary.
+​
+SECTION: FILERESPONSE OBJECTS
+PURPOSE: Describe FileResponse for optimized binary file serving.
+​
+CONCEPT: FileResponse CLASS
+FileResponse(open_file, as_attachment=False, filename='', **kwargs) is a StreamingHttpResponse subclass optimized for binary files.
+​
+Uses wsgi.file_wrapper when provided by the WSGI server; otherwise streams the file in chunks.
+​
+CONCEPT: CONTENT-DISPOSITION AND FILENAME
+as_attachment=True: Sends Content-Disposition: attachment so browsers offer to download the file.
+​
+as_attachment=False: Uses inline only if a filename is available; otherwise, it may omit Content-Disposition.
+​
+Pass filename when open_file lacks a suitable name, such as when using io.BytesIO.
+​
+CONCEPT: HEADERS AND CONTENT TYPE
+Content-Length is set when it can be derived from open_file.
+​
+Content-Type is inferred from the filename or open_file.name when possible.
+​
+FileResponse accepts any file-like object supplying binary content; for example:
+
+python
+>>> from django.http import FileResponse
+>>> response = FileResponse(open("myfile.png", "rb"))
+The file is closed automatically; DO NOT open it with a context manager that closes it early.
+​
+CONCEPT: ASGI CONSIDERATIONS
+Standard Python file APIs are synchronous; for ASGI, the file must be fully consumed to serve it in a streaming fashion.
+​
+To stream files asynchronously, use third-party packages offering async file APIs (e.g. aiofile-based libraries).
+​
+METHODS
+FileResponse.set_headers(open_file): Called during initialization to set Content-Length, Content-Type, and Content-Disposition based on open_file.
+​
+SUMMARY:
+Use FileResponse for efficient binary file delivery, especially images and documents.
+​
+Configure as_attachment and filename to control download behavior and headers.
+​
+SECTION: HTTPRESPONSEBASE CLASS
+PURPOSE: Describe the common base class for all Django response types.
+​
+CONCEPT: HttpResponseBase
+HttpResponseBase is the common base class for HttpResponse and StreamingHttpResponse and underlies FileResponse and other subclasses.
+​
+It should not be instantiated directly but is useful for type checks or generic response handling.
+​
+SUMMARY:
+All response classes share common behavior via HttpResponseBase.
+​
+Use this for type annotations or middleware that operates on any Django response.

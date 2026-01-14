@@ -1,0 +1,408 @@
+SECTION: Django Template Language Overview
+
+PURPOSE:
+Explain the design goals, scope, and philosophy of the Django Template Language (DTL).
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Django 1.8 through 6.0 (features noted where version-specific)
+
+The Django Template Language is Django’s built-in system for rendering text-based output such as HTML, XML, CSV, emails, and JavaScript. It is designed to balance expressive power with simplicity and safety.
+
+The template language is not Python embedded in HTML. It is intentionally restricted to presentation concerns and does not allow arbitrary Python execution.
+
+The system provides:
+
+Variables for data output
+
+Tags for control flow and structure
+
+Filters for value transformation
+
+Comments for non-rendered annotations
+
+Only documented tags, filters, and syntax are supported by default. Custom extensions may be added explicitly.
+
+SECTION: Templates
+
+PURPOSE:
+Define what a template is and how it is structured.
+
+CONCEPT:
+
+A template is a plain text file used to generate dynamic content. It contains:
+
+Variables that are replaced with context values
+
+Tags that control logic and flow
+
+Templates can generate any text-based format, not only HTML.
+
+COMMAND:
+{% extends "base_generic.html" %}
+
+{% block title %}{{ section.title }}{% endblock %}
+
+{% block content %}
+<h1>{{ section.title }}</h1>
+
+{% for story in story_list %}
+<h2>
+  <a href="{{ story.get_absolute_url }}">
+    {{ story.headline|upper }}
+  </a>
+</h2>
+<p>{{ story.tease|truncatewords:"100" }}</p>
+{% endfor %}
+{% endblock %}
+
+SECTION: Template Philosophy
+
+PURPOSE:
+Clarify separation of presentation and logic.
+
+CONCEPT:
+
+The Django template system is designed to express presentation, not application logic. While it includes tags similar to programming constructs (if, for), these are not Python code and cannot execute arbitrary expressions.
+
+DO NOT attempt to implement business logic in templates. Compute data in views and pass results to templates.
+
+SECTION: Template Variables
+
+PURPOSE:
+Explain how variables are resolved and rendered.
+
+CONCEPT:
+
+Variables are written using double curly braces and are replaced with values from the template context.
+
+COMMAND:
+{{ variable }}
+
+VARIABLE NAMING RULES:
+
+Alphanumeric characters and underscores only
+
+MUST NOT start with an underscore
+
+MUST NOT be a number
+
+Spaces and punctuation are NOT allowed
+
+ATTRIBUTE ACCESS:
+
+Use dot notation to access attributes or related data.
+
+{{ my_dict.key }}
+{{ my_object.attribute }}
+{{ my_list.0 }}
+
+VARIABLE RESOLUTION ORDER:
+
+Dictionary lookup
+
+Attribute or method lookup
+
+Numeric index lookup
+
+If the resolved value is callable, it is called with no arguments.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Accessing simple attributes or relationships
+
+Calling argument-free methods
+
+DO NOT USE WHEN:
+
+The object overrides dictionary lookup in unexpected ways
+
+Method arguments are required
+
+Variables beginning with an underscore are NOT accessible.
+
+If a variable does not exist, Django inserts the value of string_if_invalid (empty string by default).
+
+SECTION: Template Filters
+
+PURPOSE:
+Explain how filters modify variable output.
+
+CONCEPT:
+
+Filters transform variable values for display and are applied using the pipe (|) character.
+
+COMMAND:
+{{ name|lower }}
+{{ text|escape|linebreaks }}
+{{ bio|truncatewords:30 }}
+
+
+Filters can be chained. Some filters accept arguments.
+
+Arguments containing spaces MUST be quoted.
+
+{{ list|join:", " }}
+
+COMMON FILTER EXAMPLES:
+default
+{{ value|default:"nothing" }}
+
+length
+{{ value|length }}
+
+filesizeformat
+{{ value|filesizeformat }}
+
+
+Django provides approximately sixty built-in filters.
+
+SECTION: Template Tags
+
+PURPOSE:
+Explain control flow and structural tags.
+
+CONCEPT:
+
+Tags execute logic, control flow, or load data during rendering.
+
+COMMAND:
+{% tag %}
+
+
+Some tags require opening and closing blocks.
+
+for
+{% for athlete in athlete_list %}
+    {{ athlete.name }}
+{% endfor %}
+
+if / elif / else
+{% if athlete_list %}
+    {{ athlete_list|length }}
+{% elif athlete_in_locker_room_list %}
+    Athletes should be out soon.
+{% else %}
+    No athletes.
+{% endif %}
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Looping over collections
+
+Conditional rendering
+
+DO NOT USE WHEN:
+
+Performing complex calculations
+
+Relying on numeric comparisons from string-returning filters
+
+SECTION: Template Comments
+
+PURPOSE:
+Explain how to exclude content from rendering.
+
+CONCEPT:
+
+Comments are ignored entirely during rendering.
+
+COMMAND:
+{# This will not be rendered #}
+
+
+This syntax supports single-line comments only.
+
+For multi-line comments, use the {% comment %} tag.
+
+SECTION: Template Inheritance
+
+PURPOSE:
+Explain reusable layout structures using inheritance.
+
+CONCEPT:
+
+Template inheritance allows defining a base layout with overridable blocks.
+
+COMMAND (Base Template):
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}My site{% endblock %}</title>
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>
+
+COMMAND (Child Template):
+{% extends "base.html" %}
+{% block title %}My blog{% endblock %}
+{% block content %}
+    Blog content here
+{% endblock %}
+
+RULES:
+
+{% extends %} MUST be the first template tag
+
+Blocks provide fallback content from parent templates
+
+Duplicate block names in the same template are NOT allowed
+
+SPECIAL VARIABLE:
+{{ block.super }}
+
+
+Adds parent block content instead of replacing it.
+
+SECTION: Template Partials
+
+PURPOSE:
+Explain reusable template fragments.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+DjangoTemplates backend only
+
+CONCEPT:
+
+Template partials define reusable fragments within a template file.
+
+COMMAND: Define a Partial
+{% partialdef user-info %}
+    <div id="user-info-{{ user.username }}">
+        <h3>{{ user.name }}</h3>
+        <p>{{ user.bio }}</p>
+    </div>
+{% endpartialdef %}
+
+COMMAND: Render a Partial
+{% partial user-info %}
+
+INLINE PARTIALS:
+{% partialdef user-info inline %}
+    ...
+{% endpartialdef %}
+
+DIRECT ACCESS:
+"authors.html#user-info"
+
+
+Partials are rendered with the current context and work inside loops.
+
+SECTION: Automatic HTML Escaping
+
+PURPOSE:
+Explain Django’s XSS protection behavior.
+
+CONCEPT:
+
+By default, Django automatically escapes variable output to prevent XSS attacks.
+
+Escaped characters:
+
+< → &lt;
+
+> → &gt;
+
+' → &#x27;
+
+" → &quot;
+
+& → &amp;
+
+SECTION: Disabling Auto-Escaping
+
+PURPOSE:
+Explain controlled disabling of HTML escaping.
+
+Individual Variables
+{{ data|safe }}
+
+Template Blocks
+{% autoescape off %}
+    {{ data }}
+{% endautoescape %}
+
+
+Auto-escaping state propagates to child and included templates.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Rendering trusted HTML content
+
+Generating non-HTML output
+
+DO NOT USE WHEN:
+
+Rendering untrusted user input
+
+SECTION: String Literals and Escaping
+
+PURPOSE:
+Explain how string literals behave.
+
+CONCEPT:
+
+String literals are inserted without automatic escaping.
+
+COMMAND:
+{{ data|default:"3 &lt; 2" }}
+
+
+DO NOT write unescaped HTML inside string literals.
+
+SECTION: Accessing Method Calls
+
+PURPOSE:
+Explain method access rules.
+
+CONCEPT:
+
+Templates may access:
+
+Model attributes
+
+Argument-free methods
+
+COMMAND:
+{{ task.comment_set.all.count }}
+{{ task.foo }}
+
+
+Methods with arguments CANNOT be called from templates.
+
+SECTION: Custom Tag and Filter Libraries
+
+PURPOSE:
+Explain loading and scope of custom libraries.
+
+CONCEPT:
+
+Custom libraries must be explicitly loaded per template.
+
+COMMAND:
+{% load humanize %}
+{{ 45000|intcomma }}
+
+
+Libraries are scoped to the template where they are loaded and do NOT propagate through inheritance.
+
+SUMMARY:
+
+Django templates are presentation-only and intentionally limited
+
+Variables, filters, tags, and inheritance form the core system
+
+Django 6.0 introduces template partials for reusable fragments
+
+Automatic HTML escaping is enabled by default for security

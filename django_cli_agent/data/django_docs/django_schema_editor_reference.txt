@@ -1,0 +1,97 @@
+PURPOSE: This section describes SchemaEditor, the database abstraction layer in Django's migration system that turns operations like create model or delete field into SQL, for advanced needs or custom backends.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django migrations for schema changes; not typically for normal developers.
+
+CONCEPT: BASEDATABASESCHEMAEDITOR CLASS
+SchemaEditor provided by each backend; accessible via context manager.
+CODE EXAMPLE:
+with connection.schema_editor() as schema_editor:
+    schema_editor.delete_model(MyModel)
+Manages transactions, deferred SQL.
+Exposes methods for operations.
+If writing backend, subclass built-in SchemaEditor.
+SECTION: METHODS
+PURPOSE: This section lists SchemaEditor methods for schema operations.
+All read-only unless stated.
+CONCEPT: EXECUTE() METHOD
+Executes SQL with params; wrapper for cursors, captures for .sql file.
+CODE EXAMPLE:
+execute(sql, params=())
+CONCEPT: CREATE_MODEL() METHOD
+Creates table, unique constraints, indexes.
+CODE EXAMPLE:
+create_model(model)
+CONCEPT: DELETE_MODEL() METHOD
+Drops table, constraints, indexes.
+CODE EXAMPLE:
+delete_model(model)
+CONCEPT: ADD_INDEX() METHOD
+Adds index.
+CODE EXAMPLE:
+add_index(model, index)
+CONCEPT: REMOVE_INDEX() METHOD
+Removes index.
+CODE EXAMPLE:
+remove_index(model, index)
+CONCEPT: RENAME_INDEX() METHOD
+Renames index.
+CODE EXAMPLE:
+rename_index(model, old_index, new_index)
+CONCEPT: ADD_CONSTRAINT() METHOD
+Adds constraint.
+CODE EXAMPLE:
+add_constraint(model, constraint)
+CONCEPT: REMOVE_CONSTRAINT() METHOD
+Removes constraint.
+CODE EXAMPLE:
+remove_constraint(model, constraint)
+CONCEPT: ALTER_UNIQUE_TOGETHER() METHOD
+Changes unique_together; adds/removes constraints.
+CODE EXAMPLE:
+alter_unique_together(model, old_unique_together, new_unique_together)
+CONCEPT: ALTER_INDEX_TOGETHER() METHOD
+Changes index_together; adds/removes indexes.
+CODE EXAMPLE:
+alter_index_together(model, old_index_together, new_index_together)
+CONCEPT: ALTER_DB_TABLE() METHOD
+Renames table.
+CODE EXAMPLE:
+alter_db_table(model, old_db_table, new_db_table)
+CONCEPT: ALTER_DB_TABLE_COMMENT() METHOD
+Changes table comment.
+CODE EXAMPLE:
+alter_db_table_comment(model, old_db_table_comment, new_db_table_comment)
+CONCEPT: ALTER_DB_TABLESPACE() METHOD
+Moves table to tablespace.
+CODE EXAMPLE:
+alter_db_tablespace(model, old_db_tablespace, new_db_tablespace)
+CONCEPT: ADD_FIELD() METHOD
+Adds column(s), indexes, constraints.
+For ManyToManyField without through: makes table.
+For ForeignKey: adds constraint.
+CODE EXAMPLE:
+add_field(model, field)
+CONCEPT: REMOVE_FIELD() METHOD
+Removes column(s), constraints, indexes.
+For ManyToManyField without through: removes table.
+CODE EXAMPLE:
+remove_field(model, field)
+CONCEPT: ALTER_FIELD() METHOD
+Transforms field: name, type, null, unique, db_column, pk, ForeignKey destination.
+Cannot transform ManyToManyField to/from normal Field without data loss.
+Uses supports_combined_alters for efficiency.
+CODE EXAMPLE:
+alter_field(model, old_field, new_field, strict=False)
+SECTION: ATTRIBUTES
+PURPOSE: This section lists SchemaEditor attributes.
+CONCEPT: CONNECTION ATTRIBUTE
+Connection object; alias determines database.
+Useful for multi-database migrations.
+SUMMARY:
+
+Use context manager for SchemaEditor.
+Methods for all schema ops.
+Backend-specific; subclass for custom.

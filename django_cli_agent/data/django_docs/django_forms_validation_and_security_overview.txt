@@ -1,0 +1,425 @@
+=========================
+FORM AND FIELD VALIDATION
+=========================
+SECTION: Overview of Form Validation in Django
+
+PURPOSE:
+Explain how Django validates form and field data during the cleaning process.
+
+CONCEPT:
+
+Form validation occurs when data is cleaned, typically by calling is_valid() on a form. Validation can also be triggered by accessing errors or calling full_clean() directly.
+
+Validation logic is implemented through multiple cleaning methods. Each method may raise ValidationError when invalid data is detected. If no error is raised, the method must return cleaned, normalized Python data.
+
+Validators are reusable callables that raise ValidationError for invalid input. Validators run after a field’s to_python() and validate() methods.
+
+SECTION: Field-Level Validation Pipeline
+
+PURPOSE:
+Describe the ordered steps Django uses to validate individual form fields.
+
+CONCEPT:
+
+Validation proceeds in the following order for each field:
+
+Field.to_python()
+
+Converts raw input into the correct Python data type.
+
+Raises ValidationError if conversion fails.
+
+Field.validate()
+
+Performs validation that cannot be handled by validators.
+
+MUST NOT modify the value.
+
+Raises ValidationError on failure.
+
+Field.run_validators()
+
+Executes all validators attached to the field.
+
+Aggregates validation errors.
+
+SHOULD NOT be overridden.
+
+Field.clean()
+
+Orchestrates to_python(), validate(), and run_validators() in order.
+
+Returns cleaned data for insertion into cleaned_data.
+
+SECTION: Form Field-Specific Cleaning
+
+PURPOSE:
+Explain how to validate and normalize individual form fields.
+
+CONCEPT:
+
+clean_<fieldname>() methods are defined on the form class. These methods:
+
+Access already-cleaned data from self.cleaned_data
+
+Perform validation specific to that form field
+
+MUST return a value to replace the existing value in cleaned_data
+
+This method is used when validation depends on the form’s context, not the field type.
+
+SECTION: Cross-Field Validation
+
+PURPOSE:
+Describe validation logic that depends on multiple fields.
+
+CONCEPT:
+
+The form’s clean() method validates relationships between multiple fields.
+
+Key characteristics:
+
+Runs after all field-level cleaning
+
+Has access to self.cleaned_data and self.errors
+
+Errors raised here are non-field errors unless attached using add_error()
+
+May return a modified cleaned_data dictionary
+
+SECTION: Validation Execution Order
+
+PURPOSE:
+Clarify how Django executes validation methods.
+
+CONCEPT:
+
+Validation runs:
+
+Field-by-field, in declaration order
+
+Field.clean() → clean_<fieldname>()
+
+After all fields, Form.clean() executes
+
+If a field raises ValidationError, its clean_<fieldname>() method is skipped, but validation continues for remaining fields.
+
+=========================
+RAISING ValidationError
+=========================
+SECTION: Best Practices for ValidationError
+
+PURPOSE:
+Define how to raise structured, reusable validation errors.
+
+CONCEPT:
+
+ValidationError SHOULD:
+
+Include a descriptive code
+
+Use placeholder variables with params
+
+Use named placeholders instead of positional formatting
+
+Wrap messages for translation
+
+COMMAND:
+raise ValidationError(
+    _("Invalid value: %(value)s"),
+    code="invalid",
+    params={"value": "42"},
+)
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Writing reusable forms, fields, or validators
+
+Supporting structured error output (as_data(), as_json())
+
+DO NOT USE WHEN:
+
+You require a quick, non-overridable error message at the final validation step
+
+SECTION: Raising Multiple Validation Errors
+
+PURPOSE:
+Explain how to return multiple errors from a single validation step.
+
+CONCEPT:
+
+Multiple errors can be raised by passing a list of ValidationError objects.
+
+COMMAND:
+raise ValidationError(
+    [
+        ValidationError(_("Error 1"), code="error1"),
+        ValidationError(_("Error 2"), code="error2"),
+    ]
+)
+
+=========================
+USING VALIDATION IN PRACTICE
+=========================
+SECTION: Validators
+
+PURPOSE:
+Explain reusable validation logic using validators.
+
+CONCEPT:
+
+Validators are callables that:
+
+Accept a single value
+
+Raise ValidationError on invalid input
+
+Can be attached to fields or defined as default validators
+
+COMMAND:
+class SlugField(CharField):
+    default_validators = [validators.validate_slug]
+
+SECTION: Custom Field Cleaning
+
+PURPOSE:
+Demonstrate validation logic embedded in custom fields.
+
+CONCEPT:
+
+Custom fields override:
+
+to_python() for normalization
+
+validate() for validation
+
+COMMAND:
+class MultiEmailField(forms.Field):
+    def to_python(self, value):
+        if not value:
+            return []
+        return value.split(",")
+
+    def validate(self, value):
+        super().validate(value)
+        for email in value:
+            validate_email(email)
+
+SECTION: Field-Specific Form Validation
+
+PURPOSE:
+Demonstrate validation applied only within a specific form.
+
+COMMAND:
+def clean_recipients(self):
+    data = self.cleaned_data["recipients"]
+    if "fred@example.com" not in data:
+        raise ValidationError("You have forgotten about Fred!")
+    return data
+
+SECTION: Cross-Field Validation with clean()
+
+PURPOSE:
+Demonstrate enforcing constraints between multiple fields.
+
+COMMAND:
+def clean(self):
+    cleaned_data = super().clean()
+    cc_myself = cleaned_data.get("cc_myself")
+    subject = cleaned_data.get("subject")
+
+    if cc_myself and subject and "help" not in subject:
+        raise ValidationError(
+            "Did not send for 'help' in the subject despite CC'ing yourself."
+        )
+
+SECTION: Attaching Errors to Specific Fields
+
+PURPOSE:
+Explain how to associate errors with individual fields.
+
+COMMAND:
+def clean(self):
+    cleaned_data = super().clean()
+    cc_myself = cleaned_data.get("cc_myself")
+    subject = cleaned_data.get("subject")
+
+    if cc_myself and subject and "help" not in subject:
+        msg = "Must put 'help' in subject when cc'ing yourself."
+        self.add_error("cc_myself", msg)
+        self.add_error("subject", msg)
+
+=========================
+SECURITY IN DJANGO
+=========================
+SECTION: Core Security Principles
+
+PURPOSE:
+Summarize Django’s built-in security protections.
+
+CONCEPT:
+
+Django provides protections against:
+
+Cross-Site Scripting (XSS)
+
+Cross-Site Request Forgery (CSRF)
+
+SQL Injection
+
+Clickjacking
+
+Host header attacks
+
+Session vulnerabilities
+
+User input MUST always be sanitized.
+
+SECTION: Cross-Site Scripting (XSS) Protection
+
+PURPOSE:
+Explain Django’s template-based XSS defenses and limitations.
+
+CONCEPT:
+
+Django templates escape dangerous HTML characters by default.
+DO NOT mark content as safe unless it is fully trusted.
+
+Be cautious when:
+
+Disabling auto-escaping
+
+Using mark_safe
+
+Storing HTML in the database
+
+SECTION: Cross-Site Request Forgery (CSRF) Protection
+
+PURPOSE:
+Explain Django’s CSRF defense model.
+
+CONCEPT:
+
+CSRF protection:
+
+Uses per-user secrets
+
+Validates POST requests
+
+Relies on secure cookies and HTTPS
+
+DO NOT disable CSRF protection unless absolutely necessary.
+
+SECTION: SQL Injection Protection
+
+PURPOSE:
+Describe how Django prevents SQL injection.
+
+CONCEPT:
+
+Django ORM queries are parameterized and safe by default.
+
+USE CAUTION when:
+
+Executing raw SQL
+
+Using extra() or RawSQL
+
+SECTION: Clickjacking Protection
+
+PURPOSE:
+Explain how Django prevents UI redress attacks.
+
+CONCEPT:
+
+Django prevents framing using response headers.
+
+USE WHEN:
+
+Pages should not be embedded by third-party sites
+
+SECTION: HTTPS and Secure Deployment
+
+PURPOSE:
+Describe HTTPS-related security requirements.
+
+CONCEPT:
+
+HTTPS:
+
+Protects credentials and session data
+
+MUST be enforced using redirects and secure cookies
+
+Sessions and CSRF will not function over HTTP when secure cookies are enabled.
+
+SECTION: Host Header Validation
+
+PURPOSE:
+Explain protection against forged Host headers.
+
+CONCEPT:
+
+Django validates Host headers using ALLOWED_HOSTS.
+
+DO NOT access Host headers directly from request metadata.
+
+SECTION: User-Uploaded Content Security
+
+PURPOSE:
+Explain risks and mitigation strategies for file uploads.
+
+CONCEPT:
+
+Risks include:
+
+Arbitrary code execution
+
+HTML injection via disguised files
+
+Mitigations:
+
+Serve uploads from a separate top-level domain
+
+Restrict allowed file types
+
+Disable execution of uploaded files
+
+SECTION: Content Security Policy (CSP)
+
+PURPOSE:
+Describe Django’s CSP support introduced in version 6.0.
+
+CONCEPT:
+
+CSP:
+
+Restricts allowed content sources
+
+Mitigates XSS and content injection
+
+Supports violation reporting
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Hardening applications against script injection
+
+Enforcing strict content controls
+
+DO NOT USE WHEN:
+
+Excluding routes or paths from CSP protection
+
+SUMMARY:
+
+Django validation is layered and extensible
+
+ValidationError must be structured and reusable
+
+Security features are effective but require correct configuration
+
+CSP adds an additional defense layer in Django 6.0

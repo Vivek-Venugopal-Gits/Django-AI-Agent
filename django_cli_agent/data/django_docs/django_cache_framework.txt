@@ -1,0 +1,309 @@
+PURPOSE: Explains the purpose and levels of caching in Django for improving performance of dynamic websites.
+Caching saves results of expensive calculations to avoid recomputation. Django supports caching entire sites, specific views, template fragments, or arbitrary data via low-level API. Also handles downstream caches like Squid or browser caches via HTTP headers.
+SECTION: SETTING UP THE CACHE
+PURPOSE: Guides configuring the cache system via CACHES setting, choosing backend and location.
+Configure in CACHES setting with BACKEND and LOCATION. Backends affect performance; memory-based are faster but volatile.
+SECTION: MEMCACHED BACKEND
+PURPOSE: Details using Memcached, a memory-based cache server for high-performance sites.
+Requires Memcached daemon and bindings (pylibmc or pymemcache). Set BACKEND to django.core.cache.backends.memcached.PyLibMCCache or PyMemcacheCache. LOCATION as ip:port or unix:path.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+        "LOCATION": "127.0.0.1:11211",
+    }
+}
+Supports multiple servers for shared cache.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+        "LOCATION": [
+            "172.19.26.240:11211",
+            "172.19.26.242:11211",
+        ],
+    }
+}
+Default OPTIONS for PyMemcacheCache: allow_unicode_keys=True, default_noreply=False, serde=pymemcache.serde.pickle_serde.
+Data lost on crash; not for permanent storage.
+USAGE GUIDELINES:
+USE WHEN:
+
+High-traffic sites needing fast, in-memory caching.
+DO NOT USE WHEN:
+Persistence required; data volatile.
+
+SECTION: REDIS BACKEND
+PURPOSE: Describes using Redis as an in-memory cache.
+Requires Redis server and redis-py (hiredis-py recommended). Set BACKEND to django.core.cache.backends.redis.RedisCache. LOCATION as redis:// URL, with optional username:password.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379",
+    }
+}
+Supports replication: first LOCATION as leader (writes), others as replicas (reads).
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": [
+            "redis://127.0.0.1:6379",  # leader
+            "redis://127.0.0.1:6378",  # read-replica 1
+            "redis://127.0.0.1:6377",  # read-replica 2
+        ],
+    }
+}
+OPTIONS passed to client, e.g., db, pool_class.
+SECTION: DATABASE CACHING
+PURPOSE: Explains storing cache in database tables for well-indexed servers.
+Set BACKEND to django.core.cache.backends.db.DatabaseCache, LOCATION to table name.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "my_cache_table",
+    }
+}
+Create table with python manage.py createcachetable. No automatic expiry culling; done on add/set/touch.
+For multiple databases, use routers for django_cache app_label.
+COMMAND:
+CODE:
+class CacheRouter:
+    def db_for_read(self, model, **hints):
+        if model._meta.app_label == "django_cache":
+            return "cache_replica"
+        return None
+
+    def db_for_write(self, model, **hints):
+        if model._meta.app_label == "django_cache":
+            return "cache_primary"
+        return None
+
+    def allow_migrate(self, db, app_label, model_name=None, **hints):
+        if app_label == "django_cache":
+            return db == "cache_primary"
+        return None
+Use --dry-run to print SQL.
+USAGE GUIDELINES:
+USE WHEN:
+
+Fast database available; no need for separate cache server.
+DO NOT USE WHEN:
+Database slow or poorly indexed.
+
+SECTION: FILESYSTEM CACHING
+PURPOSE: Details serializing cache values to files.
+Set BACKEND to django.core.cache.backends.filebased.FileBasedCache, LOCATION to absolute directory path.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": "/var/tmp/django_cache",
+    }
+}
+Directory must exist and be writable by server user. Warning: Avoid MEDIA_ROOT/STATIC_ROOT to prevent exposure; pickle used, vulnerable to code injection.
+Slow with many files; consider subclassing for better culling.
+USAGE GUIDELINES:
+USE WHEN:
+
+Simple setup needed.
+DO NOT USE WHEN:
+Large number of cache entries; performance degrades.
+
+SECTION: LOCAL-MEMORY CACHING
+PURPOSE: Describes per-process in-memory caching, default if unspecified.
+Set BACKEND to django.core.cache.backends.locmem.LocMemCache. LOCATION optional for naming multiple caches.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    }
+}
+Uses LRU culling. Per-process, no cross-process sharing; not memory-efficient for production.
+USAGE GUIDELINES:
+USE WHEN:
+
+Development/testing.
+DO NOT USE WHEN:
+Production; lacks sharing.
+
+SECTION: DUMMY CACHING
+PURPOSE: Explains no-op cache for development/testing.
+Set BACKEND to django.core.cache.backends.dummy.DummyCache.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+    }
+}
+Implements interface but caches nothing.
+SECTION: CUSTOM CACHE BACKEND
+PURPOSE: Guides using external or custom backends.
+Set BACKEND to Python import path.
+COMMAND:
+CODE:
+CACHES = {
+    "default": {
+        "BACKEND": "path.to.backend",
+    }
+}
+Reference built-in backends for implementation.
+USAGE GUIDELINES:
+USE WHEN:
+
+Built-in insufficient.
+DO NOT USE WHEN:
+Built-in suffice; well-tested.
+
+SECTION: CACHE ARGUMENTS
+PURPOSE: Details additional configuration options in CACHES.
+TIMEOUT: Default expiry seconds; None for forever, 0 to disable.
+OPTIONS: Backend-specific; e.g., MAX_ENTRIES, CULL_FREQUENCY for file/db/locmem (cull 1/CULL_FREQUENCY when max reached).
+KEY_PREFIX: Prepend to keys for uniqueness.
+VERSION: For invalidation.
+KEY_FUNCTION: Dotted path to custom key function.
+COMMAND:
+CODE:
+def make_key(key, key_prefix, version):
+    return "%s:%s:%s" % (key_prefix, version, key)
+SUMMARY:
+
+Choose backend based on needs: speed vs persistence.
+Configure TIMEOUT, OPTIONS for control.
+Use KEY_PREFIX/VERSION for multi-site/invalidation.
+Custom key func for advanced processing.
+
+SECTION: PER-SITE CACHE
+PURPOSE: Explains caching entire site via middleware.
+Add UpdateCacheMiddleware first, FetchFromCacheMiddleware last in MIDDLEWARE.
+Settings: CACHE_MIDDLEWARE_ALIAS, CACHE_MIDDLEWARE_SECONDS, CACHE_MIDDLEWARE_KEY_PREFIX.
+Caches 200 OK GET/HEAD; separate by query params. Includes language/time zone in key if USE_I18N/USE_TZ.
+Sets Expires/Cache-Control. View decorators override.
+COMMAND:
+CODE:
+MIDDLEWARE = [
+    "django.middleware.cache.UpdateCacheMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.cache.FetchFromCacheMiddleware",
+]
+USAGE GUIDELINES:
+USE WHEN:
+
+Most pages static.
+DO NOT USE WHEN:
+Dynamic content varies per request.
+
+SECTION: PER-VIEW CACHE
+PURPOSE: Details caching individual views.
+Use cache_page decorator.
+COMMAND:
+CODE:
+from django.views.decorators.cache import cache_page
+
+@cache_page(60 * 15)
+def my_view(request):
+    ...
+Optional cache alias, key_prefix. Caches by URL; timeout overrides Cache-Control max-age.
+Apply in URLconf for decoupling.
+COMMAND:
+CODE:
+urlpatterns = [
+    path("foo/<int:code>/", cache_page(60 * 15)(my_view)),
+]
+SECTION: TEMPLATE FRAGMENT CACHING
+PURPOSE: Guides caching parts of templates.
+Load cache tag; use {% cache timeout name [vary_on...] %}.
+COMMAND:
+CODE:
+django{% load cache %}
+{% cache 500 sidebar request.user.username %}
+    .. sidebar ..
+{% endcache %}
+Timeout None for forever; name literal. Vary_on for dynamic keys. Includes language if USE_I18N.
+Optional using= for cache alias.
+Invalidate with make_template_fragment_key.
+COMMAND:
+CODE:
+from django.core.cache.utils import make_template_fragment_key
+key = make_template_fragment_key("sidebar", [username])
+cache.delete(key)
+SECTION: LOW-LEVEL CACHE API
+PURPOSE: Explains manual caching with granularity.
+Access via cache or caches['alias'].
+Methods: set(key, value, timeout, version), get(key, default, version), add, get_or_set, get_many, set_many, delete, delete_many, clear, touch, incr/decr, close.
+Keys str; values picklable. Timeout defaults to backend.
+incr/decr for counters; not always atomic.
+Async variants: aset, etc.
+SUMMARY:
+
+set/get for basic storage/retrieval.
+Batch with _many.
+incr/decr for atomic updates where supported.
+clear deletes all; use cautiously.
+
+SECTION: CACHE KEY PREFIXING
+PURPOSE: Prevents collisions across servers/environments.
+KEY_PREFIX prepended to keys.
+SECTION: CACHE VERSIONING
+PURPOSE: Invalidates specific keys without flushing all.
+VERSION combined in key. Use incr_version/decr_version to bump.
+SECTION: CACHE KEY TRANSFORMATION
+PURPOSE: Customizes key composition.
+KEY_FUNCTION dotted path to function.
+SECTION: CACHE KEY WARNINGS
+PURPOSE: Handles backend key restrictions.
+Memcached: <=250 chars, no whitespace/control. Others warn via CacheKeyWarning.
+Silence or subclass validate_key for custom.
+SECTION: ASYNCHRONOUS SUPPORT
+PURPOSE: Notes developing async cache support.
+BaseCache has async methods (a*); not fully async yet.
+SECTION: DOWNSTREAM CACHES
+PURPOSE: Controls external caches like ISP/proxy/browser.
+SECTION: USING VARY HEADERS
+PURPOSE: Varies cache by request headers.
+Use vary_on_headers or vary_on_cookie decorators.
+COMMAND:
+CODE:
+from django.views.decorators.vary import vary_on_headers
+
+@vary_on_headers("User-Agent", "Cookie")
+def my_view(request):
+    ...
+Or patch_vary_headers(response, ["Cookie"]).
+SECTION: CONTROLLING CACHE USING OTHER HEADERS
+PURPOSE: Sets privacy, expiry via Cache-Control.
+Use cache_control decorator.
+COMMAND:
+CODE:
+from django.views.decorators.cache import cache_control
+
+@cache_control(private=True, max_age=3600)
+def my_view(request):
+    ...
+Or patch_cache_control. Directives: private, public, no_cache, etc.
+never_cache adds no-cache headers.
+COMMAND:
+CODE:
+from django.views.decorators.cache import never_cache
+
+@never_cache
+def my_view(request):
+    ...
+SECTION: ORDER OF MIDDLEWARE
+PURPOSE: Ensures correct middleware ordering for caching.
+UpdateCacheMiddleware before vary-adding middleware (Session, GZip, Locale). FetchFromCacheMiddleware after.
+SECTION: VERSION COMPATIBILITY
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY: - All Django projects; async developing.

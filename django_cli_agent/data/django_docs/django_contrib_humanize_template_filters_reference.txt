@@ -1,0 +1,238 @@
+SECTION: django.contrib.humanize Overview
+
+PURPOSE:
+Describe Django’s built-in humanization filters used to present numeric and date values in a more human-readable format.
+
+CONCEPT:
+
+django.contrib.humanize provides template filters that transform raw numbers and dates into formats commonly used in natural language. These filters operate only at the template layer and do not modify underlying data.
+
+ACTIVATION REQUIREMENT:
+
+To use these filters:
+
+The application MUST be included in INSTALLED_APPS
+
+The template MUST load the library explicitly
+
+COMMAND:
+{% load humanize %}
+
+SECTION: Spelled-Out Numbers
+FILTER: apnumber
+
+PURPOSE:
+Convert small integers into their spelled-out English equivalents following Associated Press style.
+
+CONCEPT:
+
+Numbers from 1 to 9 are converted to words
+
+All other values are returned unchanged
+
+EXAMPLES:
+
+1 → one
+
+2 → two
+
+10 → 10
+
+INPUT TYPES:
+
+Integer
+
+String representation of an integer
+
+SECTION: Comma-Separated Numbers
+FILTER: intcomma
+
+PURPOSE:
+Format large numbers with thousands separators for readability.
+
+CONCEPT:
+
+Inserts separators every three digits
+
+Supports integers, floats, and numeric strings
+
+Respects format localization when enabled
+
+EXAMPLES:
+
+4500 → 4,500
+
+4500.2 → 4,500.2
+
+4500000 → 4,500,000
+
+LOCALIZATION BEHAVIOR:
+
+When localization is enabled:
+
+Separators follow the active locale’s numeric conventions
+
+SECTION: Large Number Words
+FILTER: intword
+
+PURPOSE:
+Convert large numbers into abbreviated human-readable phrases.
+
+CONCEPT:
+
+Designed for values ≥ 1,000,000
+
+Uses singular for 1.0, plural for all other values
+
+Supports values up to 10¹⁰⁰ (Googol)
+
+Negative values preserve sign
+
+EXAMPLES:
+
+1000000 → 1.0 million
+
+1200000 → 1.2 million
+
+1200000000 → 1.2 billion
+
+-1200000000 → -1.2 billion
+
+LOCALIZATION BEHAVIOR:
+
+Number formatting and language reflect active locale
+
+Pluralization may not be linguistically perfect in all languages
+
+SECTION: Human-Friendly Dates
+FILTER: naturalday
+
+PURPOSE:
+Replace absolute dates with relative day terms when applicable.
+
+CONCEPT:
+
+Detects proximity to the current date
+
+Outputs relative labels for near dates
+
+Falls back to formatted date for others
+
+RELATIVE OUTPUTS:
+
+Today
+
+Tomorrow
+
+Yesterday
+
+FORMAT ARGUMENT:
+
+Accepts a date format string
+
+Defaults to DATE_FORMAT if no argument is provided
+
+SECTION: Human-Friendly Time Differences
+FILTER: naturaltime
+
+PURPOSE:
+Express datetime values as relative time differences.
+
+CONCEPT:
+
+Uses seconds, minutes, and hours for recent times
+
+Falls back to timesince format after one day
+
+Automatically handles future datetimes
+
+EXAMPLE OUTPUTS:
+
+now
+
+29 seconds ago
+
+a minute ago
+
+4 minutes ago
+
+an hour ago
+
+1 day, 2 hours ago
+
+30 seconds from now
+
+2 hours from now
+
+1 week, 2 days from now
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Displaying timestamps to end users
+
+Showing relative freshness or delay
+
+DO NOT USE WHEN:
+
+Exact timestamps are required for auditing or logging
+
+SECTION: Ordinal Numbers
+FILTER: ordinal
+
+PURPOSE:
+Convert integers into ordinal string representations.
+
+CONCEPT:
+
+Appends English ordinal suffixes
+
+Negative integers are returned unchanged
+
+EXAMPLES:
+
+1 → 1st
+
+2 → 2nd
+
+3 → 3rd
+
+INPUT TYPES:
+
+Integer
+
+String representation of an integer
+
+SECTION: Activation and Loading Requirements
+CONCEPT:
+
+Humanize filters are not available by default. They require both application registration and template loading.
+
+REQUIRED STEPS:
+
+Add django.contrib.humanize to INSTALLED_APPS
+
+Load the library in templates
+
+COMMAND:
+{% load humanize %}
+
+SECTION: Usage Characteristics
+CONCEPT:
+
+Filters operate only in templates
+
+They do not mutate source values
+
+Output depends on localization and current date/time context
+
+SUMMARY:
+
+django.contrib.humanize improves readability of numbers and dates
+
+Filters are template-only and presentation-focused
+
+Localization affects numeric and linguistic output
+
+Explicit activation and loading are required

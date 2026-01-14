@@ -1,0 +1,355 @@
+SECTION: Django Templates Overview
+
+PURPOSE:
+Explain Django’s template system, its role in dynamic HTML generation, and supported template engines.
+
+Django uses templates to generate HTML dynamically. A template defines static HTML structure combined with special syntax for inserting dynamic content. A Django project may be configured with zero, one, or multiple template engines.
+
+Django includes built-in support for:
+
+The Django Template Language (DTL)
+
+Jinja2
+
+Django provides a standard API for loading and rendering templates, independent of the template engine backend.
+
+CONCEPT: Template Loading and Rendering
+
+Loading: Locates a template by identifier and preprocesses it, typically compiling it into an in-memory representation.
+
+Rendering: Interpolates the template with context data and returns the resulting string.
+
+USAGE GUIDELINES:
+
+USE WHEN:
+
+Generating dynamic HTML output
+
+Separating presentation logic from application logic
+
+DO NOT USE WHEN:
+
+Templates are authored by untrusted users
+
+SECURITY WARNING
+The Django template system is NOT safe against untrusted template authors. Template authors may perform XSS attacks or access sensitive data through template variables.
+
+SECTION: Django Template Language (DTL)
+
+PURPOSE:
+Describe the syntax and core constructs of the Django Template Language.
+
+The Django Template Language is Django’s native template system. It is opinionated and designed for safety and reusability, particularly in pluggable applications.
+
+Django’s built-in applications, including django.contrib.admin, use DTL.
+
+SECTION: Template Syntax Overview
+
+PURPOSE:
+Explain the fundamental syntax elements used in Django templates.
+
+A Django template is a text document or Python string marked up with template constructs. During rendering, variables are resolved from the context and tags are executed.
+
+The Django template language defines four primary constructs:
+
+Variables
+
+Tags
+
+Filters
+
+Comments
+
+SECTION: Template Variables
+
+PURPOSE:
+Explain how variables retrieve and display context data.
+
+CONCEPT:
+
+Variables output values from the rendering context, which behaves like a dictionary mapping keys to values.
+
+COMMAND:
+My first name is {{ first_name }}. My last name is {{ last_name }}.
+
+
+Variables support:
+
+Dictionary lookup
+
+Attribute lookup
+
+List index lookup
+
+{{ my_dict.key }}
+{{ my_object.attribute }}
+{{ my_list.0 }}
+
+
+If a variable resolves to a callable, Django automatically calls it without arguments and uses its return value.
+
+SECTION: Template Tags
+
+PURPOSE:
+Explain how tags provide logic and control flow.
+
+CONCEPT:
+
+Tags execute logic during rendering. They may output content, control flow, or integrate with Django internals.
+
+COMMAND:
+{% csrf_token %}
+{% cycle 'odd' 'even' %}
+{% if user.is_authenticated %}Hello, {{ user.username }}.{% endif %}
+
+
+Tags may require both opening and closing blocks.
+
+SECTION: Template Filters
+
+PURPOSE:
+Explain how filters transform values.
+
+CONCEPT:
+
+Filters modify variable output or tag arguments.
+
+COMMAND:
+{{ django|title }}
+{{ my_date|date:"Y-m-d" }}
+
+
+Filters may accept arguments.
+
+SECTION: Template Comments
+
+PURPOSE:
+Explain how to exclude content from rendering.
+
+CONCEPT:
+
+Comments are ignored during rendering.
+
+COMMAND:
+{# this won't be rendered #}
+
+
+Multi-line comments are supported via the {% comment %} tag.
+
+SECTION: Template System Components
+
+PURPOSE:
+Describe core objects and APIs used internally by Django templates.
+
+SECTION: Template Engine
+CONCEPT:
+
+django.template.Engine encapsulates an instance of the Django template system. It enables template usage outside a Django project.
+
+django.template.backends.django.DjangoTemplates adapts this engine to Django’s backend API.
+
+SECTION: Template Object
+CONCEPT:
+
+django.template.Template represents a compiled template.
+
+Templates are created via:
+
+Engine.get_template()
+
+Engine.from_string()
+
+SECTION: Template Context
+CONCEPT:
+
+django.template.Context holds context data and metadata.
+
+django.template.RequestContext extends it by storing the current HttpRequest and executing context processors.
+
+SECTION: Template Loaders
+CONCEPT:
+
+Loaders locate templates and return compiled Template objects.
+
+Django supports built-in and custom loaders.
+
+SECTION: Context Processors
+CONCEPT:
+
+Context processors accept an HttpRequest and return a dictionary of data automatically injected into templates.
+
+Their purpose is to provide shared context across templates.
+
+SECTION: Template Engine Configuration
+
+PURPOSE:
+Explain how template engines are configured.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+Django 6.0 and later
+
+Templates are configured using the TEMPLATES setting.
+
+COMMAND:
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {},
+    },
+]
+
+CONFIGURATION FIELDS:
+
+BACKEND: Python path to the engine backend
+
+DIRS: List of directories searched for templates
+
+APP_DIRS: Enables template discovery inside installed apps
+
+OPTIONS: Backend-specific configuration
+
+NAME: Optional identifier when multiple engines exist
+
+SECTION: Template Loading API
+
+PURPOSE:
+Explain functions for loading templates.
+
+COMMAND: get_template
+from django.template.loader import get_template
+template = get_template("template.html")
+
+CONCEPT:
+
+Searches configured engines in order
+
+Raises TemplateDoesNotExist if not found
+
+Raises TemplateSyntaxError for invalid syntax
+
+SECTION: Template Partials (Django 6.0+)
+
+PURPOSE:
+Explain loading template fragments.
+
+DJANGO VERSION: 6.0
+APPLICABILITY:
+
+DjangoTemplates backend only
+
+COMMAND:
+partial = get_template("template.html#partial_name")
+
+
+When loading a partial, the returned object behaves like a standard Template but contains only the fragment.
+
+SECTION: select_template
+
+PURPOSE:
+Explain fallback-based template selection.
+
+COMMAND:
+select_template(["story_253_detail.html", "story_detail.html"])
+
+CONCEPT:
+
+Tries each template name in order and returns the first available template.
+
+SECTION: Template Rendering API
+
+PURPOSE:
+Explain how templates are rendered.
+
+COMMAND:
+Template.render(context=None, request=None)
+
+CONCEPT:
+
+context must be a dictionary
+
+request must be an HttpRequest
+
+CSRF token and request are injected when provided
+
+SECTION: render_to_string Shortcut
+
+PURPOSE:
+Explain combined loading and rendering.
+
+COMMAND:
+from django.template.loader import render_to_string
+rendered = render_to_string("my_template.html", {"foo": "bar"})
+
+SECTION: Using Template Engines Directly
+
+PURPOSE:
+Explain direct engine access.
+
+COMMAND:
+from django.template import engines
+django_engine = engines["django"]
+template = django_engine.from_string("Hello {{ name }}!")
+
+
+The lookup key corresponds to the engine’s NAME.
+
+SECTION: Built-in Template Backends
+
+PURPOSE:
+Describe Django-supported template engines.
+
+SECTION: DjangoTemplates Backend
+CONCEPT:
+
+Configured using:
+
+BACKEND = "django.template.backends.django.DjangoTemplates"
+
+
+When APP_DIRS is True, templates are loaded from templates/ directories in installed apps.
+
+OPTIONS:
+
+autoescape: Enables HTML autoescaping (default: True)
+
+context_processors: Request-based context injection
+
+debug: Enables detailed error reporting
+
+loaders: Template loader classes
+
+string_if_invalid: Output for invalid variables
+
+file_charset: Template file encoding
+
+libraries: Custom template tag libraries
+
+builtins: Globally available tags and filters
+
+SECTION: Jinja2 Backend
+CONCEPT:
+
+Configured using:
+
+BACKEND = "django.template.backends.jinja2.Jinja2"
+
+
+When APP_DIRS is True, templates are loaded from jinja2/ directories in apps.
+
+Jinja2 engines require an environment callable and provide a minimal Django integration by default.
+
+Context processors are discouraged for Jinja2 templates.
+
+SUMMARY:
+
+Django templates generate dynamic HTML using context-driven rendering
+
+Django supports DTL and Jinja2 through a unified backend API
+
+Templates are loaded, rendered, and configured via standardized settings
+
+Django 6.0 introduces native support for template partial loading

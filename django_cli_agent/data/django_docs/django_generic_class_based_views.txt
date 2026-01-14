@@ -1,0 +1,210 @@
+SECTION: Built-in Class-Based Generic Views
+PURPOSE: This section introduces Django's generic views, which abstract common patterns in view development to reduce code repetition for tasks like displaying lists or details of objects.
+CONCEPT: Use generic views to handle repetitive tasks at the view level, complementing abstractions in models and templates.
+CONCEPT: Recognize common tasks such as displaying object lists and write reusable code for any object by passing the model as an argument in the URLconf.
+CONCEPT: Generic views include displaying list and detail pages for single objects, presenting date-based objects in archives, and allowing CRUD operations with or without authorization.
+SECTION: Extending Generic Views
+PURPOSE: This section explains how to customize generic views when they do not meet specific needs.
+CONCEPT: Subclass generic views and override attributes or methods to extend functionality, as introduced in Django 1.3.
+CONCEPT: Write custom class-based or functional views if subclassing generic views becomes too complex.
+CONCEPT: Find more examples in third-party applications or create custom views as required.
+SECTION: Generic Views of Objects
+PURPOSE: This section demonstrates using generic views to present database content, focusing on list and detail views.
+CONCEPT: TemplateView is useful, but generic views excel at displaying database content with built-in list and detail views.
+CODE:
+# models.py
+from django.db import models
+
+class Publisher(models.Model):
+    name = models.CharField(max_length=30)
+    address = models.CharField(max_length=50)
+    city = models.CharField(max_length=60)
+    state_province = models.CharField(max_length=30)
+    country = models.CharField(max_length=50)
+    website = models.URLField()
+
+    class Meta:
+        ordering = ["-name"]
+
+    def __str__(self):
+        return self.name
+
+class Author(models.Model):
+    salutation = models.CharField(max_length=10)
+    name = models.CharField(max_length=200)
+    email = models.EmailField()
+    headshot = models.ImageField(upload_to="author_headshots")
+
+    def __str__(self):
+        return self.name
+
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+    authors = models.ManyToManyField("Author")
+    publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
+    publication_date = models.DateField()
+CODE:
+# views.py
+from django.views.generic import ListView
+from books.models import Publisher
+
+class PublisherListView(ListView):
+    model = Publisher
+CODE:
+# urls.py
+from django.urls import path
+from books.views import PublisherListView
+
+urlpatterns = [
+    path("publishers/", PublisherListView.as_view()),
+]
+CONCEPT: Specify template_name attribute to use a custom template; otherwise, Django infers it as app_name/lowercased_model_name_list.html, e.g., books/publisher_list.html.
+CONCEPT: When APP_DIRS is True in DjangoTemplates backend, template location is /path/to/project/books/templates/books/publisher_list.html.
+CONCEPT: Render template with context containing object_list of all publishers.
+CODE:
+text{% extends "base.html" %}
+
+{% block content %}
+    <h2>Publishers</h2>
+    <ul>
+        {% for publisher in object_list %}
+            <li>{{ publisher.name }}</li>
+        {% endfor %}
+    </ul>
+{% endblock %}
+SECTION: Making Friendly Template Contexts
+PURPOSE: This subsection explains improving template variable names for better readability.
+CONCEPT: Default object_list works but is not descriptive; for models, Django adds lowercased model name list, e.g., publisher_list, containing the same data.
+CONCEPT: Set context_object_name attribute to customize the context variable name.
+CODE:
+# views.py
+from django.views.generic import ListView
+from books.models import Publisher
+
+class PublisherListView(ListView):
+    model = Publisher
+    context_object_name = "my_favorite_publishers"
+CONCEPT: Provide a useful context_object_name for template designers.
+SECTION: Adding Extra Context
+PURPOSE: This subsection describes passing additional data to templates beyond the generic view's defaults.
+CONCEPT: Override get_context_data method in DetailView to add extra context, such as a list of books for a publisher detail page.
+CODE:
+from django.views.generic import DetailView
+from books.models import Book, Publisher
+
+class PublisherDetailView(DetailView):
+    model = Publisher
+
+    def get_context_data(self, **kwargs):
+        # Call the base implementation first to get a context
+        context = super().get_context_data(**kwargs)
+        # Add in a QuerySet of all the books
+        context["book_list"] = Book.objects.all()
+        return context
+CONCEPT: Call super().get_context_data to merge context from parent classes; ensure overrides in children also call super if needed.
+CONCEPT: Context from generic views overrides context processors; refer to get_context_data for examples.
+SECTION: Viewing Subsets of Objects
+PURPOSE: This subsection covers specifying subsets of objects using queryset instead of model.
+CONCEPT: Use model = Publisher as shorthand for queryset = Publisher.objects.all(); use queryset for filtered lists.
+CODE:
+from django.views.generic import DetailView
+from books.models import Publisher
+
+class PublisherDetailView(DetailView):
+    context_object_name = "publisher"
+    queryset = Publisher.objects.all()
+CODE:
+from django.views.generic import ListView
+from books.models import Book
+
+class BookListView(ListView):
+    queryset = Book.objects.order_by("-publication_date")
+    context_object_name = "book_list"
+CODE:
+from django.views.generic import ListView
+from books.models import Book
+
+class AcmeBookListView(ListView):
+    context_object_name = "book_list"
+    queryset = Book.objects.filter(publisher__name="ACME Publishing")
+    template_name = "books/acme_list.html"
+CONCEPT: Use custom template_name for specific subsets; default template may not suit.
+CONCEPT: Hardcoding filters like publisher name is inefficient for multiple cases; address in dynamic filtering.
+CONCEPT: If 404 occurs for /books/acme/, verify Publisher exists; use allow_empty parameter.
+SECTION: Dynamic Filtering
+PURPOSE: This subsection explains filtering objects based on URL parameters.
+CONCEPT: Override get_queryset in ListView to filter dynamically using self.kwargs.
+CODE:
+# urls.py
+from django.urls import path
+from books.views import PublisherBookListView
+
+urlpatterns = [
+    path("books/<publisher>/", PublisherBookListView.as_view()),
+]
+CODE:
+# views.py
+from django.shortcuts import get_object_or_404
+from django.views.generic import ListView
+from books.models import Book, Publisher
+
+class PublisherBookListView(ListView):
+    template_name = "books/books_by_publisher.html"
+
+    def get_queryset(self):
+        self.publisher = get_object_or_404(Publisher, name=self.kwargs["publisher"])
+        return Book.objects.filter(publisher=self.publisher)
+CONCEPT: Access self.request, self.args, self.kwargs for dynamic logic, such as filtering by current user.
+CODE:
+# ...
+def get_context_data(self, **kwargs):
+    # Call the base implementation first to get a context
+    context = super().get_context_data(**kwargs)
+    # Add in the publisher
+    context["publisher"] = self.publisher
+    return context
+SECTION: Performing Extra Work
+PURPOSE: This subsection covers executing additional logic before or after generic view operations.
+CONCEPT: Override get_object in DetailView to perform actions like updating a last_accessed field.
+CODE:
+# models.py
+from django.db import models
+
+class Author(models.Model):
+    salutation = models.CharField(max_length=10)
+    name = models.CharField(max_length=200)
+    email = models.EmailField()
+    headshot = models.ImageField(upload_to="author_headshots")
+    last_accessed = models.DateTimeField()
+CODE:
+from django.urls import path
+from books.views import AuthorDetailView
+
+urlpatterns = [
+    # ...
+    path("authors/<int:pk>/", AuthorDetailView.as_view(), name="author-detail"),
+]
+CODE:
+from django.utils import timezone
+from django.views.generic import DetailView
+from books.models import Author
+
+class AuthorDetailView(DetailView):
+    queryset = Author.objects.all()
+
+    def get_object(self):
+        obj = super().get_object()
+        # Record the last accessed date
+        obj.last_accessed = timezone.now()
+        obj.save()
+        return obj
+CONCEPT: URLconf uses pk by default for primary key; set pk_url_kwarg to change.
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Rapid development of views for database content display and manipulation.
+SUMMARY:
+
+Use generic views for common patterns like lists and details.
+Subclass and override for customizations.
+Specify queryset for subsets or dynamic filtering.
+Add extra context or perform actions via method overrides.

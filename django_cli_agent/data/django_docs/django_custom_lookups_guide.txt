@@ -1,0 +1,131 @@
+PURPOSE: This section explains creating custom lookups (field__lookup) and transforms (field__transform__lookup) for QuerySets, extending built-in functionality.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Custom filtering beyond built-in lookups.
+
+SECTION: A LOOKUP EXAMPLE
+PURPOSE: This section demonstrates a simple custom lookup.
+CONCEPT: CUSTOM LOOKUP EXAMPLE
+NotEqual lookup opposite to exact.
+CODE EXAMPLE:
+from django.db.models import Lookup
+
+class NotEqual(Lookup):
+    lookup_name = "ne"
+
+    def as_sql(self, compiler, connection):
+        lhs, lhs_params = self.process_lhs(compiler, connection)
+        rhs, rhs_params = self.process_rhs(compiler, connection)
+        params = lhs_params + rhs_params
+        return "%s <> %s" % (lhs, rhs), params
+Register with field class.
+CODE EXAMPLE:
+from django.db.models import Field
+
+Field.register_lookup(NotEqual)
+Or decorator.
+CODE EXAMPLE:
+Field.register_lookup
+class NotEqualLookup(Lookup): ...
+Usage: name__ne='Jack' → "name" <> 'Jack'
+lookup_name: lowercase letters only, no __.
+as_sql: uses process_lhs/rhs.
+Register before use (e.g., models.py, AppConfig.ready()).
+SECTION: A TRANSFORMER EXAMPLE
+PURPOSE: This section demonstrates Transform for chaining.
+CONCEPT: TRANSFORM EXAMPLE
+AbsoluteValue using ABS().
+CODE EXAMPLE:
+from django.db.models import Transform
+
+class AbsoluteValue(Transform):
+    lookup_name = "abs"
+    function = "ABS"
+Register.
+CODE EXAMPLE:
+from django.db.models import IntegerField
+
+IntegerField.register_lookup(AbsoluteValue)
+Usage: change__abs=27 → ABS("change") = 27
+Chain: change__abs__lt=27 → ABS("change") < 27
+Supports ORDER BY, DISTINCT ON.
+output_field for type change.
+CODE EXAMPLE:
+property
+def output_field(self):
+    return FloatField()
+SECTION: WRITING AN EFFICIENT ABS__LT LOOKUP
+PURPOSE: This section optimizes specific chained lookup.
+CONCEPT: EFFICIENT LT EXAMPLE
+AbsoluteValueLessThan for range query.
+CODE EXAMPLE:
+from django.db.models import Lookup
+
+class AbsoluteValueLessThan(Lookup):
+    lookup_name = "lt"
+
+    def as_sql(self, compiler, connection):
+        lhs, lhs_params = compiler.compile(self.lhs.lhs)
+        rhs, rhs_params = self.process_rhs(compiler, connection)
+        params = lhs_params + rhs_params + lhs_params + rhs_params
+        return "%s < %s AND %s > -%s" % (lhs, rhs, lhs, rhs), params
+
+AbsoluteValue.register_lookup(AbsoluteValueLessThan)
+Skips transformation; uses original lhs.
+Handles non-integer rhs.
+PostgreSQL: consider abs(change) index.
+SECTION: A BILATERAL TRANSFORMER EXAMPLE
+PURPOSE: This section demonstrates bilateral Transform.
+CONCEPT: BILATERAL EXAMPLE
+UpperCase using UPPER(), bilateral=True.
+CODE EXAMPLE:
+from django.db.models import Transform
+
+class UpperCase(Transform):
+    lookup_name = "upper"
+    function = "UPPER"
+    bilateral = True
+Register on CharField/TextField.
+Usage: name__upper="doe" → UPPER("name") = UPPER('doe')
+SECTION: WRITING ALTERNATIVE IMPLEMENTATIONS FOR EXISTING LOOKUPS
+PURPOSE: This section shows backend-specific overrides.
+CONCEPT: BACKEND-SPECIFIC EXAMPLE
+MySQL NotEqual using !=.
+CODE EXAMPLE:
+class MySQLNotEqual(NotEqual):
+    def as_mysql(self, compiler, connection, **extra_context):
+        lhs, lhs_params = self.process_lhs(compiler, connection)
+        rhs, rhs_params = self.process_rhs(compiler, connection)
+        params = lhs_params + rhs_params
+        return "%s != %s" % (lhs, rhs), params
+
+Field.register_lookup(MySQLNotEqual)
+as_vendor methods checked first.
+Vendors: sqlite, postgresql, oracle, mysql.
+SECTION: HOW DJANGO DETERMINES THE LOOKUPS AND TRANSFORMS WHICH ARE USED
+PURPOSE: This section explains dynamic resolution.
+CONCEPT: DYNAMIC LOOKUP/TRANSFORM
+Override get_lookup/get_transform.
+CODE EXAMPLE:
+class CoordinatesField(Field):
+    def get_lookup(self, lookup_name):
+        if lookup_name.startswith("x"):
+            try:
+                dimension = int(lookup_name.removeprefix("x"))
+            except ValueError:
+                pass
+            else:
+                return get_coordinate_lookup(dimension)
+        return super().get_lookup(lookup_name)
+get_lookup: Lookup subclass.
+get_transform: Transform subclass.
+Resolution: multiple names → Transform; single → Lookup or Transform+exact.
+SUMMARY:
+
+Lookup: terminal comparison.
+Transform: chainable, bilateral possible.
+Register on fields.
+Backend-specific as_vendor.
+Dynamic via get_lookup/get_transform.

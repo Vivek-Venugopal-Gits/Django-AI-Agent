@@ -1,0 +1,275 @@
+=========================
+CONTENT SECURITY POLICY OVERVIEW
+=========================
+SECTION: Content Security Policy (CSP)
+
+PURPOSE:
+Prevent content injection attacks by restricting allowed content sources.
+
+CONCEPT:
+
+Content Security Policy (CSP) is a web security standard that reduces the risk of attacks such as Cross-Site Scripting (XSS) and data injection by defining which sources of content the browser is allowed to load.
+
+CSP is a core component of a layered web security strategy.
+
+=========================
+CSP HEADERS
+=========================
+SECTION: CSP Header Types
+
+PURPOSE:
+Explain the two CSP headers defined by the specification.
+
+CONCEPT:
+
+The CSP specification defines two complementary HTTP headers:
+
+Content-Security-Policy
+Enforces the policy by blocking content that violates the rules.
+
+Content-Security-Policy-Report-Only
+Reports violations without blocking content, enabling safe testing.
+
+When ContentSecurityPolicyMiddleware is enabled, Django automatically builds and attaches these headers based on project settings unless already defined elsewhere.
+
+=========================
+CSP SETTINGS
+=========================
+SECTION: CSP Configuration Settings
+
+PURPOSE:
+Explain how CSP is configured in Django.
+
+SETTINGS:
+
+SECURE_CSP
+Defines the enforced Content Security Policy.
+
+SECURE_CSP_REPORT_ONLY
+Defines a report-only CSP used for monitoring and testing.
+
+USAGE MODES:
+
+Enforced only
+Use SECURE_CSP when the policy is stable and verified.
+
+Report-only only
+Use SECURE_CSP_REPORT_ONLY to evaluate a new policy without breaking functionality.
+
+Combined usage
+Use both to enforce a baseline while collecting reports on experimental changes.
+
+=========================
+POLICY VIOLATION REPORTS
+=========================
+SECTION: CSP Violation Reporting
+
+PURPOSE:
+Explain how CSP violations are reported.
+
+CONCEPT:
+
+Browsers log CSP violations to developer tools by default.
+
+To receive reports programmatically, the policy must include a reporting directive such as report-uri.
+
+Django supports configuring reporting directives via CSP settings, but does not provide built-in storage or processing for violation reports.
+
+IMPLEMENTATION REQUIREMENT:
+
+Developers must create a reporting endpoint or integrate a third-party monitoring service.
+
+=========================
+CSP CONSTANTS
+=========================
+SECTION: CSP Enum Constants
+
+PURPOSE:
+Provide standardized source expression values.
+
+CONCEPT:
+
+Django provides a CSP enum containing predefined constants for common CSP source expressions. Using these constants is recommended over raw strings to avoid syntax errors and ensure compliance.
+
+CLASS:
+
+django.utils.csp.CSP
+
+CONSTANTS:
+
+NONE
+Represents 'none'. Blocks all sources for the directive.
+
+SELF
+Represents 'self'. Allows same-origin resources.
+
+REPORT_SAMPLE
+Represents 'report-sample'. Includes code samples in reports (may expose sensitive data).
+
+STRICT_DYNAMIC
+Allows scripts loaded by trusted scripts to execute without 'unsafe-inline'.
+
+UNSAFE_INLINE
+Allows inline scripts and styles. Strongly discouraged.
+
+UNSAFE_EVAL
+Allows eval() and similar functions. Strongly discouraged.
+
+UNSAFE_HASHES
+Allows inline handlers when hashes match. Requires CSP Level 3+.
+
+WASM_UNSAFE_EVAL
+Allows WebAssembly execution without enabling script unsafe-eval.
+
+NONCE
+Django-specific placeholder enabling nonce-based CSP. Replaced at runtime with a secure per-request nonce.
+
+=========================
+VIEW DECORATORS
+=========================
+SECTION: CSP View Decorators
+
+PURPOSE:
+Allow per-view CSP customization.
+
+SECURITY WARNING:
+
+Weakening or disabling CSP on any view may compromise the entire site due to same-origin trust boundaries.
+
+DECORATOR: csp_override(config)(view)
+
+PURPOSE:
+Override the enforced CSP header for a specific view.
+
+BEHAVIOR:
+
+config must be a mapping of CSP directives
+
+An empty mapping {} disables CSP enforcement for the view
+
+Overrides do not merge with global settings
+
+EXAMPLE:
+
+from django.http import HttpResponse
+from django.utils.csp import CSP
+from django.views.decorators.csp import csp_override
+
+@csp_override(
+    {
+        "default-src": [CSP.SELF],
+        "img-src": [CSP.SELF, "data:"],
+    }
+)
+def my_view(request):
+    return HttpResponse("Custom Content-Security-Policy header applied")
+
+@csp_override({})
+def my_other_view(request):
+    return HttpResponse("No Content-Security-Policy header added")
+
+DECORATOR: csp_report_only_override(config)(view)
+
+PURPOSE:
+Override the report-only CSP header for a specific view.
+
+BEHAVIOR:
+
+Uses same directive format as SECURE_CSP_REPORT_ONLY
+
+Empty mapping {} disables report-only CSP for the view
+
+EXAMPLE:
+
+from django.http import HttpResponse
+from django.utils.csp import CSP
+from django.views.decorators.csp import csp_report_only_override
+
+@csp_report_only_override(
+    {
+        "default-src": [CSP.SELF],
+        "img-src": [CSP.SELF, "data:"],
+        "report-uri": "https://mysite.com/csp-report/",
+    }
+)
+def my_view(request):
+    return HttpResponse("Custom Content-Security-Policy-Report-Only header applied")
+
+@csp_report_only_override({})
+def my_other_view(request):
+    return HttpResponse("No Content-Security-Policy-Report-Only header added")
+
+=========================
+NONCE SUPPORT
+=========================
+SECTION: CSP Nonce Usage
+
+PURPOSE:
+Safely allow inline scripts and styles without 'unsafe-inline'.
+
+CONCEPT:
+
+A CSP nonce is a unique, random value generated per HTTP response.
+
+When the NONCE placeholder is included in CSP directives (e.g., script-src), Django generates a nonce and injects it into both:
+
+The CSP header
+
+The template context
+
+Only inline elements containing the matching nonce attribute are executed.
+
+TEMPLATE REQUIREMENT:
+
+The csp() context processor must be enabled to expose csp_nonce in templates.
+
+EXAMPLE USAGE:
+<script nonce="{{ csp_nonce }}">
+    // allowed inline script
+</script>
+
+
+If {{ csp_nonce }} is used but the policy does not include NONCE, the browser will block or report the inline content.
+
+=========================
+NONCE GENERATION AND CACHING
+=========================
+SECTION: Nonce Lifecycle
+
+PURPOSE:
+Explain nonce behavior with caching.
+
+CONCEPT:
+
+Nonce generation is lazy. Django generates a nonce only if csp_nonce is accessed during template rendering.
+
+CACHING WARNING:
+
+Nonce values must be unique per request.
+
+Using full-page caching may cause nonce reuse, weakening CSP protection even if pages appear functional.
+
+RECOMMENDATIONS:
+
+Avoid caching responses that include {{ csp_nonce }}
+
+Use per-request injection strategies if caching is required
+
+Prefer eliminating inline scripts and styles where possible
+
+=========================
+SUMMARY
+=========================
+SUMMARY:
+
+CSP mitigates XSS and injection attacks
+
+Django 6.0 introduces native CSP middleware
+
+Enforced and report-only policies can run simultaneously
+
+CSP constants prevent configuration errors
+
+Nonce-based CSP enables secure inline code execution
+
+Full-page caching requires special care when using nonces

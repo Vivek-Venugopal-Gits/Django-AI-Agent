@@ -1,0 +1,209 @@
+SECTION: BUILT-IN VIEWS
+PURPOSE: Describe Django’s built-in views for serving files in development and handling common HTTP error responses.
+​
+DJANGO VERSION: 6.0
+​
+PYTHON VERSION: Not specified
+APPLICABILITY: Django applications using built-in views for development file serving and error handling.
+​
+SECTION: SERVING FILES IN DEVELOPMENT
+PURPOSE: Explain how to use django.views.static.serve (directly or via static()) to serve non-static files such as user uploads during development.
+​
+CONCEPT: static.serve DEVELOPMENT USE ONLY
+django.views.static.serve(request, path, document_root, show_indexes=False) serves files from a given directory and is intended only for local development.
+​
+This view is not hardened for production and must be replaced by a real front-end web server for deployed sites.
+​
+CONCEPT: SERVING MEDIA_ROOT DURING DEVELOPMENT
+User-uploaded files typically live under MEDIA_ROOT and are not handled by django.contrib.staticfiles.
+​
+You can expose MEDIA_ROOT via a URL pattern that calls serve() with document_root=settings.MEDIA_ROOT.
+​
+COMMAND: DIRECT URLCONF CONFIGURATION
+python
+from django.conf import settings
+from django.urls import re_path
+from django.views.static import serve
+
+# ... the rest of your URLconf goes here ...
+
+if settings.DEBUG:
+    urlpatterns += [
+        re_path(
+            r"^media/(?P<path>.*)$",
+            serve,
+            {
+                "document_root": settings.MEDIA_ROOT,
+            },
+        ),
+    ]
+This assumes MEDIA_URL is 'media/' and routes matching paths to the serve() view with the required document_root parameter.
+​
+CONCEPT: static() URL HELPER
+Django provides django.conf.urls.static.static() as a helper to generate development-only URL patterns for serving files.
+​
+static() takes a URL prefix such as MEDIA_URL and a dotted path to a view such as 'django.views.static.serve' and passes any extra parameters to the view.
+​
+USAGE GUIDELINES:
+USE WHEN:
+
+Serving user-uploaded media or other development-only files from MEDIA_ROOT during local development.
+​
+DEBUG is True and no production-ready static file server is configured.
+​
+DO NOT USE WHEN:
+
+Serving any files in production; use a real web server such as Nginx or Apache instead.
+​
+Serving static assets already managed by django.contrib.staticfiles for production deployments.
+
+SUMMARY:
+Use django.views.static.serve only for development-time file serving.
+​
+Expose MEDIA_ROOT with a URL pattern or the static() helper while DEBUG is True.
+​
+Always use a front-end web server for file serving in production.
+​
+SECTION: ERROR VIEWS OVERVIEW
+PURPOSE: Describe Django’s built-in HTTP error views and how they behave by default.
+​
+CONCEPT: BUILT-IN ERROR HANDLING
+Django provides built-in views for common HTTP errors: 404 (Not Found), 500 (Server Error), 403 (Forbidden), and 400 (Bad Request).
+​
+These views can be overridden with custom views as described in the error-view customization documentation.
+​
+SECTION: 404 PAGE NOT FOUND VIEW
+PURPOSE: Describe the default 404 view django.views.defaults.page_not_found and its behavior.
+​
+CONCEPT: defaults.page_not_found
+defaults.page_not_found(request, exception, template_name='404.html') is the default view used when an Http404 is raised or no URL pattern matches the requested path.
+​
+By default it returns a “Not Found” response or renders 404.html from the root template directory if the template exists.
+​
+CONCEPT: TEMPLATE CONTEXT FOR 404
+The default 404 view passes request_path and exception to the 404.html template.
+​
+request_path is the URL that caused the error, and exception is a useful representation of the triggering Http404 or related exception.
+​
+CONCEPT: WHEN 404 VIEW IS CALLED
+The 404 view is used when:
+​
+Django exhausts all URL patterns without finding a match.
+
+A view raises django.http.Http404 explicitly.
+
+If DEBUG is True, Django does not use the 404 view and instead shows the URLconf with debug information.
+​
+COMMAND: RAISING PermissionDenied FOR 403 (RELATED PATTERN)
+python
+from django.core.exceptions import PermissionDenied
+
+def edit(request, pk):
+    if not request.user.is_staff:
+        raise PermissionDenied
+    # ...
+USAGE GUIDELINES (404):
+USE WHEN:
+
+Handling missing pages or explicitly signaling “not found” with Http404.
+​
+DO NOT USE WHEN:
+
+DEBUG is True, since Django will always show the debug view instead.
+​
+SUMMARY:
+page_not_found handles 404 errors and may render 404.html with request_path and exception.
+​
+The 404 view is bypassed when DEBUG is True.
+​
+SECTION: 500 SERVER ERROR VIEW
+PURPOSE: Describe the default 500 view django.views.defaults.server_error and its behavior.
+​
+CONCEPT: defaults.server_error
+defaults.server_error(request, template_name='500.html') is the default view used for runtime errors in view code.
+​
+It returns a simple “Server Error” response or renders 500.html from the root template directory if that template exists.
+​
+CONCEPT: TEMPLATE CONTEXT FOR 500
+The default 500 view passes no variables to 500.html and renders the template with an empty Context.
+​
+This reduces the risk of additional errors or accidental exposure of sensitive information during error rendering.
+​
+CONCEPT: DEBUG INTERACTION FOR 500
+If DEBUG is True, Django does not use the 500 view and instead displays the traceback and debug information.
+​
+USAGE GUIDELINES (500):
+USE WHEN:
+
+Running with DEBUG=False and allowing Django’s default server-error handling.
+​
+DO NOT USE WHEN:
+
+DEBUG is True, because the 500 handler is never invoked.
+​
+SUMMARY:
+server_error handles unhandled exceptions and may render 500.html without context variables.
+​
+The 500 view is disabled when DEBUG is True in settings.
+​
+SECTION: 403 HTTP FORBIDDEN VIEW
+PURPOSE: Describe the default 403 view django.views.defaults.permission_denied and its behavior.
+​
+CONCEPT: defaults.permission_denied
+defaults.permission_denied(request, exception, template_name='403.html') is the default view used for HTTP 403 Forbidden errors.
+​
+It renders 403.html from the root template directory or returns the text “403 Forbidden” if the template is missing, consistent with RFC 9110 Section 15.5.4.
+​
+CONCEPT: TEMPLATE CONTEXT FOR 403
+The context includes exception, the string representation of the exception that triggered the 403 view.
+​
+CONCEPT: TRIGGERING 403 VIA PermissionDenied
+permission_denied is called when a django.core.exceptions.PermissionDenied exception is raised in view or middleware code.
+​
+Raising PermissionDenied inside a view is the standard way to generate a 403 response.
+​
+USAGE GUIDELINES (403):
+USE WHEN:
+
+Denying access to a resource for an authenticated or unauthenticated user who lacks the required permissions.
+​
+DO NOT USE WHEN:
+
+Signaling missing pages (use Http404) or server errors (allow exceptions to propagate to the 500 handler).
+
+SUMMARY:
+permission_denied handles 403 errors and renders 403.html with an exception variable.
+​
+Trigger this view by raising PermissionDenied in your code.
+​
+SECTION: 400 BAD REQUEST VIEW
+PURPOSE: Describe the default 400 view django.views.defaults.bad_request and its behavior.
+​
+CONCEPT: defaults.bad_request
+defaults.bad_request(request, exception, template_name='400.html') handles 400 Bad Request responses.
+​
+It is used when Django treats a request as malformed due to an unhandled SuspiciousOperation or similar client-side issues.
+​
+CONCEPT: SIMILARITY TO 500 VIEW
+bad_request behaves similarly to server_error but responds with HTTP status code 400 instead of 500.
+​
+By default, no exception-related data is passed to the template context to avoid leaking sensitive information such as filesystem paths.
+​
+CONCEPT: DEBUG INTERACTION FOR 400
+bad_request views are only used when DEBUG is False.
+​
+When DEBUG is True, normal debug behavior is used instead of the 400 view.
+​
+USAGE GUIDELINES (400):
+USE WHEN:
+
+Allowing Django to handle malformed or suspicious requests as client errors under DEBUG=False.
+​
+DO NOT USE WHEN:
+
+DEBUG is True, since the 400 handler is not invoked.
+​
+SUMMARY:
+bad_request maps unhandled SuspiciousOperation cases to HTTP 400 responses with template 400.html.
+​
+It is active only when DEBUG=False and passes no sensitive details to the template.

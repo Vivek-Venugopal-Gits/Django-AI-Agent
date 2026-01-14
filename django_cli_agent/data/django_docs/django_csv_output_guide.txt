@@ -1,0 +1,95 @@
+SECTION: How to Create CSV Output
+PURPOSE: This section explains how to dynamically output CSV (Comma Separated Values) using Django views, either with the Python CSV library or the Django template system.
+SECTION: Using the Python CSV Library
+PURPOSE: This section describes using Python's built-in csv module to generate CSV responses in Django views.
+CONCEPT: The csv module handles CSV creation on file-like objects, and Django's HttpResponse acts as a file-like object.
+CODE:
+import csv
+from django.http import HttpResponse
+
+def some_view(request):
+    # Create the HttpResponse object with the appropriate CSV header.
+    response = HttpResponse(
+        content_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="somefilename.csv"'},
+    )
+
+    writer = csv.writer(response)
+    writer.writerow(["First row", "Foo", "Bar", "Baz"])
+    writer.writerow(["Second row", "A", "B", "C", '"Testing"', "Here's a quote"])
+
+    return response
+CONCEPT: Set the MIME type to text/csv to indicate a CSV file. Use Content-Disposition header for the filename in the Save as dialog. Pass response to csv.writer. The CSV module handles quoting and escaping.
+SECTION: Streaming Large CSV Files
+PURPOSE: This section explains using StreamingHttpResponse for large CSV responses to avoid timeouts.
+CONCEPT: StreamingHttpResponse prevents load balancers from dropping connections during long generations.
+CODE:
+import csv
+
+from django.http import StreamingHttpResponse
+
+class Echo:
+    """An object that implements just the write method of the file-like
+    interface.
+    """
+
+    def write(self, value):
+        """Write the value by returning it, instead of storing in a buffer."""
+        return value
+
+def some_streaming_csv_view(request):
+    """A view that streams a large CSV file."""
+    # Generate a sequence of rows. The range is based on the maximum number of
+    # rows that can be handled by a single sheet in most spreadsheet
+    # applications.
+    rows = (["Row {}".format(idx), str(idx)] for idx in range(65536))
+    pseudo_buffer = Echo()
+    writer = csv.writer(pseudo_buffer)
+    return StreamingHttpResponse(
+        (writer.writerow(row) for row in rows),
+        content_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="somefilename.csv"'},
+    )
+CONCEPT: Use generators for efficient assembly and transmission.
+SECTION: Using the Template System
+PURPOSE: This section describes generating CSV using Django templates as an alternative to the csv module.
+CONCEPT: Pass a list of items to the template and output commas in a for loop.
+CODE:
+from django.http import HttpResponse
+from django.template import loader
+
+def some_view(request):
+    # Create the HttpResponse object with the appropriate CSV header.
+    response = HttpResponse(
+        content_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="somefilename.csv"'},
+    )
+
+    # The data is hardcoded here, but you could load it from a database or
+    # some other source.
+    csv_data = (
+        ("First row", "Foo", "Bar", "Baz"),
+        ("Second row", "A", "B", "C", '"Testing"', "Here's a quote"),
+    )
+
+    t = loader.get_template("my_template_name.txt")
+    c = {"data": csv_data}
+    response.write(t.render(c))
+    return response
+CONCEPT: Use content_type='text/csv' and Content-Disposition. Load template and render with context containing data.
+CODE:
+text{% for row in data %}"{{ row.0|addslashes }}", "{{ row.1|addslashes }}", "{{ row.2|addslashes }}", "{{ row.3|addslashes }}", "{{ row.4|addslashes }}"
+{% endfor %}
+CONCEPT: Iterate over data and use addslashes filter for escaping quotes.
+SECTION: Other Text-Based Formats
+PURPOSE: This section notes that similar techniques apply to other text-based formats.
+CONCEPT: Adapt for arbitrary text-based or binary data.
+DJANGO VERSION: 6.0
+PYTHON VERSION:
+APPLICABILITY: - Generating CSV or text-based output in Django views.
+SUMMARY:
+
+Use csv module with HttpResponse for standard CSV generation.
+Use StreamingHttpResponse for large files.
+Use templates for custom formatting.
+Extend to other formats.

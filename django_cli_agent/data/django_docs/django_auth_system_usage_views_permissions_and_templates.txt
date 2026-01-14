@@ -1,0 +1,2110 @@
+Explain the scope and purpose of Django’s default authentication system.
+
+CONCEPT:
+Django’s authentication system provides authentication and authorization in a single, integrated framework referred to as the authentication system.
+​
+The default configuration is designed to cover common project needs, including secure password handling and permission management, while allowing extensive extension and customization when requirements differ.
+​
+The system is implemented in django.contrib.auth and is intended for use in typical Django projects that require user accounts, permissions, and access control.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need a built-in solution for user login, logout, permissions, and sessions.
+​
+
+Your project requirements align with or can extend Django’s default auth behavior.
+​
+
+DO NOT USE WHEN:
+
+You require a fundamentally different authentication flow that cannot be expressed as an extension of Django’s auth system.
+​
+
+You do not use Django’s ORM or contrib apps at all.
+​
+
+SUMMARY:
+Django’s authentication system handles both authentication and authorization.
+​
+
+The default configuration focuses on common needs with secure password and permission handling.
+​
+
+The system is extensible for custom authentication and authorization requirements.
+​
+
+SECTION: USER OBJECTS: PURPOSE:
+Describe the core User model, its attributes, and how it is used.
+
+CONCEPT:
+User objects are the core of Django’s authentication system and usually represent people interacting with the site.
+​
+They enable access restriction, user profiles, and association of content with creators.
+​
+There is only one class of user; superusers and staff users are regular users with special attributes set, not distinct classes.
+​
+
+The primary attributes of the default user are:
+​
+
+username
+
+password
+
+email
+
+first_name
+
+last_name
+
+The user API is fully documented in the django.contrib.auth.models.User reference; this task-oriented documentation focuses on common usage patterns.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to represent individual authenticated identities in your application.
+​
+
+You must associate objects (such as posts or comments) with a creator.
+​
+
+DO NOT USE WHEN:
+
+You use a fully custom auth user model with a different interface and do not rely on the default User API.
+​
+
+SUMMARY:
+User is the central model for authentication.
+​
+
+Superusers and staff are regular users with extra flags.
+​
+
+Core fields include username, password, email, and name attributes.
+​
+
+SECTION: USER CREATION: PURPOSE:
+Explain how to create regular users programmatically and via the admin.
+
+CONCEPT:
+The recommended way to create users programmatically is to use the create_user() helper provided by UserManager.
+​
+This helper ensures that the password is stored as a hash rather than clear text.
+​
+
+COMMAND:
+Create a user programmatically:
+CODE:
+from django.contrib.auth.models import User
+user = User.objects.create_user("john", "lennon@thebeatles.com", "johnpassword")
+
+Update additional fields
+user.last_name = "Lennon"
+user.save()
+If the Django admin is installed, you can also create users interactively through the admin interface.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to create users in code and ensure proper password hashing.
+​
+
+You want to seed initial users or handle registration logic in views or management commands.
+​
+
+DO NOT USE WHEN:
+
+You plan to set the password field directly, which bypasses hashing and is insecure.
+​
+
+SUMMARY:
+Use create_user() to create users with correctly hashed passwords.
+​
+
+Additional fields can be set on the User instance after creation.
+​
+
+Admin can create users interactively if installed.
+​
+
+SECTION: SUPERUSER CREATION: PURPOSE:
+Describe how to create superuser accounts.
+
+CONCEPT:
+Superusers are users with all permissions enabled, typically used for full administrative access.
+​
+They are created using the createsuperuser management command.
+​
+
+COMMAND:
+Create a superuser (POSIX-like systems):
+
+CODE:
+ manage.py createsuperuser --username=joe --email=joe@example.com
+On Windows:
+CODE:
+ manage.py createsuperuser --username=joe --email=joe@example.com
+When the command runs, it prompts for a password and creates the user immediately after a valid password is entered.
+​
+If --username or --email is omitted, the command prompts for those values.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need a full-privilege account for site administration or debugging.
+​
+
+DO NOT USE WHEN:
+
+You want a limited-permission admin user; in that case create a regular user and assign specific permissions.
+​
+
+SUMMARY:
+Use createsuperuser to create fully privileged admin accounts.
+​
+
+The command interacts via prompts for missing fields and the password.
+​
+
+SECTION: PASSWORD MANAGEMENT (USER-LEVEL): PURPOSE:
+Explain how user passwords are stored and changed.
+
+CONCEPT:
+Django does not store raw passwords; only a secure hash is stored on the user model.
+​
+DO NOT manipulate the password attribute directly because it bypasses hashing and can break authentication.
+​
+
+To change a password, use dedicated tools rather than writing to password:
+
+Command-line: manage.py changepassword username.
+​
+
+Programmatic: call set_password() on a User instance and then save().
+​
+
+COMMAND:
+Change a user’s password programmatically:
+
+CODE:
+from django.contrib.auth.models import User
+
+u = User.objects.get(username="john")
+u.set_password("new password")
+u.save()
+Change a user’s password from the command line:
+
+CODE:
+ manage.py changepassword username
+The command prompts for the new password twice and updates it immediately if both entries match.
+​
+
+If no username is provided, the command attempts to change the password of the system user matching the current OS username.
+​
+
+If the Django admin is installed, user passwords can also be changed via the admin’s user detail pages.
+​
+
+Changing a user’s password logs out all their sessions.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to securely change a user’s password via CLI or code.
+​
+
+You must enforce Django’s password handling and hashing rules.
+​
+
+DO NOT USE WHEN:
+
+You attempt to set user.password to a raw string.
+​
+
+SUMMARY:
+Django stores only password hashes on the user model.
+​
+
+Use set_password() or changepassword to update passwords.
+​
+
+Password changes invalidate existing sessions for that user.
+​
+
+SECTION: AUTHENTICATING USERS: PURPOSE:
+Describe how to verify credentials and obtain a User object.
+
+CONCEPT:
+Use authenticate() to verify a set of credentials and retrieve the corresponding User if valid.
+​
+authenticate() accepts credentials as keyword arguments (by default username and password) and checks them against each configured authentication backend.
+​
+If validation succeeds for any backend, it returns a User object; if no backend authenticates or a backend raises PermissionDenied, it returns None.
+​
+
+An asynchronous version, aauthenticate(), is also available.
+​
+
+request is an optional HttpRequest passed through to the backend authenticate() methods.
+​
+
+This function is a low-level building block and is used by other components and middleware; for typical login flows, prefer using login views.
+​
+
+COMMAND:
+Example usage of authenticate():
+
+CODE:
+from django.contrib.auth import authenticate
+
+user = authenticate(username="john", password="secret")
+if user is not None:
+    # A backend authenticated the credentials
+    ...
+else:
+    # No backend authenticated the credentials
+    ...
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to validate credentials programmatically and obtain a User instance.
+​
+
+You implement custom authentication flows or backends.
+​
+
+DO NOT USE WHEN:
+
+You only need to log a user in via the standard login view; use LoginView instead.
+​
+
+SUMMARY:
+authenticate() validates credentials and returns a User or None.
+​
+
+It delegates to configured authentication backends and accepts an optional request.
+​
+
+It is a low-level API mainly used by middleware and custom auth flows.
+​
+
+SECTION: PERMISSIONS AND AUTHORIZATION: PURPOSE:
+Describe how Django’s permission system works and how it is used.
+
+CONCEPT:
+Django provides a built-in permissions system for assigning permissions to specific users and groups.
+​
+The admin site uses this system to control access to views and actions.
+​
+
+In the admin:
+
+Viewing objects requires the “view” or “change” permission for that model type.
+​
+
+Adding objects requires the “add” permission.
+​
+
+Viewing the change list, using the change form, and changing objects requires the “change” permission.
+​
+
+Deleting objects requires the “delete” permission.
+​
+
+Permissions can also be assigned on a per-object instance basis by overriding has_view_permission(), has_add_permission(), has_change_permission(), and has_delete_permission() on ModelAdmin.
+​
+
+User objects expose two many-to-many relations: groups and user_permissions.
+​
+These relations are managed using the standard Django many-to-many API (set, add, remove, clear).
+​
+
+COMMAND:
+Manipulate user groups and permissions:
+
+CODE:
+myuser.groups.set([group_list])
+myuser.groups.add(group, group, ...)
+myuser.groups.remove(group, group, ...)
+myuser.groups.clear()
+
+myuser.user_permissions.set([permission_list])
+myuser.user_permissions.add(permission, permission, ...)
+myuser.user_permissions.remove(permission, permission, ...)
+myuser.user_permissions.clear()
+USAGE GUIDELINES:
+USE WHEN:
+
+You need fine-grained access control tied to user accounts and groups.
+​
+
+You want admin behavior aligned with add, change, delete, and view permissions.
+​
+
+DO NOT USE WHEN:
+
+You require permissions entirely independent of Django’s auth and ORM.
+​
+
+SUMMARY:
+Django’s permission system controls access to models at type and instance level.
+​
+
+Admin uses view/add/change/delete permissions for object access.
+​
+
+Users gain permissions directly or via groups.
+​
+
+SECTION: DEFAULT PERMISSIONS: PURPOSE:
+Explain automatic permission creation for models.
+
+CONCEPT:
+When django.contrib.auth is included in INSTALLED_APPS, Django automatically creates four default permissions for each model in installed applications: add, change, delete, and view.
+​
+These permissions are created when manage.py migrate runs.
+​
+
+On the first migration after adding django.contrib.auth, default permissions are created for all previously installed models as well as any new models added at that time.
+​
+Subsequent migrations create default permissions for newly added models.
+​
+
+The permission names used with has_perm() follow the pattern <app_label>.<permission_codename>.
+​
+
+Example permission checks for a model Bar in an app with app_label foo:
+​
+
+user.has_perm('foo.add_bar')
+
+user.has_perm('foo.change_bar')
+
+user.has_perm('foo.delete_bar')
+
+user.has_perm('foo.view_bar')
+
+The Permission model itself is rarely accessed directly.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You rely on standard CRUD permissions for models.
+​
+
+You call has_perm() or has_perms() with the appropriate codename strings.
+​
+
+DO NOT USE WHEN:
+
+You ignore migrate and attempt to manually create permission rows.
+​
+
+SUMMARY:
+Django creates add/change/delete/view permissions for each model when migrations run.
+​
+
+Permission codenames follow the <app_label>.<codename> pattern.
+​
+
+has_perm() uses these names to test permissions.
+​
+
+SECTION: GROUPS: PURPOSE:
+Explain how groups categorize users and grant permissions collectively.
+
+CONCEPT:
+Group models provide a generic way to categorize users and attach permissions or labels to those categories.
+​
+A user can belong to any number of groups.
+​
+
+Users in a group automatically inherit the permissions granted to that group.
+​
+Groups can also serve as labels for extended functionality such as members-only areas or targeted email.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You want to manage permissions for sets of users instead of per-user configuration.
+​
+
+You need logical user categories (e.g., “Site editors”, “Special users”).
+​
+
+DO NOT USE WHEN:
+
+You require purely per-object or per-user custom logic without grouping semantics.
+​
+
+SUMMARY:
+Groups categorize users and centralize permission assignment.
+​
+
+Users inherit permissions from their groups.
+​
+
+Groups can also act as functional labels.
+​
+
+SECTION: PROGRAMMATIC PERMISSION CREATION: PURPOSE:
+Describe how to define and create custom permissions in code.
+
+CONCEPT:
+Custom permissions can be defined in a model’s Meta class, but can also be created programmatically.
+​
+
+To create a custom permission such as can_publish on a model BlogPost in myapp, use ContentType and Permission.
+​
+
+COMMAND:
+Create a custom permission:
+
+CODE:
+from myapp.models import BlogPost
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
+
+content_type = ContentType.objects.get_for_model(BlogPost)
+permission = Permission.objects.create(
+    codename="can_publish",
+    name="Can Publish Posts",
+    content_type=content_type,
+)
+Assign the permission:
+
+CODE:
+user.user_permissions.add(permission)
+# or
+group.permissions.add(permission)
+For proxy models, pass for_concrete_model=False to get_for_model() to obtain the correct content type.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need permissions beyond the default add/change/delete/view set.
+​
+
+You want to attach custom behaviors to permissions.
+​
+
+DO NOT USE WHEN:
+
+Default auto-created permissions are sufficient for your use case.
+​
+
+SUMMARY:
+Custom permissions can be defined in Meta or created via Permission and ContentType.
+​
+
+Assign custom permissions to users or groups.
+​
+
+Proxy models require for_concrete_model=False when deriving content types.
+​
+
+SECTION: PERMISSION CACHING: PURPOSE:
+Explain how permission caching works and how to handle updates.
+
+CONCEPT:
+ModelBackend caches permissions on the user object after the first permission check.
+​
+This behavior is usually acceptable for a standard request-response cycle since permissions are rarely checked immediately after being modified.
+​
+
+If you add permissions and then immediately check them (for example, in tests or the same view), the cached set may be stale.
+​
+The straightforward solution is to re-fetch the user from the database rather than using refresh_from_db(), which does not clear the permission cache.
+​
+
+COMMAND:
+Example pattern for permission changes and immediate checks:
+
+CODE:
+from django.contrib.auth.models import Permission, User
+from django.contrib.contenttypes.models import ContentType
+from django.shortcuts import get_object_or_404
+
+from myapp.models import BlogPost
+
+
+def user_gains_perms(request, user_id):
+    user = get_object_or_404(User, pk=user_id)
+    # Initial permission check caches permissions
+    user.has_perm("myapp.change_blogpost")
+
+    content_type = ContentType.objects.get_for_model(BlogPost)
+    permission = Permission.objects.get(
+        codename="change_blogpost",
+        content_type=content_type,
+    )
+    user.user_permissions.add(permission)
+
+    # Cached permissions still reflect old state
+    user.has_perm("myapp.change_blogpost")  # False
+
+    # Re-fetch user to clear cache
+    user = get_object_or_404(User, pk=user_id)
+    user.has_perm("myapp.change_blogpost")  # True
+USAGE GUIDELINES:
+USE WHEN:
+
+You modify permissions and must verify them within the same request or test.
+​
+
+DO NOT USE WHEN:
+
+You assume that adding a permission immediately updates the cached permissions on the same user instance.
+​
+
+SUMMARY:
+ModelBackend caches permissions per user instance.
+​
+
+Re-fetch the user to ensure updated permission checks take effect immediately.
+​
+
+SECTION: PROXY MODELS AND PERMISSIONS: PURPOSE:
+Explain permission handling for proxy models.
+
+CONCEPT:
+Proxy models behave like concrete models regarding permissions but use their own content type.
+​
+Permissions are created for the proxy model’s content type and do not include permissions from the concrete base model.
+​
+
+When you fetch permissions for a proxy model using get_for_model(model, for_concrete_model=False), you receive a set of permissions only for that proxy.
+​
+Granting these permissions does not grant permissions for the underlying concrete model.
+​
+
+COMMAND:
+Example of proxy model permissions:
+
+CODE:
+class Person(models.Model):
+    class Meta:
+        permissions = [("can_eat_pizzas", "Can eat pizzas")]
+
+
+class Student(Person):
+    class Meta:
+        proxy = True
+        permissions = [("can_deliver_pizzas", "Can deliver pizzas")]
+
+
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
+
+content_type = ContentType.objects.get_for_model(Student, for_concrete_model=False)
+student_permissions = Permission.objects.filter(content_type=content_type)
+[p.codename for p in student_permissions]
+# ['add_student', 'change_student', 'delete_student', 'view_student', 'can_deliver_pizzas']
+
+for permission in student_permissions:
+    user.user_permissions.add(permission)
+
+user.has_perm("app.add_person")        # False
+user.has_perm("app.can_eat_pizzas")   # False
+user.has_perms(("app.add_student", "app.can_deliver_pizzas"))  # True
+USAGE GUIDELINES:
+USE WHEN:
+
+You define proxy models and need distinct permissions for them.
+​
+
+DO NOT USE WHEN:
+
+You expect proxy models to automatically inherit permissions from their base model.
+​
+
+SUMMARY:
+Proxy models get their own permissions via their content type.
+​
+
+Permissions on proxy models do not apply to the base model.
+​
+
+SECTION: AUTHENTICATION IN WEB REQUESTS: PURPOSE:
+Describe how the authentication system integrates with HTTP requests.
+
+CONCEPT:
+Django uses sessions and middleware to attach authentication data to each incoming request.
+​
+Each request exposes request.user and an async method request.auser() to represent the current user.
+​
+
+If a user has not logged in, request.user is an AnonymousUser instance; otherwise, it is a User instance.
+​
+Use is_authenticated to distinguish between authenticated and anonymous users.
+​
+
+COMMAND:
+Synchronous check:
+
+CODE:
+if request.user.is_authenticated:
+    # Authenticated user logic
+    ...
+else:
+    # Anonymous user logic
+    ...
+Asynchronous check:
+
+CODE:n
+user = await request.auser()
+if user.is_authenticated:
+    # Authenticated user logic
+    ...
+else:
+    # Anonymous user logic
+    ...
+USAGE GUIDELINES:
+USE WHEN:
+
+You need access to the current user in views or middleware.
+​
+
+DO NOT USE WHEN:
+
+You assume request.user is always a real user; always test is_authenticated.
+​
+
+SUMMARY:
+Authentication middleware adds user and auser() to requests.
+​
+
+AnonymousUser represents non-logged-in users.
+​
+
+Use is_authenticated to branch logic.
+​
+
+SECTION: LOGGING USERS IN: PURPOSE:
+Explain how to attach an authenticated user to a session.
+
+CONCEPT:
+Use login() to associate an authenticated user with the current session.
+​
+login(request, user, backend=None) stores the user’s ID and backend path in the session using Django’s session framework.
+​
+Anonymous session data is preserved after login.
+​
+
+An asynchronous version, alogin(), is available.
+​
+
+COMMAND:
+Example login flow combining authenticate() and login():
+
+CODE:
+from django.contrib.auth import authenticate, login
+
+
+def my_view(request):
+    username = request.POST["username"]
+    password = request.POST["password"]
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        # Redirect to a success page.
+        ...
+    else:
+        # Return an 'invalid login' error message.
+        ...
+CONCEPT: SELECTING THE AUTHENTICATION BACKEND
+When a user logs in, Django must know which authentication backend to use for future requests.
+​
+The backend is stored in the session and chosen in this order:
+​
+
+If a backend argument is passed to login(), use that value.
+​
+
+Else, if the user has user.backend set (e.g., by authenticate()), use it.
+​
+
+Else, if there is only one backend in AUTHENTICATION_BACKENDS, use that one.
+​
+
+Otherwise, raise an exception.
+​
+
+The backend identifier must be a dotted import path string, not a backend class.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You have already authenticated a user and want to start a session.
+​
+
+DO NOT USE WHEN:
+
+You pass a backend instance instead of a dotted path string as the backend argument.
+​
+
+SUMMARY:
+login() attaches a User to the session.
+​
+
+Backend selection follows a defined precedence order.
+​
+
+Anonymous session data survives login.
+​
+
+SECTION: LOGGING USERS OUT: PURPOSE:
+Explain how to end authenticated sessions.
+
+CONCEPT:
+Use logout(request) to log out a user who previously logged in via login().
+​
+logout() takes an HttpRequest and has no return value.
+​
+It does not error if the user was not logged in.
+​
+
+On logout, session data for the current request is completely cleared.
+​
+Any data needed immediately after logout must be written to the session after calling logout().
+​
+
+An asynchronous version, alogout(), is also available.
+​
+
+COMMAND:
+Simple logout view:
+
+CODE:
+from django.contrib.auth import logout
+
+
+def logout_view(request):
+    logout(request)
+    # Redirect to a success page.
+USAGE GUIDELINES:
+USE WHEN:
+
+You want to terminate the current user’s session and clear all session data.
+​
+
+DO NOT USE WHEN:
+
+You expect session data to remain after calling logout(); re-add any required data afterward.
+​
+
+SUMMARY:
+logout() clears the user’s session data and logs them out.
+​
+
+The function is safe to call even if the user is not logged in.
+​
+
+SECTION: LIMITING ACCESS TO LOGGED-IN USERS (RAW): PURPOSE:
+Describe the manual pattern for restricting access to authenticated users.
+
+CONCEPT:
+The raw pattern for limiting access is to check request.user.is_authenticated and either redirect or return an error response.
+​
+
+COMMAND:
+Redirect unauthenticated users to the login page:
+
+CODE:
+from django.conf import settings
+from django.shortcuts import redirect
+
+
+def my_view(request):
+    if not request.user.is_authenticated:
+        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
+    # ...
+Render an error page for unauthenticated users:
+
+CODE:
+from django.shortcuts import render
+
+
+def my_view(request):
+    if not request.user.is_authenticated:
+        return render(request, "myapp/login_error.html")
+    # ...
+USAGE GUIDELINES:
+USE WHEN:
+
+You need full custom control over unauthorized responses.
+​
+
+DO NOT USE WHEN:
+
+A decorator such as login_required or a mixin is sufficient; prefer those for simplicity.
+​
+
+SUMMARY:
+Manually checking is_authenticated allows custom redirect or error handling.
+​
+
+This approach is explicit but more verbose than decorators.
+​
+
+SECTION: LOGIN_REQUIRED DECORATOR: PURPOSE:
+Explain how login_required restricts access to view functions.
+
+CONCEPT:
+login_required(redirect_field_name='next', login_url=None) is a decorator that restricts access to authenticated users.
+​
+If the user is not logged in, they are redirected to settings.LOGIN_URL, with the current absolute path stored in the query string under redirect_field_name (default "next").
+​
+If the user is logged in, the view executes normally.
+​
+
+You can change redirect_field_name to use a different query parameter, which also changes the context variable name used in the login template.
+​
+You can change login_url to direct unauthenticated users to a specific login path.
+​
+
+COMMAND:
+Basic usage:
+
+CODE:
+from django.contrib.auth.decorators import login_required
+
+
+@login_required
+def my_view(request):
+    ...
+Custom redirect field:
+
+CODE:
+from django.contrib.auth.decorators import login_required
+
+
+@login_required(redirect_field_name="my_redirect_field")
+def my_view(request):
+    ...
+Custom login URL:
+
+CODE:
+from django.contrib.auth.decorators import login_required
+
+
+@login_required(login_url="/accounts/login/")
+def my_view(request):
+    ...
+Example URL configuration for the default login URL:
+
+CODE:
+from django.contrib.auth import views as auth_views
+
+path("accounts/login/", auth_views.LoginView.as_view()),
+login_required does not check the is_active flag; default authentication backends reject inactive users.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need a simple way to require authentication for function-based views.
+​
+
+DO NOT USE WHEN:
+
+You are writing Django admin views; consider staff_member_required instead.
+​
+
+SUMMARY:
+login_required redirects anonymous users to a login page.
+​
+
+Redirect behavior is controlled by login_url and redirect_field_name.
+​
+
+Active status is enforced by backends, not the decorator itself.
+​
+
+SECTION: LOGINREQUIREDMIXIN: PURPOSE:
+Explain how to require login for class-based views.
+
+CONCEPT:
+LoginRequiredMixin applies the same semantics as login_required to class-based views.
+​
+It must be placed at the leftmost position in the inheritance list.
+​
+
+Non-authenticated users are redirected to the login page or receive HTTP 403 Forbidden depending on the raise_exception parameter inherited from AccessMixin.
+​
+You can configure login_url and redirect_field_name on the view class.
+​
+
+COMMAND:
+Example usage:
+
+CODE:
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views import View
+
+
+class MyView(LoginRequiredMixin, View):
+    login_url = "/login/"
+    redirect_field_name = "redirect_to"
+LoginRequiredMixin, like login_required, does not check the is_active flag; inactive users are typically rejected by the authentication backend.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You want to require authentication for class-based views.
+​
+
+DO NOT USE WHEN:
+
+You have function-based views; use login_required instead.
+​
+
+SUMMARY:
+LoginRequiredMixin enforces login for class-based views.
+​
+
+Customize behavior via login_url, redirect_field_name, and raise_exception.
+​
+
+SECTION: LOGIN_NOT_REQUIRED DECORATOR: PURPOSE:
+Explain how to allow unauthenticated access when global middleware enforces login.
+
+CONCEPT:
+When LoginRequiredMiddleware is installed, all views require authentication by default.
+​
+login_not_required() is a decorator that explicitly allows unauthenticated access to a view under this middleware.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You have global login enforcement via middleware and need exceptions such as the login view or public endpoints.
+​
+
+DO NOT USE WHEN:
+
+The middleware is not installed; the decorator has no effect in that case.
+​
+
+SUMMARY:
+login_not_required marks views as exempt from LoginRequiredMiddleware.
+​
+
+Use it selectively for endpoints that must remain public.
+​
+
+SECTION: LIMITING ACCESS WITH CUSTOM TESTS: PURPOSE:
+Describe how to restrict access to users that pass a specific test.
+
+CONCEPT:
+You can restrict access by running custom tests on request.user directly or by using the user_passes_test decorator.
+​
+
+A simple pattern is to inspect user attributes (e.g., email domain) and redirect to the login page if the test fails.
+​
+
+user_passes_test(test_func, login_url=None, redirect_field_name='next') wraps this logic in a decorator.
+​
+test_func is a callable that receives a User and returns True if the user may access the view; it does not automatically check for anonymous users.
+​
+
+login_url controls where failing users are redirected; it defaults to settings.LOGIN_URL.
+​
+redirect_field_name controls the query parameter name used for the redirect target; set it to None to omit it.
+​
+
+COMMAND:
+Manual test in a view:
+
+CODE:
+from django.shortcuts import redirect
+
+
+def my_view(request):
+    if not request.user.email.endswith("@example.com"):
+        return redirect("/login/?next=%s" % request.path)
+    # ...
+Using user_passes_test:
+CODE:
+from django.contrib.auth.decorators import user_passes_test
+
+
+def email_check(user):
+    return user.email.endswith("@example.com")
+
+
+@user_passes_test(email_check)
+def my_view(request):
+    ...
+Custom login URL:
+
+CODE:
+@user_passes_test(email_check, login_url="/login/")
+def my_view(request):
+    ...
+USAGE GUIDELINES:
+USE WHEN:
+
+You must enforce arbitrary conditions beyond simple authentication or permissions.
+​
+
+DO NOT USE WHEN:
+
+Basic login or permission checks are sufficient; use login_required or permission_required instead.
+​
+
+SUMMARY:
+Custom tests can be applied via direct checks or user_passes_test.
+​
+
+user_passes_test redirects failing users to a login or other page.
+​
+
+Anonymous user handling must be included in your test logic if required.
+​
+
+SECTION: USERPASSESTESTMIXIN: PURPOSE:
+Explain class-based view support for custom user tests.
+
+CONCEPT:
+UserPassesTestMixin provides the same functionality as user_passes_test for class-based views.
+​
+You must override test_func() to implement the access test.
+​
+Alternatively, override get_test_func() to use a differently named function.
+​
+
+You can also configure AccessMixin parameters to control how unauthorized users are handled.
+​
+
+You cannot stack multiple UserPassesTestMixin subclasses in a single inheritance list because they do not compose via super().
+​
+
+COMMAND:
+Basic usage:
+
+CODE:
+from django.contrib.auth.mixins import UserPassesTestMixin
+from django.views import View
+
+
+class MyView(UserPassesTestMixin, View):
+    def test_func(self):
+        return self.request.user.email.endswith("@example.com")
+Example of non-working stacked mixins:
+
+CODE:
+class TestMixin1(UserPassesTestMixin):
+    def test_func(self):
+        return self.request.user.email.endswith("@example.com")
+
+
+class TestMixin2(UserPassesTestMixin):
+    def test_func(self):
+        return self.request.user.username.startswith("django")
+
+
+class MyView(TestMixin1, TestMixin2, View):
+    ...
+USAGE GUIDELINES:
+USE WHEN:
+
+You need complex access rules for class-based views beyond simple permission checks.
+​
+
+DO NOT USE WHEN:
+
+You attempt to compose multiple UserPassesTestMixin subclasses via inheritance; they are not stackable.
+​
+
+SUMMARY:
+UserPassesTestMixin centralizes custom access tests on class-based views.
+​
+
+Override test_func() or get_test_func() to implement your logic.
+​
+
+Avoid stacking multiple UserPassesTestMixin classes.
+​
+
+SECTION: PERMISSION_REQUIRED DECORATOR: PURPOSE:
+Explain how to enforce specific permissions on views.
+
+CONCEPT:
+permission_required(perm, login_url=None, raise_exception=False) is a decorator that checks whether the user has a given permission (or all permissions in an iterable).
+​
+Permissions use the form <app_label>.<permission_codename>, e.g., polls.add_choice.
+​
+
+If the user lacks the required permission and raise_exception is False, they are redirected to the login page (default settings.LOGIN_URL).
+​
+If raise_exception is True, a PermissionDenied exception is raised, typically resulting in a 403 response.
+​
+
+To allow login first but still raise a 403 after login if missing permissions, combine login_required and permission_required.
+​
+
+COMMAND:
+Basic usage:
+
+CODE:
+from django.contrib.auth.decorators import permission_required
+
+
+@permission_required("polls.add_choice")
+def my_view(request):
+    ...
+With custom login URL:
+
+CODE:
+@permission_required("polls.add_choice", login_url="/loginpage/")
+def my_view(request):
+    ...
+Combined with login_required and raise_exception:
+
+CODE:
+from django.contrib.auth.decorators import login_required, permission_required
+
+
+@login_required
+@permission_required("polls.add_choice", raise_exception=True)
+def my_view(request):
+    ...
+This combination also avoids redirect loops when LoginView uses redirect_authenticated_user=True and the authenticated user lacks permissions.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You must enforce one or more explicit permissions for function-based views.
+​
+
+DO NOT USE WHEN:
+
+You only require generic authentication; use login_required instead.
+​
+
+SUMMARY:
+permission_required ensures users hold specific permissions.
+​
+
+It can redirect to login or raise 403 depending on configuration.
+​
+
+Combine with login_required to avoid redirect loops and allow login attempts.
+​
+
+SECTION: PERMISSIONREQUIREDMIXIN: PURPOSE:
+Explain permission enforcement for class-based views.
+
+CONCEPT:
+PermissionRequiredMixin enforces that the accessing user has all specified permissions for a class-based view.
+​
+Set permission_required to a single permission string or an iterable of permissions.
+​
+
+It inherits from AccessMixin, so you can customize handling of unauthorized users through mixin attributes.
+​
+
+get_permission_required() returns the iterable of permission names, defaulting to the permission_required attribute converted to a tuple.
+​
+has_permission() returns a boolean indicating whether the current user has all required permissions, typically using user.has_perms().
+​
+
+COMMAND:
+Basic usage:
+
+CODE:
+from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.views import View
+
+
+class MyView(PermissionRequiredMixin, View):
+    permission_required = "polls.add_choice"
+    # Or multiple permissions:
+    permission_required = ["polls.view_choice", "polls.change_choice"]
+USAGE GUIDELINES:
+USE WHEN:
+
+You must enforce one or more permissions for class-based views.
+​
+
+DO NOT USE WHEN:
+
+You only need custom tests unrelated to permissions; use UserPassesTestMixin instead.
+​
+
+SUMMARY:
+PermissionRequiredMixin enforces permissions on class-based views.
+​
+
+Customize permissions via permission_required and override methods if needed.
+​
+
+SECTION: ACCESSMIXIN AND UNAUTHORIZED REDIRECTS: PURPOSE:
+Describe common behavior for handling unauthorized requests in class-based views.
+
+CONCEPT:
+AccessMixin centralizes behavior for denying access in class-based views.
+​
+Authenticated users who fail checks receive HTTP 403 Forbidden; anonymous users are redirected to the login page or receive 403 based on raise_exception.
+​
+
+Key attributes:
+​
+
+login_url: URL or view name for login; default None falls back to settings.LOGIN_URL.
+​
+
+permission_denied_message: message used when raise_exception is True; defaults to an empty string.
+​
+
+redirect_field_name: name of the query parameter storing the post-login redirect URL; defaults to "next".
+​
+
+raise_exception: if True, raises PermissionDenied; if False (default), redirects anonymous users to login.
+​
+
+Key methods:
+​
+
+get_login_url(): returns the URL to redirect unauthorized users to.
+​
+
+get_permission_denied_message(): returns the message for error handlers when raising exceptions.
+​
+
+get_redirect_field_name(): returns the redirect field name or None.
+​
+
+handle_no_permission(): either raises PermissionDenied or redirects to login_url, optionally including the redirect field.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You implement your own authorization mixins or views that need consistent unauthorized handling semantics.
+​
+
+DO NOT USE WHEN:
+
+You do not use class-based views or mixins; this mixin is not applied to function-based views.
+​
+
+SUMMARY:
+AccessMixin defines shared behavior for authorization failures.
+​
+
+Use its attributes and methods to customize login redirects and 403 responses.
+​
+
+SECTION: SESSION INVALIDATION ON PASSWORD CHANGE: PURPOSE:
+Explain how password changes affect existing sessions and how to preserve the current session.
+
+CONCEPT:
+If AUTH_USER_MODEL inherits from AbstractBaseUser or implements get_session_auth_hash(), Django stores a session auth hash in each authenticated session.
+​
+For AbstractBaseUser, this hash is an HMAC of the password field.
+​
+Django verifies the stored hash on each request; changing the password changes the hash and invalidates all existing sessions.
+​
+
+The default password change views (PasswordChangeView and the admin’s user_change_password) update the session with the new hash so that users changing their own passwords are not logged out.
+​
+Custom password change views should call update_session_auth_hash(request, user) after saving the new password.
+​
+
+update_session_auth_hash() also rotates the session key, invalidating stolen session cookies.
+​
+
+Because get_session_auth_hash() depends on SECRET_KEY, secret key rotation must use SECRET_KEY_FALLBACKS to avoid invalidating all sessions unexpectedly.
+​
+
+COMMAND:
+Example password change view:
+
+CODE:
+from django.contrib.auth import update_session_auth_hash
+
+
+def password_change(request):
+    if request.method == "POST":
+        form = PasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            form.save()
+            update_session_auth_hash(request, form.user)
+    else:
+        ...
+USAGE GUIDELINES:
+USE WHEN:
+
+You implement custom password change logic and want to keep the user logged in.
+​
+
+DO NOT USE WHEN:
+
+You rely entirely on Django’s built-in password change views; they already call update_session_auth_hash().
+​
+
+SUMMARY:
+Session auth hashes allow invalidating all sessions on password change.
+​
+
+Use update_session_auth_hash() in custom views to preserve the current session.
+​
+
+Secret key rotation must be coordinated with SECRET_KEY_FALLBACKS.
+​
+
+SECTION: AUTHENTICATION VIEWS: PURPOSE:
+Describe built-in views for login, logout, and password management.
+
+CONCEPT:
+Django provides class-based authentication views for login, logout, and password operations.
+​
+They use stock auth forms but can be customized with alternative forms and templates.
+​
+No default templates are provided; you must create templates for the views you use.
+​
+
+CONCEPT: INCLUDING AUTH URLS
+The simplest integration is to include django.contrib.auth.urls in your URLconf under a path such as accounts/.
+​
+
+COMMAND:
+Include all auth URLs:
+
+CODE:
+urlpatterns = [
+    path("accounts/", include("django.contrib.auth.urls")),
+]
+This adds routes for login, logout, password change, password reset, and related completion views.
+​
+
+To control URLs more precisely, reference individual views in your URLconf and optionally pass keyword arguments such as template_name.
+​
+
+Example:
+
+CODE:
+from django.contrib.auth import views as auth_views
+
+urlpatterns = [
+    path("change-password/", auth_views.PasswordChangeView.as_view()),
+]
+Customization via template_name:
+
+CODE:
+urlpatterns = [
+    path(
+        "change-password/",
+        auth_views.PasswordChangeView.as_view(template_name="change-password.html"),
+    ),
+]
+All authentication views are class-based, so you can override attributes or subclass them for additional customization.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You want standard login/logout/password flows without writing views from scratch.
+​
+
+DO NOT USE WHEN:
+
+You require completely custom workflows that cannot be adapted from these views.
+​
+
+SUMMARY:
+Django supplies ready-made auth views and URL patterns.
+​
+
+Include django.contrib.auth.urls or wire individual views as needed.
+​
+
+Customize behavior via attributes, templates, and subclassing.
+​
+
+SECTION: LOGINVIEW: PURPOSE:
+Document core attributes and behavior of LoginView.
+
+CONCEPT:
+LoginView handles user login.
+​
+URL name: login.
+​
+
+Key attributes:
+​
+
+template_name: template used to display the login form; defaults to registration/login.html.
+​
+
+next_page: URL to redirect to after login; defaults to LOGIN_REDIRECT_URL.
+​
+
+redirect_field_name: GET parameter specifying the redirect target; defaults to next and overrides get_default_redirect_url().
+​
+
+authentication_form: form class used to authenticate; defaults to AuthenticationForm and must provide get_user().
+​
+
+extra_context: additional context data for the template.
+​
+
+redirect_authenticated_user: boolean controlling whether authenticated users visiting the login page are immediately redirected as if they had logged in; defaults to False.
+​
+
+success_url_allowed_hosts: set of additional allowed hosts for post-login redirects beyond request.get_host(); defaults to an empty set.
+​
+
+get_default_redirect_url() returns next_page if set, otherwise LOGIN_REDIRECT_URL.
+​
+
+Behavior:
+​
+
+On GET: displays a login form that posts back to the same URL.
+​
+
+On POST: attempts to authenticate and log in the user; on success, redirects to the next parameter or LOGIN_REDIRECT_URL; on failure, re-renders the form.
+​
+
+Security notes:
+​
+
+Enabling redirect_authenticated_user can enable “social media fingerprinting” and should be combined with hosting static assets on a separate domain.
+​
+
+redirect_authenticated_user can cause redirect loops when combined with permission_required unless raise_exception is used.
+​
+
+The login template receives form, next, site, and site_name in its context.
+​
+
+COMMAND:
+URLconf with custom template:
+
+CODE:
+path("accounts/login/", auth_views.LoginView.as_view(template_name="myapp/login.html")),
+Sample registration/login.html:
+
+text
+{% extends "base.html" %}
+
+{% block content %}
+
+{% if form.errors %}
+<p>Your username and password didn't match. Please try again.</p>
+{% endif %}
+
+{% if next %}
+    {% if user.is_authenticated %}
+    <p>Your account doesn't have access to this page. To proceed,
+    please login with an account that has access.</p>
+    {% else %}
+    <p>Please login to see this page.</p>
+    {% endif %}
+{% endif %}
+
+<form method="post" action="{% url 'login' %}">
+{% csrf_token %}
+<table>
+<tr>
+    <td>{{ form.username.label_tag }}</td>
+    <td>{{ form.username }}</td>
+</tr>
+<tr>
+    <td>{{ form.password.label_tag }}</td>
+    <td>{{ form.password }}</td>
+</tr>
+</table>
+
+<input type="submit" value="login">
+<input type="hidden" name="next" value="{{ next }}">
+</form>
+
+<p><a href="{% url 'password_reset' %}">Lost password?</a></p>
+
+{% endblock %}
+USAGE GUIDELINES:
+USE WHEN:
+
+You need a standard login form and behavior with optional customization.
+​
+
+DO NOT USE WHEN:
+
+You enable redirect_authenticated_user but cannot isolate static assets to prevent fingerprinting.
+​
+
+SUMMARY:
+LoginView handles GET (form) and POST (login) flows.
+​
+
+Behavior is configurable via attributes and templates.
+​
+
+redirect_authenticated_user requires careful security consideration.
+​
+
+SECTION: LOGOUTVIEW AND LOGOUT_THEN_LOGIN: PURPOSE:
+Document logout-related views and behavior.
+
+CONCEPT:
+LogoutView logs out a user on POST requests.
+​
+URL name: logout.
+​
+
+Key attributes:
+​
+
+next_page: redirect URL after logout; defaults to LOGOUT_REDIRECT_URL.
+​
+
+template_name: template to display after logout; defaults to registration/logged_out.html.
+​
+
+redirect_field_name: GET parameter specifying redirect target after logout; defaults to next and overrides next_page when present.
+​
+
+extra_context: extra context data passed to the template.
+​
+
+success_url_allowed_hosts: additional allowed hosts for post-logout redirects; defaults to an empty set.
+​
+
+Template context includes title, site, and site_name.
+​
+
+logout_then_login(request, login_url=None) logs a user out on POST and redirects them to the login page.
+​
+login_url defaults to settings.LOGIN_URL if not provided.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need standard logout behavior with an optional post-logout page or redirect.
+​
+
+You want a logout-then-login flow in a single step.
+​
+
+DO NOT USE WHEN:
+
+You rely on GET requests for logout; LogoutView is designed for POST.
+​
+
+SUMMARY:
+LogoutView provides a configurable logout process.
+​
+
+logout_then_login combines logout and immediate login redirect.
+​
+
+SECTION: PASSWORD CHANGE VIEWS: PURPOSE:
+Explain views responsible for letting users change their passwords.
+
+CONCEPT:
+PasswordChangeView allows authenticated users to change their password.
+​
+URL name: password_change.
+​
+
+Key attributes:
+​
+
+template_name: template for the password change form; defaults to registration/password_change_form.html.
+​
+
+success_url: redirect URL after a successful password change; defaults to password_change_done.
+​
+
+form_class: form used to change the password; must accept a user keyword argument and is responsible for changing the password; defaults to PasswordChangeForm.
+​
+
+extra_context: extra context data for the template.
+​
+
+Template context contains form.
+​
+
+PasswordChangeDoneView displays a confirmation page after password change.
+​
+URL name: password_change_done.
+​
+
+Key attributes:
+​
+
+template_name: template used to display the completion page; defaults to registration/password_change_done.html.
+​
+
+extra_context: extra context data for the template.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You want to provide a standard in-session password change flow for authenticated users.
+​
+
+DO NOT USE WHEN:
+
+You want password resets via email; use the password reset views instead.
+​
+
+SUMMARY:
+PasswordChangeView and PasswordChangeDoneView implement the password change workflow.
+​
+
+Behavior is customizable via templates, forms, and attributes.
+​
+
+SECTION: PASSWORD RESET VIEWS: PURPOSE:
+Explain how Django implements email-based password reset.
+
+CONCEPT:
+PasswordResetView initiates a password reset by emailing a one-time-use link to the user’s registered email.
+​
+URL name: password_reset.
+​
+
+An email is sent only if:
+​
+
+The email address exists in the system.
+​
+
+The user is active (User.is_active is True).
+​
+
+The user has a usable password (i.e., has not set an unusable password via set_unusable_password()).
+​
+
+If these conditions are not met, no email is sent and the user receives no error—this avoids information disclosure.
+​
+
+Security note: email sending time can leak information; consider asynchronous email solutions to mitigate timing attacks.
+​
+
+Key attributes:
+​
+
+template_name: form template; defaults to registration/password_reset_form.html.
+​
+
+form_class: form used to capture the email; defaults to PasswordResetForm.
+​
+
+email_template_name: email body template; defaults to registration/password_reset_email.html.
+​
+
+subject_template_name: email subject template; defaults to registration/password_reset_subject.txt.
+​
+
+token_generator: instance of PasswordResetTokenGenerator; defaults to default_token_generator.
+​
+
+success_url: redirect URL after request; defaults to password_reset_done.
+​
+
+from_email: sender address; defaults to DEFAULT_FROM_EMAIL.
+​
+
+extra_context: extra context data for the form template.
+​
+
+html_email_template_name: optional HTML email template; by default, only plain text is sent.
+​
+
+extra_email_context: extra context for email templates; can override defaults like domain.
+​
+
+Form template context includes form.
+​
+
+Email template context includes email, user, site_name, domain, protocol, uid, and token.
+​
+
+Sample email template:
+
+CODE:
+Someone asked for password reset for email {{ email }}. Follow the link below:
+{{ protocol}}://{{ domain }}{% url 'password_reset_confirm' uidb64=uid token=token %}
+PasswordResetDoneView shows a page after a reset email is (or is not) sent.
+​
+URL name: password_reset_done.
+​
+Even if the email address is invalid, inactive, or has an unusable password, the user is still redirected here without error feedback.
+​
+
+Key attributes:
+​
+
+template_name: completion template; defaults to registration/password_reset_done.html.
+​
+
+extra_context: extra context for the template.
+​
+
+PasswordResetConfirmView handles the link from the email, presenting a form for the new password.
+​
+URL name: password_reset_confirm.
+​
+
+Keyword arguments from URL:
+​
+
+uidb64: base64-encoded user ID.
+​
+
+token: token validating the password reset.
+​
+
+Key attributes:
+​
+
+template_name: template for the form; defaults to registration/password_reset_confirm.html.
+​
+
+token_generator: token verifier; defaults to default_token_generator.
+​
+
+post_reset_login: boolean; if True, automatically logs the user in after a successful reset; defaults to False.
+​
+
+post_reset_login_backend: dotted path to an authentication backend used when post_reset_login is True, required only with multiple backends; defaults to None.
+​
+
+form_class: form to set the new password; defaults to SetPasswordForm.
+​
+
+success_url: redirect after reset; defaults to password_reset_complete.
+​
+
+extra_context: extra context for the template.
+​
+
+reset_url_token: URL component used as token parameter; defaults to set-password.
+​
+
+Template context includes form and validlink.
+​
+
+PasswordResetCompleteView displays a final success page after the password has been reset.
+​
+URL name: password_reset_complete.
+​
+
+Key attributes:
+​
+
+template_name: template used for the completion page; defaults to registration/password_reset_complete.html.
+​
+
+extra_context: extra context for the template.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need a standard email-based password reset flow.
+​
+
+DO NOT USE WHEN:
+
+You cannot accept the information-hiding behavior (same response regardless of user existence); altering this risks leaking user existence.
+​
+
+SUMMARY:
+Password reset uses email links based on secure tokens.
+​
+
+Several views handle initiation, confirmation, and completion stages.
+​
+
+Behavior is configurable via templates, forms, and token generator.
+​
+
+SECTION: HELPER FUNCTION redirect_to_login: PURPOSE:
+Explain how to programmatically redirect users to login with a post-login target.
+
+CONCEPT:
+redirect_to_login(next, login_url=None, redirect_field_name='next') redirects users to the login page and then back to a target URL after successful login.
+​
+
+Required argument:
+​
+
+next: URL to redirect to after successful login.
+​
+
+Optional arguments:
+​
+
+login_url: login page URL; defaults to settings.LOGIN_URL.
+​
+
+redirect_field_name: GET parameter name used to store the post-login redirect URL; overrides next if present; defaults to "next".
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to manually send users to login while preserving their intended destination.
+​
+
+DO NOT USE WHEN:
+
+Decorators or mixins already handle your redirect logic.
+​
+
+SUMMARY:
+redirect_to_login encapsulates login redirect patterns with a return URL.
+​
+
+It is useful in custom authorization logic where decorators are not applicable.
+​
+
+SECTION: BUILT-IN AUTH FORMS: PURPOSE:
+Describe the standard forms provided for auth-related operations.
+
+CONCEPT:
+Django’s authentication system exposes several built-in forms in django.contrib.auth.forms.
+​
+These forms assume certain properties of the user model; with a custom user model, you may need custom forms.
+​
+
+Key forms:
+​
+
+AdminPasswordChangeForm: used in the admin to change a user’s password, including setting an unusable password via set_unusable_password().
+​
+
+AdminUserCreationForm: used in the admin to create a new user, inheriting from UserCreationForm and including a usable_password field.
+​
+
+AuthenticationForm: used for logging a user in, taking request as its first positional argument.
+​
+
+BaseUserCreationForm: a ModelForm for creating new users with username, password1, and password2 fields.
+​
+
+UserCreationForm: inherits from BaseUserCreationForm and prevents creation of users whose usernames differ only by case.
+​
+
+PasswordChangeForm: allows a user to change their password while logged in.
+​
+
+PasswordResetForm: generates and emails a one-time password reset link.
+​
+
+SetPasswordForm: allows setting a new password without requiring the old one.
+​
+
+UserChangeForm: used in the admin to change user information and permissions.
+​
+
+AdminUserCreationForm validates that password1 and password2 are non-empty and match, validates passwords via validate_password(), and sets the password using set_password() when usable_password is enabled; when disabled, it calls set_unusable_password() instead.
+​
+
+BaseUserCreationForm ensures password1 and password2 match, validates them via validate_password(), and sets the password via set_password().
+​
+
+AuthenticationForm stores request on the form instance and supports confirm_login_allowed(user).
+​
+
+CONCEPT: confirm_login_allowed
+confirm_login_allowed(user) on AuthenticationForm defines which users may log in.
+​
+By default, it rejects users whose is_active is False by raising ValidationError.
+​
+You can override it in a subclass to customize login policy.
+​
+
+Examples:
+​
+
+Allow inactive users:
+
+CODE:
+from django.contrib.auth.forms import AuthenticationForm
+
+
+class AuthenticationFormWithInactiveUsersOkay(AuthenticationForm):
+    def confirm_login_allowed(self, user):
+        pass
+Restrict users further:
+
+CODE:
+class PickyAuthenticationForm(AuthenticationForm):
+    def confirm_login_allowed(self, user):
+        if not user.is_active:
+            raise ValidationError(
+                _("This account is inactive."),
+                code="inactive",
+            )
+        if user.username.startswith("b"):
+            raise ValidationError(
+                _("Sorry, accounts starting with 'b' aren't welcome here."),
+                code="no_b_users",
+            )
+In these cases, ensure your authentication backend is compatible with the policy (e.g., AllowAllUsersModelBackend for inactive users).
+​
+
+CONCEPT: PasswordResetForm.send_mail
+PasswordResetForm.send_mail(subject_template_name, email_template_name, context, from_email, to_email, html_email_template_name=None) sends an EmailMultiAlternatives.
+​
+Override it to customize email sending and error handling.
+​
+By default, save() populates the context similarly to PasswordResetView’s email context.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You want built-in forms for auth-related flows and your user model conforms to their assumptions.
+​
+
+DO NOT USE WHEN:
+
+Your custom user model deviates significantly; define custom forms instead.
+​
+
+SUMMARY:
+Built-in forms cover login, user creation, password change, and password reset.
+​
+
+AuthenticationForm can enforce custom login policies via confirm_login_allowed.
+​
+
+PasswordResetForm.send_mail can be overridden for email customization.
+​
+
+SECTION: AUTH DATA IN TEMPLATES: PURPOSE:
+Explain how user and permission data appears in templates.
+
+CONCEPT:
+When using RequestContext with the django.contrib.auth.context_processors.auth context processor (enabled by default), templates receive user and perms variables.
+​
+
+user is either a User instance or an AnonymousUser instance.
+​
+
+perms is an instance of PermWrapper, a template-friendly proxy for user permissions.
+​
+
+COMMAND:
+User-based conditions:
+
+CODE:
+{% if user.is_authenticated %}
+    <p>Welcome, {{ user.username }}. Thanks for logging in.</p>
+{% else %}
+    <p>Welcome, new user. Please log in.</p>
+{% endif %}
+Module permission check:
+
+CODE:
+{% if perms.foo %}
+    ...
+{% endif %}
+Specific permission check:
+
+CODE:
+{% if perms.foo.add_vote %}
+    ...
+{% endif %}
+Using in tests:
+
+CODE:
+{% if 'foo' in perms %}
+    {% if 'foo.add_vote' in perms %}
+        <p>In lookup works, too.</p>
+    {% endif %}
+{% endif %}
+USAGE GUIDELINES:
+USE WHEN:
+
+You need to conditionally render template content based on authentication or permissions.
+​
+
+DO NOT USE WHEN:
+
+You do not use RequestContext or have disabled the auth context processor; user and perms will not be available.
+​
+
+SUMMARY:
+Templates receive user and perms when using the auth context processor.
+​
+
+Permissions can be checked using attribute access or in tests.
+​
+
+SECTION: MANAGING USERS IN THE ADMIN: PURPOSE:
+Describe how the Django admin supports user, group, and permission management.
+
+CONCEPT:
+When both django.contrib.admin and django.contrib.auth are installed, the admin provides interfaces for managing users, groups, and permissions.
+​
+Users can be created and deleted like any other model, and groups can be created and assigned permissions.
+​
+The admin also logs user edits to models.
+​
+
+The “Add user” page differs from typical admin pages: it requires entering a username and password before exposing additional fields, or allows setting a username and disabling password authentication.
+​
+
+To grant a user account the ability to create users in the admin, you must give it both “add user” and “change user” permissions.
+​
+Without change permission, a user with add permission alone cannot create users, as that would effectively grant superuser creation capability; Django enforces both as a security measure.
+​
+
+Allowing non-superusers to edit users is equivalent to granting them superuser-level control, since they can elevate their own or others’ permissions.
+​
+
+User passwords are not displayed in the admin; instead, password storage details are shown along with a link to a password change form.
+​
+
+USAGE GUIDELINES:
+USE WHEN:
+
+You need an administrative UI for managing users, groups, and permissions.
+​
+
+DO NOT USE WHEN:
+
+You want to expose user management capabilities to non-superusers without fully understanding the security implications.
+​
+
+SUMMARY:
+Admin integrates with auth to manage users, groups, and permissions.
+​
+
+Creating users via admin requires both add and change permissions.
+​
+
+Non-superusers who can edit users effectively have superuser power.
+​
+
+VERSION AND SCOPE:
+DJANGO VERSION: 6.0.
+​
+PYTHON VERSION: Not specified in this document.
+​
+APPLICABILITY: Django projects using the default authentication framework described in the Django 6.0 documentation.
+​

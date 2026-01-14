@@ -1,0 +1,400 @@
+SECTION: Custom Template Tags and Filters Overview
+
+PURPOSE:
+Explain how to extend Django’s template language by defining custom tags and filters in Python.
+
+CONCEPT:
+
+Django provides a rich set of built-in template tags and filters, but additional presentation logic can be implemented by defining custom tags and filters. These extensions are written in Python and explicitly loaded into templates using {% load %}.
+
+SECTION: Code Layout for Template Libraries
+
+PURPOSE:
+Define the required directory structure for custom template tag and filter modules.
+
+CONCEPT:
+
+Custom template tags and filters are typically defined inside a Django app. When the app is listed in INSTALLED_APPS, its template libraries become available to templates.
+
+DIRECTORY STRUCTURE REQUIREMENTS:
+
+DIRECTORY: templatetags/
+ROLE: Python package containing custom template tag modules
+
+FILE: __init__.py
+ROLE: Marks the directory as a Python package
+
+FILE: <module_name>.py
+ROLE: Defines template tags and filters loaded by {% load %}
+
+EXAMPLE STRUCTURE:
+polls/
+    __init__.py
+    models.py
+    templatetags/
+        __init__.py
+        poll_extras.py
+    views.py
+
+TEMPLATE USAGE:
+{% load poll_extras %}
+
+IMPORTANT RULES:
+
+The app MUST be listed in INSTALLED_APPS
+
+The development server MUST be restarted after adding templatetags
+
+{% load %} loads modules, not apps
+
+Module names MUST NOT conflict with other tag libraries
+
+SECTION: Template Library Registration
+
+PURPOSE:
+Explain how Django discovers custom tags and filters.
+
+CONCEPT:
+
+Each template tag module MUST define a module-level variable named register, which is an instance of django.template.Library.
+
+REQUIRED CODE:
+from django import template
+
+register = template.Library()
+
+ALTERNATIVE REGISTRATION:
+
+Template libraries may also be registered using the libraries argument of DjangoTemplates. This allows:
+
+Custom load labels
+
+Registration without installing an app
+
+SECTION: Writing Custom Template Filters
+
+PURPOSE:
+Define how to create reusable value-transforming filters.
+
+CONCEPT:
+
+A custom filter is a Python function that accepts:
+
+A value
+
+An optional argument
+
+Filters SHOULD NOT raise exceptions unless the input represents a template bug.
+
+EXAMPLE FILTER:
+def cut(value, arg):
+    """Removes all values of arg from the given string"""
+    return value.replace(arg, "")
+
+TEMPLATE USAGE:
+{{ somevariable|cut:"0" }}
+
+SECTION: Filters Without Arguments
+CONCEPT:
+
+Filters that do not require arguments accept only a single parameter.
+
+EXAMPLE:
+def lower(value):
+    """Converts a string into all lowercase"""
+    return value.lower()
+
+SECTION: Registering Custom Filters
+CONCEPT:
+
+Filters must be registered with the Library instance to be usable.
+
+COMMAND:
+register.filter("cut", cut)
+register.filter("lower", lower)
+
+DECORATOR FORM:
+@register.filter(name="cut")
+def cut(value, arg):
+    return value.replace(arg, "")
+
+@register.filter
+def lower(value):
+    return value.lower()
+
+REGISTRATION OPTIONS:
+
+is_safe
+
+needs_autoescape
+
+expects_localtime
+
+SECTION: Filters Expecting Strings
+CONCEPT:
+
+Filters that operate only on strings MUST use the stringfilter decorator to ensure non-string inputs are converted safely.
+
+COMMAND:
+from django.template.defaultfilters import stringfilter
+
+@register.filter
+@stringfilter
+def lower(value):
+    return value.lower()
+
+SECTION: Filters and Auto-Escaping
+
+PURPOSE:
+Define how filters interact with Django’s HTML auto-escaping system.
+
+CONCEPT:
+
+Django distinguishes between:
+
+Raw strings: Escaped on output if auto-escaping is enabled
+
+Safe strings: Marked safe and not escaped again
+
+SAFE STRING TYPE:
+
+django.utils.safestring.SafeString
+
+CASE 1: Filter Does NOT Introduce Unsafe HTML
+RULE:
+
+Set is_safe=True ONLY IF the filter does not introduce HTML-unsafe characters.
+
+EXAMPLE:
+@register.filter(is_safe=True)
+def add_xx(value):
+    return "%sxx" % value
+
+WARNING:
+
+DO NOT mark filters is_safe if:
+
+Characters are removed
+
+HTML structure may become invalid
+
+The filter returns non-string values
+
+CASE 2: Filter Introduces HTML
+RULE:
+
+When generating HTML:
+
+Manually escape input
+
+Mark output safe explicitly
+
+Respect auto-escaping state
+
+REQUIRED FLAGS:
+
+needs_autoescape=True
+
+EXAMPLE:
+@register.filter(needs_autoescape=True)
+def initial_letter_filter(text, autoescape=True):
+    ...
+
+SECTION: Filters and Time Zones
+CONCEPT:
+
+Filters operating on datetime objects SHOULD be registered with expects_localtime=True.
+
+EXAMPLE:
+@register.filter(expects_localtime=True)
+def businesshours(value):
+    try:
+        return 9 <= value.hour < 17
+    except AttributeError:
+        return ""
+
+SECTION: Writing Custom Template Tags
+
+PURPOSE:
+Explain how to define template tags that perform logic beyond value transformation.
+
+SECTION: Simple Tags
+CONCEPT:
+
+Simple tags:
+
+Accept arguments
+
+Return a value
+
+Automatically escape output
+
+EXAMPLE:
+@register.simple_tag
+def current_time(format_string):
+    return datetime.datetime.now().strftime(format_string)
+
+CONTEXT ACCESS:
+@register.simple_tag(takes_context=True)
+def current_time(context, format_string):
+    ...
+
+VARIABLE ASSIGNMENT:
+{% current_time "%Y-%m-%d %I:%M %p" as the_time %}
+
+SECTION: Simple Block Tags
+
+DJANGO VERSION: 5.2+
+
+PURPOSE:
+Process rendered template content enclosed within a custom tag.
+
+CONCEPT:
+
+simple_block_tag receives:
+
+Rendered inner content
+
+Optional arguments
+
+Optional context
+
+EXAMPLE:
+@register.simple_block_tag
+def chart(content):
+    return render_chart(source=content)
+
+BLOCK USAGE:
+{% chart %}
+  ...
+{% endchart %}
+
+SECTION: Inclusion Tags
+
+PURPOSE:
+Render a separate template fragment using a generated context.
+
+CONCEPT:
+
+Inclusion tags:
+
+Return a dictionary
+
+Render a fixed template
+
+Support takes_context=True
+
+EXAMPLE REGISTRATION:
+@register.inclusion_tag("results.html")
+def show_results(poll):
+    return {"choices": poll.choice_set.all()}
+
+CONTEXT-AWARE EXAMPLE:
+@register.inclusion_tag("link.html", takes_context=True)
+def jump_link(context):
+    return {
+        "link": context["home_link"],
+        "title": context["home_title"],
+    }
+
+SECTION: Advanced Custom Template Tags
+
+PURPOSE:
+Describe low-level tag creation using compilation and rendering stages.
+
+CONCEPT:
+
+Template rendering has two phases:
+
+Compilation into Node objects
+
+Rendering via Node.render(context)
+
+SECTION: Compilation Functions
+CONCEPT:
+
+Compilation functions:
+
+Parse tag syntax
+
+Validate arguments
+
+Return a Node instance
+
+EXAMPLE:
+def do_current_time(parser, token):
+    ...
+    return CurrentTimeNode(format_string)
+
+SECTION: Node Rendering
+CONCEPT:
+
+Each Node:
+
+Is instantiated once
+
+May render multiple times
+
+MUST NOT store mutable state
+
+EXAMPLE:
+class CurrentTimeNode(template.Node):
+    def render(self, context):
+        return datetime.datetime.now().strftime(self.format_string)
+
+SECTION: Thread-Safety and render_context
+CONCEPT:
+
+Nodes may be rendered concurrently across threads.
+Mutable state MUST be stored in context.render_context.
+
+SAFE PATTERN:
+context.render_context[self] = ...
+
+SECTION: Parsing Until Another Block Tag
+CONCEPT:
+
+Block tags can consume content until a closing tag using parser.parse().
+
+EXAMPLE:
+nodelist = parser.parse(("endcomment",))
+parser.delete_first_token()
+
+SECTION: Parsing and Modifying Block Content
+CONCEPT:
+
+Captured node lists can be rendered and transformed.
+
+EXAMPLE:
+output = self.nodelist.render(context)
+return output.upper()
+
+SECTION: Setting Variables in the Context
+CONCEPT:
+
+Tags may assign values into the template context instead of returning output.
+
+RULE:
+
+render() MUST return a string (often empty).
+
+SECTION: Auto-Escaping in Custom Tags
+CONCEPT:
+
+Template tags:
+
+Do NOT auto-escape by default
+
+MUST propagate context.autoescape when creating new contexts
+
+SUMMARY:
+
+Custom tags and filters extend Django templates using Python
+
+Filters transform values; tags perform logic
+
+Auto-escaping and thread safety are critical
+
+simple_tag, simple_block_tag, and inclusion_tag cover most use cases
+
+Advanced tags require manual parsing and node management

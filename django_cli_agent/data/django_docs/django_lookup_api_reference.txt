@@ -1,0 +1,127 @@
+PURPOSE: This section details the Django API for building WHERE clauses in database queries, including registration and expression components.
+DJANGO VERSION: 6.0
+PYTHON VERSION: Not specified
+APPLICABILITY:
+
+Django ORM for custom lookups and transforms.
+
+CONCEPT: LOOKUP API OVERVIEW
+The lookup API consists of RegisterLookupMixin for registering lookups and the Query Expression API for classes to implement registrable lookups. All built-in lookups derive from Lookup for field lookups and Transform for field transformations.
+A lookup expression includes fields part, optional transforms part, and a lookup (defaults to exact if omitted).
+SECTION: REGISTRATION API
+PURPOSE: This section explains the interface for registering lookups on classes or instances.
+CONCEPT: REGISTERLOOKUPMIXIN CLASS
+RegisterLookupMixin implements the lookup API on a class.
+COMMAND:
+classmethod register_lookup(lookup, lookup_name=None)
+Registers a lookup on the class or instance. Overrides existing with same name. Instance lookups take precedence.
+CODE:
+DateField.register_lookup(YearExact)
+User._meta.get_field("date_joined").register_lookup(MonthExact)
+COMMAND:
+CODE:
+get_lookup(lookup_name)
+Returns the Lookup named lookup_name, checking parents recursively.
+COMMAND:
+CODE:
+get_lookups()
+Returns dict of registered lookup names to Lookup classes.
+COMMAND:
+CODE:
+get_transform(transform_name)
+Returns the Transform named transform_name, checking parents.
+USAGE GUIDELINES:
+USE WHEN:
+
+Adding custom lookups to fields like Field or Transform.
+DO NOT USE WHEN:
+Overriding without checking existing registrations.
+
+SECTION: THE QUERY EXPRESSION API
+PURPOSE: This section describes methods classes must implement to be usable in query expressions.
+CONCEPT: QUERY EXPRESSION API OVERVIEW
+Classes like Lookup and Transform implement this API to translate to SQL.
+COMMAND:
+CODE:
+as_sql(compiler, connection)
+Generates SQL fragment. Returns (sql, params). Use compiler.compile() for other expressions.
+Custom kwargs possible for vendor-specific overrides.
+DO NOT call expression.as_sql(); use compiler.compile(expression) instead.
+COMMAND:
+CODE:
+as_vendorname(compiler, connection)
+Like as_sql(), tried first for vendor-specific.
+vendorname: postgresql, oracle, sqlite, mysql.
+COMMAND:
+CODE:
+get_lookup(lookup_name)
+Returns Lookup named lookup_name.
+COMMAND:
+CODE:
+get_transform(transform_name)
+Returns Transform named transform_name.
+CONCEPT: OUTPUT_FIELD
+Defines return type; must be a Field instance.
+USAGE GUIDELINES:
+USE WHEN:
+
+Implementing custom lookups or transforms.
+DO NOT USE WHEN:
+Bypassing compiler.compile().
+
+SECTION: TRANSFORM REFERENCE
+PURPOSE: This section details the Transform class for field transformations.
+CONCEPT: TRANSFORM CLASS
+Transform implements field transformations like __year.
+Notation: <expression>__<transformation>.
+Follows Query Expression API; specialized Func with one argument.
+CONCEPT: BILATERAL
+Boolean; if True, applies to both lhs and rhs.
+Defaults to False.
+CONCEPT: LHS
+Left-hand side being transformed; follows Query Expression API or plain value.
+CONCEPT: LOOKUP_NAME
+Lookup name; cannot contain "__".
+CONCEPT: OUTPUT_FIELD
+Output class; Field instance. Defaults to lhs.output_field.
+USAGE GUIDELINES:
+USE WHEN:
+
+Creating transformations like __lower.
+DO NOT USE WHEN:
+For direct filters; use in annotations or right-hand side.
+
+SECTION: LOOKUP REFERENCE
+PURPOSE: This section details the Lookup class for implementing lookups.
+CONCEPT: LOOKUP CLASS
+Lookup implements lookups like exact.
+Notation: <lhs>__<lookup_name>=<rhs>.
+CONCEPT: LHS
+Left-hand side; typically follows Query Expression API, or plain value.
+CONCEPT: RHS
+Right-hand side; plain value, F(), or QuerySet.
+CONCEPT: LOOKUP_NAME
+Lookup name; cannot contain "__".
+CONCEPT: PREPARE_RHS
+If True (default), prepares rhs as query parameter.
+COMMAND:
+CODE:
+process_lhs(compiler, connection, lhs=None)
+Processes lhs; returns (lhs_string, lhs_params).
+COMMAND:
+CODE:
+process_rhs(compiler, connection)
+Processes rhs similarly.
+USAGE GUIDELINES:
+USE WHEN:
+
+Custom lookups for boolean comparisons.
+DO NOT USE WHEN:
+Assumptions about SQL generation.
+
+SUMMARY:
+
+Use RegisterLookupMixin to add lookups.
+Implement Query Expression API for custom expressions.
+Transform for field changes, Lookup for comparisons.
+Bilateral for symmetric transforms.
