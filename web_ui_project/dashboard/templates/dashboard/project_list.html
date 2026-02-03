@@ -272,6 +272,14 @@
             justify-content: center;
             z-index: 999;
         }
+        .btn.danger {
+            background: #dc2626;
+        }
+
+        .btn.danger:hover {
+            background: #b91c1c;
+        }
+
 
         .spinner {
             width: 36px;
@@ -335,8 +343,23 @@
                                 Created {{ project.created_at|date:"F d, Y g:i A" }}
                             </div>
                             <div class="project-footer">
-                                <a href="{% url 'chat:chat' project.id %}" class="btn">💬 Open Chat</a>
-                            </div>
+                            <a href="{% url 'chat:chat' project.id %}" class="btn">
+                                💬 Open Chat
+                            </a>
+
+                            <form
+                                method="post"
+                                action="{% url 'dashboard:delete_project_chat' project.id %}"
+                                onsubmit="return confirmDelete();"
+                                style="display:inline;"
+                            >
+                                {% csrf_token %}
+                                <button type="submit" class="btn danger">
+                                    🗑 Delete Chat
+                                </button>
+                            </form>
+                        </div>
+
                         </div>
                     {% endfor %}
                 </div>
