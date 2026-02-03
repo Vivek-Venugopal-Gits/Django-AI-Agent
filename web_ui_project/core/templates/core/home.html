@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
 <head>
     <title>Django AI Agent</title>
@@ -13,5 +13,161 @@
 
     <a href="{% url 'accounts:login' %}">Login</a>
     <a href="{% url 'accounts:signup' %}">Sign Up</a>
+</body>
+</html> -->
+<!-- templates/core/home.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Django AI Agent</title>
+
+    <style>
+        :root {
+            --bg-main: #020617;
+            --bg-soft: #0f172a;
+            --text-main: #e5e7eb;
+            --text-muted: #9ca3af;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #1f2937;
+            --radius: 14px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top, #0f172a, #020617);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            text-align: center;
+            animation: fadeIn 0.6s ease;
+        }
+
+        h1 {
+            font-size: 42px;
+            font-weight: 700;
+            letter-spacing: -0.6px;
+            margin-bottom: 16px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: var(--text-muted);
+            line-height: 1.7;
+            max-width: 680px;
+            margin: 0 auto 36px;
+        }
+
+        .highlight {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 28px;
+            border-radius: 999px;
+            font-size: 15px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: transform 0.15s ease, background 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-soft);
+        }
+
+        footer {
+            margin-top: 60px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 32px;
+            }
+            .subtitle {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Django AI Agent</h1>
+
+        <p class="subtitle">
+            Build Django projects using <span class="highlight">natural language</span>.<br>
+            Let the AI agent write <span class="highlight">real production-ready code</span>
+            directly into your project.
+        </p>
+
+        <div class="actions">
+            <a href="{% url 'accounts:login' %}" class="btn btn-primary">
+                Login
+            </a>
+            <a href="{% url 'accounts:signup' %}" class="btn btn-secondary">
+                Sign Up
+            </a>
+        </div>
+
+        <footer>
+            © Django AI Agent · Build faster with intelligence
+        </footer>
+    </div>
+
 </body>
 </html>

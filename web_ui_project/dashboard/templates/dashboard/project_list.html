@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
 <head>
     <title>My Projects - Django AI Agent</title>
@@ -105,5 +105,259 @@
             </div>
         {% endif %}
     </div>
+</body>
+</html> -->
+<!-- templates/dashboard/projects.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Projects · Django AI Agent</title>
+
+    <style>
+        :root {
+            --bg-main: #0f172a;
+            --bg-card: #111827;
+            --bg-soft: #1f2933;
+            --text-main: #e5e7eb;
+            --text-muted: #9ca3af;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #1f2937;
+            --radius: 14px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: linear-gradient(135deg, #020617, #020617);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        /* Header */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 10px;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s ease, transform 0.15s ease;
+        }
+
+        .btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn.secondary {
+            background: var(--bg-soft);
+            color: var(--text-main);
+        }
+
+        .btn.secondary:hover {
+            background: #2b3645;
+        }
+
+        /* Card */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        /* Project List */
+        .project-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .project-item {
+            background: var(--bg-soft);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .project-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .project-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .project-path {
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--text-muted);
+            word-break: break-all;
+        }
+
+        .project-date {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .project-footer {
+            margin-top: auto;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state h2 {
+            margin-bottom: 10px;
+            color: var(--text-main);
+        }
+
+        /* Loader */
+        .loader {
+            position: fixed;
+            inset: 0;
+            background: #020617;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid #1f2937;
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Page Loader -->
+    <div class="loader" id="pageLoader">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="container">
+        <div class="page-header">
+            <div class="page-title">My Projects</div>
+            <div class="header-actions">
+                <a href="{% url 'dashboard:new_project' %}" class="btn">➕ New Project</a>
+                <a href="{% url 'dashboard:home' %}" class="btn secondary">🏠 Dashboard</a>
+            </div>
+        </div>
+
+        <div class="card">
+            {% if projects %}
+                <div class="project-list">
+                    {% for project in projects %}
+                        <div class="project-item">
+                            <div class="project-name">{{ project.name }}</div>
+                            <div class="project-path">{{ project.root_path }}</div>
+                            <div class="project-date">
+                                Created {{ project.created_at|date:"F d, Y g:i A" }}
+                            </div>
+                            <div class="project-footer">
+                                <a href="{% url 'chat:chat' project.id %}" class="btn">💬 Open Chat</a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h2>No projects yet</h2>
+                    <p>Create your first project to start building with AI.</p>
+                    <br>
+                    <a href="{% url 'dashboard:new_project' %}" class="btn">➕ Create Project</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener("load", () => {
+            const loader = document.getElementById("pageLoader");
+            loader.style.opacity = "0";
+            setTimeout(() => loader.remove(), 300);
+        });
+    </script>
+
 </body>
 </html>
