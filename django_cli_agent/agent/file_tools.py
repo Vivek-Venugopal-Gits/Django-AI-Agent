@@ -103,26 +103,41 @@ def get_workspace_root():
     return _current_workspace_root
 
 
+# def _resolve_path(relative_path: str) -> Path:
+#     """
+#     Resolve a relative path within the current workspace
+    
+#     Args:
+#         relative_path: Relative path from workspace root (e.g., "app/models.py")
+    
+#     Returns:
+#         Absolute resolved Path object
+    
+#     Raises:
+#         FileToolError: If path tries to escape workspace
+#     """
+#     workspace = get_workspace_root()
+#     path = (workspace / relative_path).resolve()
+    
+#     # Security check: prevent directory traversal attacks
+#     if not str(path).startswith(str(workspace)):
+#         raise FileToolError(f"Access outside workspace denied: {relative_path}")
+    
+#     return path
 def _resolve_path(relative_path: str) -> Path:
-    """
-    Resolve a relative path within the current workspace
-    
-    Args:
-        relative_path: Relative path from workspace root (e.g., "app/models.py")
-    
-    Returns:
-        Absolute resolved Path object
-    
-    Raises:
-        FileToolError: If path tries to escape workspace
-    """
     workspace = get_workspace_root()
     path = (workspace / relative_path).resolve()
-    
-    # Security check: prevent directory traversal attacks
+
     if not str(path).startswith(str(workspace)):
         raise FileToolError(f"Access outside workspace denied: {relative_path}")
-    
+
+    # 🚨 Block paths like models.py/anything
+    for parent in path.parents:
+        if parent.suffix and parent.exists() and parent.is_file():
+            raise FileToolError(
+                f"Invalid path: treating file as directory → {parent}"
+            )
+
     return path
 
 
@@ -145,22 +160,41 @@ def read_file(path: str) -> str:
     return file_path.read_text(encoding="utf-8")
 
 
+# def write_file(path: str, content: str):
+#     """
+#     Write new file to workspace (fails if file exists)
+    
+#     Args:
+#         path: Relative path from workspace root
+#         content: File content to write
+    
+#     Raises:
+#         FileToolError: If file already exists
+#     """
+#     file_path = _resolve_path(path)
+#     if file_path.exists():
+#         raise FileToolError(f"File already exists: {path}")
+#     file_path.parent.mkdir(parents=True, exist_ok=True)
+#     file_path.write_text(content, encoding="utf-8")
 def write_file(path: str, content: str):
     """
     Write new file to workspace (fails if file exists)
-    
-    Args:
-        path: Relative path from workspace root
-        content: File content to write
-    
-    Raises:
-        FileToolError: If file already exists
     """
     file_path = _resolve_path(path)
+
+    # If path already exists as a FILE → block
     if file_path.exists():
         raise FileToolError(f"File already exists: {path}")
+
+    # 🚨 SAFETY: parent must not be a file
+    if file_path.parent.exists() and file_path.parent.is_file():
+        raise FileToolError(
+            f"Invalid path: parent is a file, not a directory → {file_path.parent}"
+        )
+
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
+
 
 
 def append_file(path: str, content: str):
