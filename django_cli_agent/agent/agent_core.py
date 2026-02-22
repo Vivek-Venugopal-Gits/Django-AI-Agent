@@ -6,7 +6,7 @@ from agent.file_tools import (
     write_file,
     append_file,
     FileToolError,
-    set_workspace_root  # NEW: Import the setter function
+    set_workspace_root
 )
 import re
 import os
@@ -21,90 +21,231 @@ class AgentCore:
     - Supports both CLI mode (workspace.py) and Web UI mode (dynamic path)
     """
 
-    def __init__(self, workspace_root: str | None = None):
-        import os
-        from agent.file_tools import set_workspace_root
+    FILE_TYPE_HINTS = {
+        "urls.py": (
+            "TARGET FILE TYPE: urls.py\n"
+            "You MUST produce a valid Django `urlpatterns` list using `path()` or `re_path()`.\n"
+            "Always include FULL imports at the top:\n"
+            "    from django.urls import path\n"
+            "    from . import views\n"
+            "Do NOT generate model classes, view functions, or form code.\n"
+            "Output ONLY the urlpatterns Python code block with all imports at the top."
+        ),
+        "models.py": (
+            "TARGET FILE TYPE: models.py\n"
+            "You MUST produce Django model classes that inherit from `models.Model`.\n"
+            "Always include `from django.db import models` at the top.\n"
+            "Do NOT generate url patterns, view functions, or form code.\n"
+            "Output ONLY the model class(es) with all imports at the top."
+        ),
+        "views.py": (
+            "TARGET FILE TYPE: views.py\n"
+            "You MUST produce Django view functions or class-based views.\n"
+            "Always include FULL imports at the top:\n"
+            "    from django.shortcuts import render, redirect\n"
+            "Do NOT generate model classes, url patterns, or form code.\n"
+            "Output ONLY the view function(s) or class(es) with all imports at the top."
+        ),
+        "forms.py": (
+            "TARGET FILE TYPE: forms.py\n"
+            "You MUST produce Django Form or ModelForm classes.\n"
+            "Always include FULL imports at the top:\n"
+            "    from django import forms\n"
+            "    from .models import <ModelName>\n"
+            "Do NOT generate model classes, url patterns, or view functions.\n"
+            "Output ONLY the form class(es) with all imports at the top."
+        ),
+        "admin.py": (
+            "TARGET FILE TYPE: admin.py\n"
+            "You MUST register models using `admin.site.register()` or `@admin.register()`.\n"
+            "Always include FULL imports at the top:\n"
+            "    from django.contrib import admin\n"
+            "    from .models import <ModelName>\n"
+            "Do NOT generate model classes, url patterns, or view functions.\n"
+            "Output ONLY the admin registration code with all imports at the top."
+        ),
+        "serializers.py": (
+            "TARGET FILE TYPE: serializers.py\n"
+            "You MUST produce DRF serializer classes using `serializers.ModelSerializer`.\n"
+            "Always include FULL imports at the top.\n"
+            "Output ONLY the serializer class(es) with all imports."
+        ),
+        "signals.py": (
+            "TARGET FILE TYPE: signals.py\n"
+            "You MUST produce Django signal handlers using the `@receiver` decorator.\n"
+            "Always include FULL imports at the top.\n"
+            "Output ONLY the signal handler code with all imports."
+        ),
+    }
 
+    # Matches lines that are pure LLM garbage abbreviations like "f i c d @" or "f ic d @"
+    # Strategy: strip the garbage PREFIX but keep any trailing real code on the same line
+    GARBAGE_PREFIX_PATTERN = re.compile(
+        r'^(?:[a-z@]{1,2}\s+){2,}',
+        re.IGNORECASE
+    )
+
+    STOP_MARKERS = [
+        "Explanation:", "Note:", "Summary:", "This will", "This code",
+        "The code", "In this case", "The above", "By default", "You can now",
+        "The user has", "This will allow"
+    ]
+
+    CODE_START_PREFIXES = (
+        "from ", "import ", "class ", "def ", "@",
+        "urlpatterns", "app_name", "admin.site",
+    )
+
+    def _get_file_type_hint(self, path: str | None) -> str | None:
+        if not path:
+            return None
+        filename = path.replace("\\", "/").split("/")[-1].lower()
+        return self.FILE_TYPE_HINTS.get(filename)
+
+    def _extract_model_names_from_source(self, source_content: str) -> list[str]:
+        return re.findall(r'^class\s+(\w+)\s*\(models\.Model\)', source_content, re.MULTILINE)
+
+    def _extract_view_names_from_source(self, source_content: str) -> list[str]:
+        """Extract all view function names from a views.py file."""
+        return re.findall(r'^def\s+(\w+)\s*\(request', source_content, re.MULTILINE)
+
+    def _build_urls_hint_from_views(self, view_names: list[str]) -> str:
+        """
+        Build an explicit urls.py generation hint from actual view names.
+        This overrides the generic FILE_TYPE_HINTS['urls.py'] when a source views.py
+        is available, so the LLM generates paths for real views only.
+        """
+        # Home view gets path('') — all others get path('name/')
+        path_lines = []
+        for name in view_names:
+            url = '' if name == 'home' else f'{name}/'
+            path_lines.append(f'    path("{url}", views.{name}, name="{name}"),')
+        paths_str = '\n'.join(path_lines)
+
+        return (
+            "TARGET FILE TYPE: urls.py\n"
+            f"The source views.py contains EXACTLY these view functions: {view_names}\n"
+            "You MUST generate url patterns for ONLY these views — do NOT invent or add any others.\n"
+            "Use ONLY the view names listed above.\n"
+            "Always include:\n"
+            "    from django.urls import path\n"
+            "    from . import views\n"
+            f"Generate this exact urlpatterns list:\n"
+            f"urlpatterns = [\n{paths_str}\n]"
+        )
+
+    def _clean_garbage_line(self, line: str) -> str:
+        """
+        Strip garbage abbreviation prefix from a line but keep any real code after it.
+        e.g. "f i c d @ admin.site.register(Student)" -> "admin.site.register(Student)"
+        e.g. "from django.contrib import admin"        -> unchanged
+        """
+        stripped = self.GARBAGE_PREFIX_PATTERN.sub('', line).strip()
+        # If stripping left nothing or just punctuation, return empty
+        if not stripped or stripped in ('@', '#'):
+            return ''
+        return stripped
+
+    def __init__(self, workspace_root: str | None = None):
         if workspace_root:
             workspace_root = os.path.abspath(workspace_root)
-
             if not os.path.exists(workspace_root):
                 raise ValueError(f"Invalid workspace root: {workspace_root}")
-
             set_workspace_root(workspace_root)
 
         self.workspace_root = workspace_root
         self.llm = LLM()
-        
 
     def run(self, user_input: str) -> str:
-        # STEP 1: Detect mode and extract path FIRST
+        # STEP 1: Detect mode and extract path
         mode = self._detect_mode(user_input)
         path = self._extract_path(user_input, mode)
-        
-        # DEBUG: Show detected mode
+
         print(f"\n[DEBUG] Detected mode: {mode}")
         print(f"[DEBUG] Extracted path: {path}")
 
-        # STEP 2: Check if user mentions a source file to read from
-        # Example: "register models from students/models.py into students/admin.py"
+        # STEP 2: Source file detection — only for "from X ... to/into Y" pattern
         source_file_content = None
         source_file_path = None
-        
-        if mode == "ACTION":
-            # Look for source file patterns like "from <file>", "inside <file>"
-            source_keywords = ['from', 'inside']
-            tokens = user_input.split()
-            
-            for i, token in enumerate(tokens):
-                if token.lower() in source_keywords and i + 1 < len(tokens):
-                    potential_source = tokens[i + 1]
-                    if potential_source.endswith((".py", ".html")) and potential_source != path:
-                        source_file_path = potential_source
-                        print(f"[DEBUG] Source file detected: {source_file_path}")
-                        try:
-                            source_file_content = read_file(source_file_path)
-                            print(f"[DEBUG] Source file read successfully: {len(source_file_content)} chars")
-                        except FileToolError as e:
-                            print(f"[DEBUG] Could not read source file: {e}")
-                        break
 
-        # STEP 3: If ANSWER MODE with file path, read the file content
+        if mode == "ACTION":
+            tokens = user_input.split()
+            lower_tokens = [t.lower() for t in tokens]
+            has_target_keyword = any(t in lower_tokens for t in ['to', 'into', 'inside'])
+
+            if has_target_keyword:
+                for i, token in enumerate(tokens):
+                    if token.lower() == 'from' and i + 1 < len(tokens):
+                        potential_source = tokens[i + 1]
+                        if potential_source.endswith((".py", ".html")) and potential_source != path:
+                            source_file_path = potential_source
+                            print(f"[DEBUG] Source file detected: {source_file_path}")
+                            try:
+                                source_file_content = read_file(source_file_path)
+                                print(f"[DEBUG] Source file read: {len(source_file_content)} chars")
+                            except FileToolError as e:
+                                print(f"[DEBUG] Could not read source file: {e}")
+                            break
+
+        # STEP 3: ANSWER MODE — read target file content
         file_content = None
         if mode == "ANSWER" and path:
             try:
                 file_content = read_file(path)
-                print(f"[DEBUG] File content read successfully: {len(file_content)} chars")
             except FileToolError as e:
-                print(f"[DEBUG] FileToolError: {e}")
                 return f"❌ Cannot read file: {e}"
             except Exception as e:
-                print(f"[DEBUG] Unexpected error: {e}")
                 return f"❌ Error reading file: {e}"
 
-        # STEP 4: Retrieve RAG context
+        # STEP 4: RAG context
         try:
             context, sources = retrieve_context(user_input, k=3)
         except Exception:
             context, sources = None, []
 
-        # STEP 5: Build prompt with file content if available
+        # STEP 5: Build augmented prompt with file-type hint
+        file_type_hint = self._get_file_type_hint(path)
+        augmented_input = user_input
+
+        if file_type_hint and mode == "ACTION":
+            target_filename = path.replace("\\", "/").split("/")[-1].lower() if path else ""
+
+            if target_filename == "urls.py" and source_file_content:
+                # urls.py + source views.py: extract real view names and build explicit hint
+                view_names = self._extract_view_names_from_source(source_file_content)
+                if view_names:
+                    print(f"[DEBUG] Views found in source: {view_names}")
+                    file_type_hint = self._build_urls_hint_from_views(view_names)
+                else:
+                    print("[DEBUG] No view functions found in source file")
+
+            elif target_filename == "admin.py" and source_file_content:
+                # admin.py: inject actual model names so LLM knows what to register
+                model_names = self._extract_model_names_from_source(source_file_content)
+                if model_names:
+                    names_str = ", ".join(model_names)
+                    file_type_hint += (
+                        f"\n\nModels to register (from source file): {names_str}\n"
+                        f"Use: from .models import {names_str}\n"
+                        f"Then: admin.site.register({model_names[0]}) for each model."
+                    )
+
+            augmented_input = f"{file_type_hint}\n\nUser request: {user_input}"
+
         prompt = build_prompt(
-            user_input=user_input, 
+            user_input=augmented_input,
             context=context,
-            file_content=file_content or source_file_content,  # Use source file if no answer file
+            file_content=file_content or source_file_content,
             file_path=path,
-            source_file_path=source_file_path  # Pass source file info to prompt
+            source_file_path=source_file_path
         )
-        
+
         # STEP 6: Generate LLM response
         raw = self.llm.generate(prompt).strip()
 
-        # STEP 7: Handle ANSWER MODE (no file operations, just display)
+        # STEP 7: ANSWER MODE output
         if mode == "ANSWER":
             cli_output = []
-            
-            # If reading a file, show the actual code first
             if file_content:
                 cli_output.extend([
                     f"📄 Code from {path}:",
@@ -115,16 +256,13 @@ class AgentCore:
                     "📝 Explanation:",
                     "=" * 60
                 ])
-            
             cli_output.append(raw)
-            
             if sources:
                 cli_output.extend(["", "=" * 60, "📚 Sources:", "=" * 60])
                 cli_output.extend(f"  • {s}" for s in sources)
-            
             return "\n".join(cli_output)
 
-        # STEP 8: Handle ACTION MODE (extract code and write to file)
+        # STEP 8: ACTION MODE — extract and write code
         code = self._extract_code_only(raw)
         if not code:
             return "❌ No code detected in LLM output.\n\n" + raw
@@ -132,325 +270,307 @@ class AgentCore:
         if not path:
             return "❌ ACTION MODE requires a file path.\n\n" + raw
 
-        # STEP 9: Check if file exists, remove duplicate imports if so
+        # STEP 9: File exists? Use smart merge for urls.py, else dedup-and-append
         existing_content = None
+        merged_content = None
         try:
             existing_content = read_file(path)
-            code = self._remove_duplicate_imports(existing_content, code)
-            action = "append_file"
-        except Exception:
-            action = "write_file"  # file does not exist yet
+            is_urls_file = path.replace("\\", "/").endswith("urls.py")
 
-        # STEP 11: Execute file action
+            if is_urls_file and "urlpatterns" in existing_content and "urlpatterns" in code:
+                # Smart merge: insert new paths into existing urlpatterns list
+                merged_content = self._merge_urlpatterns(existing_content, code)
+                action = "update_file" if merged_content else "append_file"
+            else:
+                code = self._remove_duplicate_imports(existing_content, code)
+                action = "append_file"
+        except Exception:
+            action = "write_file"
+
+        # STEP 10: Execute file action
         try:
             if action == "write_file":
                 write_file(path, code)
                 file_status = f"✅ File created: {path}"
+            elif action == "update_file" and merged_content:
+                from agent.file_tools import update_file
+                update_file(path, merged_content)
+                file_status = f"✅ URL paths merged into: {path}"
             else:
                 append_file(path, code)
                 file_status = f"✅ Code appended to: {path}"
-
         except FileToolError as e:
             file_status = f"❌ [FILE ERROR] {e}"
 
-        # STEP 12: Build CLI output
+        # STEP 11: CLI output
         cli_output = [file_status, "", "=" * 60, "📝 Full Response:", "=" * 60, raw]
-        
         if sources:
             cli_output.extend(["", "=" * 60, "📚 Sources:", "=" * 60])
             cli_output.extend(f"  • {s}" for s in sources)
-
         return "\n".join(cli_output)
 
     # ---------------- HELPERS ---------------- #
 
+    def _merge_urlpatterns(self, existing: str, new_code: str):
+        """
+        Merge new path() entries into the existing urlpatterns list in-place.
+        Returns merged file string, or None if merging is not possible.
+        """
+        existing_block = re.search(r'urlpatterns\s*=\s*\[(.*?)\]', existing, re.DOTALL)
+        new_block = re.search(r'urlpatterns\s*=\s*\[(.*?)\]', new_code, re.DOTALL)
+
+        if not existing_block or not new_block:
+            return None
+
+        def extract_path_lines(block_content):
+            lines = []
+            for line in block_content.splitlines():
+                s = line.strip().rstrip(',')
+                if s.startswith(('path(', 're_path(')):
+                    lines.append('    ' + s)
+            return lines
+
+        existing_paths = extract_path_lines(existing_block.group(1))
+        new_paths = extract_path_lines(new_block.group(1))
+
+        existing_set = {l.strip() for l in existing_paths}
+        to_add = [l for l in new_paths if l.strip() not in existing_set]
+
+        if not to_add:
+            print("[DEBUG] No new url paths to add — all already exist")
+            return existing
+
+        all_paths = existing_paths + to_add
+        paths_str = ",\n".join(all_paths) + ","
+
+        merged = re.sub(
+            r'urlpatterns\s*=\s*\[.*?\]',
+            f'urlpatterns = [\n{paths_str}\n]',
+            existing,
+            flags=re.DOTALL
+        )
+
+        existing_imports = {
+            l.strip() for l in existing.splitlines()
+            if l.strip().startswith(('from ', 'import '))
+        }
+        new_imports = [
+            l for l in new_code.splitlines()
+            if l.strip().startswith(('from ', 'import '))
+            and l.strip() not in existing_imports
+        ]
+        if new_imports:
+            merged = "\n".join(new_imports) + "\n" + merged
+
+        print(f"[DEBUG] urlpatterns merged: added {len(to_add)} new path(s)")
+        return merged
+
+
     def _detect_mode(self, user_input: str) -> str:
-        """
-        Detect whether the user wants ACTION MODE or ANSWER MODE
-        
-        ANSWER MODE triggers:
-        - 'read', 'explain', 'what is', 'how does', 'why'
-        - 'difference between', 'when to use'
-        - 'best practice', 'should I', 'help understand'
-        
-        ACTION MODE triggers:
-        - 'create', 'write', 'generate', 'build', 'add'
-        - 'implement', 'make', 'develop', 'insert'
-        """
         lower_input = user_input.lower()
-        
-        # ANSWER MODE keywords (check these FIRST for read/explain)
+
         answer_keywords = [
             'read the code', 'read code', 'explain the code', 'explain code',
-            'show me the code', 'what is', 'how does', 'why', 
+            'show me the code', 'what is', 'how does', 'why',
             'explain', 'describe', 'tell me about',
             'difference', 'when to use', 'best practice',
             'help understand', 'understand', 'clarify'
         ]
-        
         for keyword in answer_keywords:
             if keyword in lower_input:
                 return "ANSWER"
-        
-        # Check for "read" alone (without "write")
+
         if 'read' in lower_input and 'write' not in lower_input:
             return "ANSWER"
-        
-        # ACTION MODE keywords (specific action verbs)
+
         action_keywords = [
             'create', 'write', 'generate', 'build', 'add',
             'implement', 'make', 'develop', 'insert',
-            'update', 'modify', 'change', 'delete'
+            'update', 'modify', 'change', 'delete', 'register'
         ]
-        
         for keyword in action_keywords:
             if keyword in lower_input:
                 return "ACTION"
-        
-        # Default to ANSWER if no clear action verb
+
         return "ANSWER"
 
     def _extract_path(self, user_input: str, mode: str) -> str | None:
-        """
-        Extract file path from user input
-        
-        Only extract paths when context indicates an actual file operation:
-        - ACTION MODE: Always try to extract path (user wants to write code)
-        - ANSWER MODE: Only extract if explicit file reading keywords present
-        
-        Priority for ACTION MODE:
-        1. Look for "into <file>" or "to <file>" (target file)
-        2. Look for "in <file>" only if no target found (source file for reading)
-        3. Fall back to any .py/.html file found
-        """
         lower_input = user_input.lower()
-        
-        # In ANSWER MODE, only extract path if explicitly reading a specific file
+
         if mode == "ANSWER":
-            # Check for explicit file reading indicators
             file_read_indicators = [
-                'read the code in',
-                'read code in', 
-                'read the file',
-                'read file',
-                'show me the code in',
-                'show code in',
-                'explain the code in',
-                'explain code in',
-                'what does the code in',
-                'open',
-                'display the file'
+                'read the code in', 'read code in', 'read the file', 'read file',
+                'show me the code in', 'show code in', 'explain the code in',
+                'explain code in', 'what does the code in', 'open', 'display the file'
             ]
-            
-            has_file_read_indicator = any(indicator in lower_input for indicator in file_read_indicators)
-            
-            if not has_file_read_indicator:
-                # This is a general question about a concept
+            if not any(indicator in lower_input for indicator in file_read_indicators):
                 return None
-        
-        # ACTION MODE: Extract target file path intelligently
+
         tokens = user_input.split()
-        
-        # Strategy 1: Look for "into <file>" or "to <file>" pattern (TARGET FILE)
-        # Example: "register models into students/admin.py"
-        target_keywords = ['into', 'to', 'inside']
+
+        # Strategy 1: "into/to/inside <file>"
         for i, token in enumerate(tokens):
-            if token.lower() in target_keywords and i + 1 < len(tokens):
+            if token.lower() in ('into', 'to', 'inside') and i + 1 < len(tokens):
                 next_token = tokens[i + 1]
                 if next_token.endswith((".py", ".html")):
                     print(f"[DEBUG] Target file found after '{token}': {next_token}")
                     return next_token
-        
-        # Strategy 2: Look for "in <file>" pattern (might be source or target)
-        # Only use this if no clear target was found above
-        # Example: "create view in students/views.py"
+
+        # Strategy 2: "in <file>" with action context
         for i, token in enumerate(tokens):
             if token.lower() == 'in' and i + 1 < len(tokens):
                 next_token = tokens[i + 1]
                 if next_token.endswith((".py", ".html")):
-                    # Check if this looks like a target (create/write/add context)
-                    action_context = any(keyword in lower_input[:lower_input.find('in')] 
-                                       for keyword in ['create', 'write', 'add', 'register', 'make'])
+                    action_context = any(
+                        keyword in lower_input[:lower_input.find('in')]
+                        for keyword in ['create', 'write', 'add', 'register', 'make']
+                    )
                     if action_context:
                         print(f"[DEBUG] Target file found after 'in': {next_token}")
                         return next_token
-        
-        # Strategy 3: Fall back to any .py or .html file (last resort)
-        all_files = [token for token in tokens if token.endswith((".py", ".html"))]
+
+        # Strategy 3: last .py/.html file mentioned
+        all_files = [t for t in tokens if t.endswith((".py", ".html"))]
         if all_files:
-            # Prefer the LAST file mentioned (usually the target)
-            target_file = all_files[-1]
-            print(f"[DEBUG] Using last file mentioned: {target_file}")
-            return target_file
-        
+            print(f"[DEBUG] Using last file mentioned: {all_files[-1]}")
+            return all_files[-1]
+
         return None
+
+    def _preprocess_llm_output(self, text: str) -> str:
+        """
+        Clean raw LLM output before code extraction:
+        1. Strip "In ACTION/ANSWER MODE:" labels
+        2. Strip garbage abbreviation PREFIXES (keep trailing real code on same line)
+        3. Strip explanation prose that follows the code
+        """
+        # Step 1: remove mode labels
+        text = re.sub(
+            r'In\s+(?:ACTION|ANSWER)\s+MODE\s*:\s*',
+            '\n',
+            text,
+            flags=re.IGNORECASE
+        )
+
+        # Step 2: clean garbage prefixes line by line (keep trailing code)
+        cleaned_lines = []
+        for line in text.splitlines():
+            result = self._clean_garbage_line(line)
+            if result != line.strip():
+                print(f"[DEBUG] Cleaned garbage: {repr(line.strip())} -> {repr(result)}")
+            cleaned_lines.append(result)
+
+        return "\n".join(cleaned_lines)
 
     def _extract_code_only(self, text: str) -> str:
         """
-        Extract code from LLM output - handles markdown and raw code
-        Returns clean Python code without markdown backticks or explanations
-        
-        AGGRESSIVE EXTRACTION: Works even when LLM ignores format rules
+        Extract ALL code pieces from LLM output and merge them into one clean block.
+
+        Key insight: the LLM often splits imports and code across different parts
+        of its response (e.g. register() call in raw text, imports in a markdown block).
+        We collect EVERYTHING and merge: imports first, then the rest.
         """
-        # Strategy 1: Try markdown code blocks first (most common)
+        text = self._preprocess_llm_output(text)
+
+        # Collect all code pieces from every source
+        all_pieces: list[str] = []
+
+        # Source A: all markdown code blocks (not just the first one)
         markdown_pattern = r'```(?:python)?\s*\n(.*?)\n```'
-        markdown_matches = re.findall(markdown_pattern, text, re.DOTALL)
-        
-        if markdown_matches:
-            # Use the first code block found
-            code = markdown_matches[0].strip()
-            cleaned = self._clean_extracted_code(code)
-            if cleaned:
-                print(f"[DEBUG] Extracted code from markdown block: {len(cleaned)} chars")
-                return cleaned
-        
-        # Strategy 2: Extract raw Python code (no markdown)
-        lines = []
-        recording = False
-        found_code_start = False
-        
-        for line in text.splitlines():
+        for block in re.findall(markdown_pattern, text, re.DOTALL):
+            block = block.strip()
+            if block:
+                all_pieces.append(block)
+                print(f"[DEBUG] Found markdown block: {len(block)} chars")
+
+        # Source B: raw code outside markdown blocks
+        text_no_markdown = re.sub(markdown_pattern, '\n', text, flags=re.DOTALL)
+        raw_lines = []
+        found_start = False
+        for line in text_no_markdown.splitlines():
             stripped = line.strip()
-            
-            # Detect start of actual Python code
-            if not found_code_start:
-                # Skip everything until we hit actual Python code
-                if stripped.startswith(("from ", "import ", "class ", "def ", "@")):
-                    found_code_start = True
-                    recording = True
+            if not found_start:
+                if stripped.startswith(self.CODE_START_PREFIXES):
+                    found_start = True
                 else:
                     continue
-            
-            # Once recording, stop at explanation markers
-            if recording:
-                # Stop conditions
-                stop_markers = [
-                    "Explanation:", "Note:", "Summary:", "This will",
-                    "This code", "The code", "In this case",
-                    "The above", "By default", "You can now"
-                ]
-                
-                if any(stripped.startswith(marker) for marker in stop_markers):
-                    break
-                
-                # Also stop if we hit another "In ACTION/ANSWER MODE" text
-                if stripped.startswith("In ") and "MODE" in stripped:
-                    break
-                
-                lines.append(line)
-        
-        code = "\n".join(lines).strip()
-        cleaned = self._clean_extracted_code(code)
-        
+            if any(stripped.startswith(m) for m in self.STOP_MARKERS):
+                break
+            raw_lines.append(line)
+
+        raw_code = "\n".join(raw_lines).strip()
+        if raw_code:
+            all_pieces.append(raw_code)
+            print(f"[DEBUG] Found raw code: {len(raw_code)} chars")
+
+        if not all_pieces:
+            print("[DEBUG] ❌ No code pieces found")
+            return ""
+
+        # Merge all pieces: deduplicated imports first, then all other code
+        import_lines: list[str] = []
+        other_lines: list[str] = []
+        seen_imports: set[str] = set()
+        seen_other: set[str] = set()
+
+        for piece in all_pieces:
+            for line in piece.splitlines():
+                s = line.strip()
+                if not s:
+                    continue
+                # Skip markdown fences that slipped through
+                if s in ('```', '```python', '```py'):
+                    continue
+                if s.startswith(("from ", "import ")):
+                    if s not in seen_imports:
+                        seen_imports.add(s)
+                        import_lines.append(line)
+                else:
+                    if s not in seen_other:
+                        seen_other.add(s)
+                        other_lines.append(line)
+
+        merged = "\n".join(import_lines + [""] + other_lines).strip() if import_lines else "\n".join(other_lines).strip()
+        cleaned = self._clean_extracted_code(merged)
+
         if cleaned:
-            print(f"[DEBUG] Extracted raw code: {len(cleaned)} chars")
+            print(f"[DEBUG] Final merged code: {len(cleaned)} chars")
             return cleaned
-        
-        # Strategy 3: AGGRESSIVE - Look for any Python-like code blocks
-        # This catches cases where LLM adds extra text before code
-        print("[DEBUG] Using aggressive extraction (LLM didn't follow format)")
-        
-        all_lines = text.splitlines()
-        best_code_block = ""
-        current_block = []
-        in_code = False
-        
-        for i, line in enumerate(all_lines):
-            stripped = line.strip()
-            
-            # Start of code block
-            if stripped.startswith(("from ", "import ", "class ", "def ", "@admin")):
-                if not in_code:
-                    in_code = True
-                    current_block = [line]
-                else:
-                    current_block.append(line)
-            
-            # Continue code block
-            elif in_code:
-                # Check if still code (indentation, empty lines, or code-like syntax)
-                if (line.startswith((" ", "\t")) or 
-                    not stripped or 
-                    stripped.startswith(("admin.", "models.", "return ", "if ", "for ", "with "))):
-                    current_block.append(line)
-                else:
-                    # End of code block
-                    in_code = False
-                    block_code = "\n".join(current_block).strip()
-                    
-                    # Keep the longest/best code block found
-                    if len(block_code) > len(best_code_block):
-                        best_code_block = block_code
-                    
-                    current_block = []
-        
-        # Don't forget the last block
-        if current_block:
-            block_code = "\n".join(current_block).strip()
-            if len(block_code) > len(best_code_block):
-                best_code_block = block_code
-        
-        if best_code_block:
-            cleaned = self._clean_extracted_code(best_code_block)
-            if cleaned:
-                print(f"[DEBUG] Aggressively extracted code: {len(cleaned)} chars")
-                return cleaned
-        
-        print("[DEBUG] ❌ No code could be extracted")
+
+        print("[DEBUG] ❌ No valid code after merge")
         return ""
 
     def _clean_extracted_code(self, code: str) -> str:
-        """
-        Clean extracted code:
-        - Remove stray markdown backticks
-        - Remove invalid lines
-        - Fix indentation issues
-        """
+        """Validate extracted code contains real Python content."""
         lines = []
-        
         for line in code.splitlines():
             stripped = line.strip()
-            
-            # Skip markdown artifacts
-            if stripped in ['```', '```python', '```py']:
+            if stripped in ('```', '```python', '```py'):
                 continue
-            
-            # Skip explanation lines
-            if any(stripped.startswith(marker) for marker in [
-                'Explanation:', 'Note:', 'In this', 'The above', 'This model'
+            if any(stripped.startswith(m) for m in [
+                'Explanation:', 'Note:', 'In this', 'The above', 'This model',
+                'The user has', 'This will allow'
             ]):
-                continue
-            
-            # Keep valid Python lines
+                break  # Stop at explanation prose
             lines.append(line)
-        
-        # Validate the code has a proper class or function definition
+
         code_str = "\n".join(lines).strip()
-        
-        # Must contain at least one class or function definition
-        if not any(keyword in code_str for keyword in ['class ', 'def ']):
+
+        VALID_MARKERS = ['class ', 'def ', 'urlpatterns', 'import ', 'admin.site.register']
+        if not any(keyword in code_str for keyword in VALID_MARKERS):
             return ""
-        
+
         return code_str
 
     def _remove_duplicate_imports(self, existing: str, new_code: str) -> str:
-        """
-        Removes imports from new_code that are already present in existing.
-        Uses a set for O(n) lookup instead of O(n²) list comprehension per line.
-        """
-        # Build set once — O(n) instead of rebuilding per iteration
+        """Remove imports from new_code already present in existing file."""
         existing_line_set = {l.strip() for l in existing.splitlines()}
-        new_lines = new_code.splitlines()
         filtered_lines = []
 
-        for line in new_lines:
+        for line in new_code.splitlines():
             stripped = line.strip()
-
-            # Skip leading empty lines
             if not stripped and not filtered_lines:
                 continue
-
-            # Keep line if it's not already in existing file, or if it's a blank line
             if not stripped or stripped not in existing_line_set:
                 filtered_lines.append(line)
 
