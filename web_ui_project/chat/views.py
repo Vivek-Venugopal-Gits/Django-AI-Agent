@@ -40,6 +40,10 @@ from django.contrib.auth.decorators import login_required
 from .models import Project, ChatMessage
 from agent.agent_core import AgentCore
 
+import inspect
+print("AgentCore loaded from:", inspect.getfile(AgentCore))
+print("AgentCore signature:", inspect.signature(AgentCore.__init__))
+
 @login_required
 def chat_view(request, project_id):
     project = get_object_or_404(Project, id=project_id, user=request.user)

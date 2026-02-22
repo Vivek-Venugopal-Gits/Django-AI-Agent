@@ -5,3 +5,4 @@ Junk-Folder
 dist/
 build/
 __pycache__/
+.env
