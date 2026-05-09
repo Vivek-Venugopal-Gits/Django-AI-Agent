@@ -77,11 +77,15 @@ class AgentCore:
             "Output ONLY the signal handler code with all imports."
         ),
     }
-
+    VALID_MARKERS = ['class ', 'def ', 'urlpatterns', 'import ', 'from ', 'admin.site.register']
     # Matches lines that are pure LLM garbage abbreviations like "f i c d @" or "f ic d @"
     # Strategy: strip the garbage PREFIX but keep any trailing real code on the same line
+    # GARBAGE_PREFIX_PATTERN = re.compile(
+    #     r'^(?:[a-z@]{1,2}\s+){2,}',
+    #     re.IGNORECASE
+    # )
     GARBAGE_PREFIX_PATTERN = re.compile(
-        r'^(?:[a-z@]{1,2}\s+){2,}',
+        r'^(?:[a-z@]{1,2}\s+){2,}(?=[a-z@])',  # only strip if next char is also lowercase/symbol
         re.IGNORECASE
     )
 
@@ -108,6 +112,7 @@ class AgentCore:
     def _extract_view_names_from_source(self, source_content: str) -> list[str]:
         """Extract all view function names from a views.py file."""
         return re.findall(r'^def\s+(\w+)\s*\(request', source_content, re.MULTILINE)
+
 
     def _build_urls_hint_from_views(self, view_names: list[str]) -> str:
         """
@@ -148,13 +153,48 @@ class AgentCore:
 
     def __init__(self, workspace_root: str | None = None):
         if workspace_root:
+            workspace_root = workspace_root.strip().rstrip('>"\'')  # strip FIRST
             workspace_root = os.path.abspath(workspace_root)
             if not os.path.exists(workspace_root):
-                raise ValueError(f"Invalid workspace root: {workspace_root}")
+                raise ValueError(f"Invalid workspace root: {workspace_root!r}")
             set_workspace_root(workspace_root)
-
         self.workspace_root = workspace_root
         self.llm = LLM()
+
+    def _fix_indentation(self, code: str) -> str:
+        lines = code.splitlines()
+        result = []
+        # Stack tracks (indent_level_of_header, body_indent_string)
+        indent_stack: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                result.append("")
+                continue
+
+            is_block_header = bool(
+                re.match(r'^(class |def |async def )\w', stripped)
+                and stripped.endswith(":")
+            )
+
+            if is_block_header:
+                leading = len(line) - len(line.lstrip())
+                # Pop stack entries deeper than current level
+                while indent_stack and len(indent_stack[-1]) >= leading + 4:
+                    indent_stack.pop()
+                result.append(line)
+                indent_stack.append(" " * (leading + 4))
+                continue
+
+            if indent_stack:
+                leading = len(line) - len(line.lstrip())
+                if leading == 0:
+                    line = indent_stack[-1] + stripped
+            
+            result.append(line)
+
+        return "\n".join(result)
 
     def run(self, user_input: str) -> str:
         # STEP 1: Detect mode and extract path
@@ -437,6 +477,165 @@ class AgentCore:
 
         return None
 
+    def _normalize_collapsed_code(self, text: str) -> str:
+        """
+        Fix LLM output where multiple statements are collapsed onto one line.
+        e.g. "class Foo:     x = 1     y = 2" → proper multi-line with indent
+        """
+        # Split on 4+ spaces that appear to separate statements
+        # Only activate when we detect a class/def header mid-text
+        if not re.search(r'(class |def )\w.*:\s{2,}\w', text):
+            return text  # Nothing collapsed, skip
+
+        # Insert real newlines before known statement starters that follow spaces
+        text = re.sub(
+            r'(?<=:)\s{2,}(?=(from |import |class |def |    \w|\w+\s*=))',
+            '\n',
+            text
+        )
+        # Insert newline+indent before field assignments after a class header
+        text = re.sub(
+            r'(?<=[^\n])\s{4,}(\w+\s*=\s*models\.)',
+            r'\n    \1',
+            text
+        )
+        return text
+
+    def _expand_collapsed_lines(self, text: str) -> str:
+        """
+        Fix LLM output where multiple Python statements are collapsed onto one line.
+        Uses a state machine to correctly handle nested blocks like class Meta:.
+        """
+        # Step 1: Insert newlines before top-level keywords after 2+ spaces
+        # Handles: "from X  class Foo" → "from X\nclass Foo"
+        text = re.sub(
+            r'(?<=\S)  +(?=(from |import |class |def |async def |@))',
+            '\n',
+            text
+        )
+
+        # Step 2: Per-line expansion — if a line contains a block header followed
+        # by collapsed body content, expand it using a depth-aware state machine
+        expanded_lines = []
+        for line in text.splitlines():
+            if not re.search(r'(?:class |def )\w[^:]*:\s{2,}\S', line):
+                # No collapsed block on this line — keep as-is
+                expanded_lines.append(line)
+                continue
+
+            # This line has a collapsed block — expand it
+            base_indent = len(line) - len(line.lstrip())
+            expanded_lines.extend(
+                self._expand_single_collapsed_line(line.strip(), base_indent)
+            )
+
+        return "\n".join(expanded_lines)
+
+
+    def _expand_single_collapsed_line(self, text: str, base_indent: int) -> list[str]:
+        """
+        Expand a single collapsed line like:
+        "class Foo:     class Meta:         model = X         fields = Y"
+        into properly indented lines using a token state machine.
+
+        Returns a list of correctly indented lines.
+        """
+        # Split on 2+ spaces — these are the statement separators
+        # but we must NOT split inside string literals
+        tokens = self._split_on_spaces(text)
+        
+        result_lines: list[str] = []
+        indent_level = base_indent  # current indent in spaces
+        pending: list[str] = []     # tokens accumulating into current statement
+
+        def flush(next_indent: int | None = None):
+            """Emit the accumulated tokens as one line, then set new indent."""
+            nonlocal indent_level
+            if pending:
+                result_lines.append(" " * indent_level + " ".join(pending))
+                pending.clear()
+            if next_indent is not None:
+                indent_level = next_indent
+
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if not token.strip():
+                i += 1
+                continue
+
+            # Check if this token starts a new statement
+            is_new_statement = (
+                i > 0 and
+                re.match(
+                    r'^(from|import|class|def|async|@|\w+\s*=)',
+                    token.strip()
+                )
+            )
+
+            if is_new_statement:
+                # Flush previous statement first
+                # Determine if previous statement was a block header
+                prev = " ".join(pending).strip()
+                if prev.endswith(":") and re.match(r'^(class |def |async def )', prev):
+                    flush(next_indent=indent_level + 4)
+                else:
+                    flush(next_indent=indent_level)
+
+            pending.append(token.strip())
+            i += 1
+
+        # Flush final statement
+        flush()
+        return result_lines
+
+
+    def _split_on_spaces(self, text: str) -> list[str]:
+        """
+        Split text on runs of 2+ spaces, but not inside string literals.
+        Returns list of non-empty tokens.
+        """
+        tokens = []
+        current = []
+        in_string = None  # None, '"', or "'"
+        i = 0
+
+        while i < len(text):
+            ch = text[i]
+
+            if in_string:
+                current.append(ch)
+                if ch == in_string and (i == 0 or text[i-1] != '\\'):
+                    in_string = None
+                i += 1
+                continue
+
+            if ch in ('"', "'"):
+                in_string = ch
+                current.append(ch)
+                i += 1
+                continue
+
+            # Check for 2+ space separator
+            if ch == ' ' and i + 1 < len(text) and text[i+1] == ' ':
+                # Consume all spaces
+                token = "".join(current).strip()
+                if token:
+                    tokens.append(token)
+                current = []
+                while i < len(text) and text[i] == ' ':
+                    i += 1
+                continue
+
+            current.append(ch)
+            i += 1
+
+        token = "".join(current).strip()
+        if token:
+            tokens.append(token)
+
+        return tokens
+
     def _preprocess_llm_output(self, text: str) -> str:
         """
         Clean raw LLM output before code extraction:
@@ -444,6 +643,8 @@ class AgentCore:
         2. Strip garbage abbreviation PREFIXES (keep trailing real code on same line)
         3. Strip explanation prose that follows the code
         """
+        text = self._normalize_collapsed_code(text)
+        text = self._expand_collapsed_lines(text)
         # Step 1: remove mode labels
         text = re.sub(
             r'In\s+(?:ACTION|ANSWER)\s+MODE\s*:\s*',
@@ -532,8 +733,9 @@ class AgentCore:
 
         merged = "\n".join(import_lines + [""] + other_lines).strip() if import_lines else "\n".join(other_lines).strip()
         cleaned = self._clean_extracted_code(merged)
-
+    
         if cleaned:
+            cleaned = self._fix_indentation(cleaned)   # ← add this line
             print(f"[DEBUG] Final merged code: {len(cleaned)} chars")
             return cleaned
 
@@ -575,3 +777,38 @@ class AgentCore:
                 filtered_lines.append(line)
 
         return "\n".join(filtered_lines).strip()
+    
+    def _fix_indentation(self, code: str) -> str:
+        lines = code.splitlines()
+        result = []
+        # Stack tracks (indent_level_of_header, body_indent_string)
+        indent_stack: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                result.append("")
+                continue
+
+            is_block_header = bool(
+                re.match(r'^(class |def |async def )\w', stripped)
+                and stripped.endswith(":")
+            )
+
+            if is_block_header:
+                leading = len(line) - len(line.lstrip())
+                # Pop stack entries deeper than current level
+                while indent_stack and len(indent_stack[-1]) >= leading + 4:
+                    indent_stack.pop()
+                result.append(line)
+                indent_stack.append(" " * (leading + 4))
+                continue
+
+            if indent_stack:
+                leading = len(line) - len(line.lstrip())
+                if leading == 0:
+                    line = indent_stack[-1] + stripped
+            
+            result.append(line)
+
+        return "\n".join(result)

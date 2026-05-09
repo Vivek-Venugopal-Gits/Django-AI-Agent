@@ -123,16 +123,21 @@ def build_prompt(
         "Use when: user says create, write, generate, build, add, implement, register.\n\n"
 
         "═══ ACTION MODE FORMAT (STRICT) ═══\n"
-        "- Your FIRST character MUST be one of: f i c d @  (from/import/class/def/@)\n"
-        "- NO preamble, NO 'In ACTION MODE', NO markdown ``` blocks\n"
+        "- Start DIRECTLY with a Python keyword: 'from', 'import', 'class', 'def', or '@'\n"
+        "- NO preamble, NO 'In ACTION MODE:', NO markdown ``` blocks\n"
         "- NO # file/path.py comments at the top\n"
         "- After the code: one blank line, then 'Explanation:'\n\n"
 
         "✅ CORRECT:\n"
         "from django.db import models\n\n"
         "class School(models.Model):\n"
-        "    school_name = models.CharField(max_length=200)\n\n"
+        "    school_name = models.CharField(max_length=200)\n"
+        "    principal_name = models.CharField(max_length=100)\n\n"
         "Explanation: Creates a School model...\n\n"
+
+        # Add this rule explicitly:
+        "- Use REAL newlines and 4-space indentation inside class/def bodies\n"
+        "- NEVER put multiple statements on one line\n"
 
         "❌ WRONG (starts with explanation):\n"
         "To create a School model, you need to...\n\n"

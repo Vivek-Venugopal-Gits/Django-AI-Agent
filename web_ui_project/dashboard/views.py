@@ -12,7 +12,7 @@ def home(request):
 def new_project(request):
     if request.method == "POST":
         project_name = request.POST.get("project_name")
-        root_path = request.POST.get("root_path")
+        root_path = request.POST.get("root_path", "").strip()
 
         project = Project.objects.create(
             user=request.user,
