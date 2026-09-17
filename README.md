@@ -4,7 +4,7 @@
 
 The **Django AI Agent** is an AI coding assistant designed specifically for Django development. It combines a local Large Language Model with **Retrieval-Augmented Generation (RAG)** and **hybrid search** to provide context-aware answers and generate Django-specific code.
 
-The agent can operate through an interactive **CLI** and also includes a **Django-based web interface** where users can create projects and interact with the agent through a chat interface.
+The agent can operate through an interactive **CLI** and also includes a **Django-based web interface** where user can create projects and interact with the agent through a chat interface.
 
 ---
 
