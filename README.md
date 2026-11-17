@@ -763,17 +763,6 @@ This makes the project an exploration of **AI coding agents and agentic software
 
 ---
 
-## License
-
-Add your preferred license here, for example:
-
-```text
-MIT License
-```
-
----
-
-
 Built as a project exploring:
 
 - Artificial Intelligence.
