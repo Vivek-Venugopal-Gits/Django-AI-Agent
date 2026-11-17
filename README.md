@@ -27,8 +27,6 @@ The project supports both an interactive **CLI** and a **Django-based web interf
 - [Current Limitations](#current-limitations)
 - [Future Improvements](#future-improvements)
 - [Project Goal](#project-goal)
-- [License](#license)
-- [Author](#author)
 
 ---
 
